@@ -51,10 +51,10 @@ jobs:
             args: '--days-forward 2 --delay-ms 500'
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -69,7 +69,7 @@ jobs:
         run: ls -la epg_*.xml*
 
       - name: Upload guide
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: epg-${{ matrix.provider }}
           path: epg_*.xml*
@@ -84,10 +84,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -102,7 +102,7 @@ jobs:
         run: ls -la epg_sports_merged.xml*
 
       - name: Upload merged guide
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: epg-sports-merged
           path: epg_sports_merged.xml*
@@ -122,7 +122,7 @@ jobs:
       contents: write
     steps:
       - name: Download guides
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           pattern: epg-*
           merge-multiple: true
