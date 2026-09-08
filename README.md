@@ -31,13 +31,13 @@ Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
-digiturkburada 400 —
+digiturkburada 400, sporekrani 500, tivibu 400 —
 mynet fetches ~90 channel pages per day, so keep this polite).
 
-Sports channels are covered by the `tvplus`, `beinsports`, and
-`digiturkburada` providers (24 channels together); see the dedicated
-sections below and `UNSUCCESSFUL.md` for the channels that still have no
-public scrapeable source.
+Sports channels are covered by the `tvplus`, `beinsports`, `digiturkburada`,
+`sporekrani`, and `tivibu` providers (37 channels together); see the
+dedicated sections below and `UNSUCCESSFUL.md` for the channels that still
+have no public scrapeable source.
 
 ## Browser mode
 
@@ -409,6 +409,62 @@ node bin/epg-scraper.js --provider tvplus --date 2026-09-09
 node bin/epg-scraper.js --provider digiturkburada --date 2026-09-08 --days-forward 1
 ```
 
+## Provider: sporekrani
+
+- Source: `https://www.sporekrani.com/home/channel/{slug}` (Spor Ekranı, the
+  "hangi maç hangi kanalda" aggregator).  Covers the feeds no other free
+  source carries: **tabii spor 1-8** (match-day simulcast channels) and
+  **S Sport Plus** (D-Smart-only premium feed).
+- Page anatomy: a Quasar SSR page with the schedule embedded in a
+  `window.__INITIAL_STATE__` JSON script tag — `common.events` holds the
+  channel's rolling ~30-day event list
+  (`{ name, date_time: "YYYY-MM-DD HH:MM:SS" (Istanbul wall time),
+  sport_name, channels: [...] }`).  An event often airs on several channels
+  (e.g. a Champions League match on tabii Spor 1 AND CBC Sport), so only
+  events whose `channels[].name` matches the page's channel are kept.
+- Each page covers the whole ~30-day window, so **one fetch per channel**
+  serves any requested dates inside it (dates outside are silently skipped).
+- **Events-only:** the source publishes start times but no end times.
+  Programme stops are derived from the next event on the page, chained
+  across day boundaries (24:00 for the last event) — the same convention as
+  beinsports/mynet/digiturkburada.
+- The `sport_name` (e.g. "Futbol", "Basketbol") is emitted as the category.
+- tabii spor 1-8 are match-day simulcast feeds — most days most of them
+  carry no events at all, which is correct, not a scrape failure.
+
+```bash
+# All 9 channels (tabii spor 1-8 + S Sport Plus)
+node bin/epg-scraper.js --provider sporekrani --date 2026-09-08
+```
+
+## Provider: tivibu
+
+- Source: `https://www.tivibu.com.tr/kanallar/{slug}` (Tivibu GO, Türk
+  Telekom) — covers **Tivibu Spor 1-4** (the old `tivibu.com.tr/yayin-akisi`
+  path is dead; the new site moved to `/kanallar/<slug>`).
+- Transport: the day-grid's date switcher is client-side, but behind it is a
+  plain-HTTP JSON API (discovered via chrome-devtools): one GET of the
+  channel page captures the ASP.NET antiforgery cookie, the hidden-input
+  request token, and the channel's code (`ch…` in the `/rv?i=2|ch…` links);
+  a `POST /Channel/GetPrevueList` per channel-day then returns
+  `mobilPrevueViewModel[]` with `{ prevueName, genre, beginTime, endTime,
+  description }` — **explicit start/stop on every slot**, so no stop
+  derivation is needed, and any past/future date works.
+- Each programme belongs to the day it starts on: the response for a day
+  also carries the previous day's cross-midnight tail (e.g. 23:30 → 01:15),
+  which is dropped so programmes are never duplicated across day requests.
+- The `genre` (e.g. "Spor Programı") is emitted as the category and
+  `description` as `<desc>`.
+- Tivibu Spor 2-4 often carry only a repeating "Tivibu Spor Tanıtım" promo
+  loop (idle feeds) — those slots are emitted as-is.
+- **Plain HTTP only** — this provider POSTs form data + antiforgery cookies,
+  so it cannot run under `--browser`.
+
+```bash
+# All 4 channels, today
+node bin/epg-scraper.js --provider tivibu --date 2026-09-08
+```
+
 ## Provider: beinsports
 
 - Source: `https://beinsports.com.tr/yayin-akisi/{channel}/{day}` where
@@ -465,12 +521,14 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
 ### Sports guide from the sports providers
 
 ```bash
-# One guide with all 24 scrapeable sports channels
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --out epg_sports_TR.xml.gz
+# One guide with all 37 scrapeable sports channels
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge --out epg_sports_merged_TR.xml.gz
 ```
 
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
-`digiturkburada` adds beIN Sports 5, Max 1-2 and GS TV.
+`digiturkburada` adds beIN Sports 5, Max 1-2 and GS TV; `sporekrani` adds
+tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4.
+(The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
 
 ## Scheduled scrapes (GitHub Actions)
 
@@ -551,7 +609,7 @@ src/model.js            channel/programme model + validation
 src/registry.js         provider registry + date-range helper
 src/xmltv.js            XMLTV writer (plain + gzip)
 src/cli.js              CLI implementation (testable)
-src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, …)
+src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, …)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/scraper-server.js  static file server for EPG output
 test/                   vitest suites + fixtures

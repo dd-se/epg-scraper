@@ -7,6 +7,8 @@ import * as mynet from './mynet.js';
 import * as tvplus from './tvplus.js';
 import * as beinsports from './beinsports.js';
 import * as digiturkburada from './digiturkburada.js';
+import * as sporekrani from './sporekrani.js';
+import * as tivibu from './tivibu.js';
 
 let loaded = false;
 
@@ -43,6 +45,20 @@ export function loadProviders() {
       baseUrl: digiturkburada.BASE_URL,
       // Plain-HTTP form POSTs only — the Playwright fetcher cannot POST.
       scrape: digiturkburada.scrape,
+    });
+    registerProvider({
+      id: 'sporekrani',
+      name: 'Spor Ekranı Yayın Akışı (tabii spor 1-8 / S Sport Plus)',
+      baseUrl: sporekrani.BASE_URL,
+      scrape: sporekrani.scrape,
+    });
+    registerProvider({
+      id: 'tivibu',
+      name: 'Tivibu Yayın Akışı (Tivibu Spor 1-4)',
+      baseUrl: tivibu.BASE_URL,
+      // Plain-HTTP form POSTs + antiforgery cookie only — the Playwright
+      // fetcher cannot POST.
+      scrape: tivibu.scrape,
     });
     loaded = true;
   }

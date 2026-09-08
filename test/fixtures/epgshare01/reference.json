@@ -10,7 +10,20 @@
     "TABII.SPOR.tr": "TV+ provider channel tabii spor (joint TRT feed); upstream reference carries no tabii channel as of 2026-09-08.",
     "TV8.5.tr": "TV+ provider channel TV8,5; upstream reference lists TV8.tr / TV8.HD.tr only as of 2026-09-08.",
     "beIN.SPORTS.5.tr": "DigiturkBurada provider channel beIN Sports 5 (not published on beinsports.com.tr); upstream reference carries no beIN 5 as of 2026-09-08.",
-    "GS.TV.tr": "DigiturkBurada provider channel GS TV (Galatasaray club channel); not present in the upstream reference as of 2026-09-08."
+    "GS.TV.tr": "DigiturkBurada provider channel GS TV (Galatasaray club channel); not present in the upstream reference as of 2026-09-08.",
+    "TABII.SPOR.1.tr": "Sporekrani provider channel tabii spor 1 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.2.tr": "Sporekrani provider channel tabii spor 2 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.3.tr": "Sporekrani provider channel tabii spor 3 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.4.tr": "Sporekrani provider channel tabii spor 4 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.5.tr": "Sporekrani provider channel tabii spor 5 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.6.tr": "Sporekrani provider channel tabii spor 6 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.7.tr": "Sporekrani provider channel tabii spor 7 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TABII.SPOR.8.tr": "Sporekrani provider channel tabii spor 8 (match-day simulcast feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "S.SPORT.PLUS.tr": "Sporekrani provider channel S Sport Plus (D-Smart-only premium feed); not present in the upstream reference as of 2026-09-08.",
+    "TIVIBU.SPOR.1.tr": "Tivibu provider channel Tivibu Spor 1; not present in the upstream reference as of 2026-09-08.",
+    "TIVIBU.SPOR.2.tr": "Tivibu provider channel Tivibu Spor 2; not present in the upstream reference as of 2026-09-08.",
+    "TIVIBU.SPOR.3.tr": "Tivibu provider channel Tivibu Spor 3; not present in the upstream reference as of 2026-09-08.",
+    "TIVIBU.SPOR.4.tr": "Tivibu provider channel Tivibu Spor 4; not present in the upstream reference as of 2026-09-08."
   },
   "channels": [
     {

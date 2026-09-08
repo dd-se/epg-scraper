@@ -96,6 +96,27 @@ CLI tool and library.
       `yayin=DD.MM.YYYY` (the served date in the `<h2>` is verified against
       the request).  `parseDayPage()` / `parseServedDate()` are the pure
       parsers.  **Not browser-compatible** (POSTs form data).
+    - `sporekrani.js` — Spor Ekranı Yayın Akışı: tabii spor 1-8 (match-day
+      simulcast feeds) and S Sport Plus via `sporekrani.com/home/channel/
+      {slug}` pages.  Quasar SSR with the schedule in a `window.__INITIAL_
+      STATE__` JSON script tag; each page carries a rolling ~30-day event
+      list (one fetch per channel).  `extractInitialState()` /
+      `parseChannelPage()` are the pure parsers.  Events are filtered to
+      the page's own channel (`channels[].name`), and because the source
+      publishes **start times only**, stops derive from the next event on
+      the page (24:00 for the last), like beinsports.
+    - `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor 1-4 via
+      `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
+      and its plain-HTTP JSON API.  One session GET per channel captures the
+      ASP.NET antiforgery cookie, hidden-input token and channel code; a
+      `POST /Channel/GetPrevueList` per channel-day returns
+      `mobilPrevueViewModel[]` with **explicit start/stop** (+ `genre`,
+      `description`).  `parseChannelPage()` / `parsePrevueResponse()` /
+      `sessionGet()` / `prevuePost()` are the pure parsers/transport.
+      Cross-midnight tails from the previous day are dropped (each
+      programme belongs to the day it starts on).  **Not browser-
+      compatible** (POSTs form data + antiforgery cookie).  Supports
+      `maxChannels`.
    - `index.js` — `loadProviders()` registry loader.
 9. `src/cli.js` — CLI argument parsing, orchestration, output writing.
    Exports `runCli({ argv, stdout, stderr, cwd })` for testability.
@@ -107,10 +128,13 @@ CLI tool and library.
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
     reports into text lines.
 
-Sports coverage: `tvplus` + `beinsports` + `digiturkburada` merged
-(`--provider tvplus,beinsports,digiturkburada --merge`) cover 24 of the 50
-sports channels; the rest have no public scrapeable source and are tracked in
-`UNSUCCESSFUL.md` (Tivibu/Tabi/Exxen login-walled, platform-exclusive feeds).
+Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekrani` +
+`tivibu` merged (`--provider tvplus,beinsports,digiturkburada,sporekrani,
+tivibu --merge`) cover 37 of the 50 sports channels; the rest are tracked
+in `UNSUCCESSFUL.md`.  `sporekrani` adds the tabii spor 1-8 simulcast feeds
+and S Sport Plus; `tivibu` adds Tivibu Spor 1-4.  iDMAN TV now has a
+**verified candidate source** listed in `UNSUCCESSFUL.md` but no provider
+yet; Exxen stays login-walled and the rest are platform-exclusive feeds.
 11. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later

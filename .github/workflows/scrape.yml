@@ -2,12 +2,14 @@
 # resulting XMLTV guides to a rolling "latest" GitHub Release, so IPTV apps
 # can fetch them from a stable URL:
 #
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_hurriyet_TR.xml.gz
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_mynet_TR.xml.gz
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_tvplus_TR.xml.gz
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_beinsports_TR.xml.gz
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_digiturkburada_TR.xml.gz
-#   https://github.com/OWNER/REPO/releases/latest/download/epg_sports_merged.xml.gz  (sports merge: tvplus + beinsports + digiturkburada)
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_hurriyet_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_mynet_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvplus_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_beinsports_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_digiturkburada_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sporekrani_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tivibu_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sports_merged_TR.xml.gz  (sports merge: tvplus + beinsports + digiturkburada + sporekrani + tivibu)
 #
 # (Replace OWNER/REPO with this repository's path. The repo must be public —
 # release assets on private repos need authentication, which IPTV apps can't
@@ -49,6 +51,27 @@ jobs:
             # full 3-day window). Keep an explicit polite per-request delay
             # so scheduled runs from datacenter IPs don't hammer the source.
             args: '--days-forward 2 --delay-ms 500'
+          - provider: tvplus
+            # Plain-HTTP JSON API: 16 channels, one POST per channel-day.
+            # A 3-day window (like the merged guide) keeps the API load and
+            # politeness reasonable from a datacenter IP.
+            args: '--days-forward 2'
+          - provider: beinsports
+            # Publishes exactly one Mon–Sun week per channel, so the full
+            # week is always scraped (28 fetches) regardless of the window.
+            args: ''
+          - provider: digiturkburada
+            # 4 channels, one POST per channel-day; 3-day window matches the
+            # merged sports guide.
+            args: '--days-forward 2'
+          - provider: sporekrani
+            # One page per channel (9 pages total) — the provider's default
+            # 500 ms delay is polite enough for a daily run.
+            args: ''
+          - provider: tivibu
+            # One session GET + one POST per channel-day (4 channels) — the
+            # provider's default 400 ms delay is polite enough.
+            args: ''
     steps:
       - name: Check out
         uses: actions/checkout@v5
@@ -76,8 +99,8 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # One combined sports guide: union of tvplus (16), beinsports (4) and
-  # digiturkburada (4) channels.
+  # One combined sports guide: union of tvplus (16), beinsports (4),
+  # digiturkburada (4), sporekrani (9) and tivibu (4) channels.
   epg-sports-merged:
     needs: scrape
     runs-on: ubuntu-latest
@@ -96,16 +119,16 @@ jobs:
         run: npm ci
 
       - name: Merge sports providers
-        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --days-forward 2 --delay-ms 300 --out epg_sports_merged.xml.gz
+        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge --days-forward 2 --delay-ms 300 --out epg_sports_merged_TR.xml.gz
 
       - name: List output
-        run: ls -la epg_sports_merged.xml*
+        run: ls -la epg_sports_merged_TR.xml*
 
       - name: Upload merged guide
         uses: actions/upload-artifact@v6
         with:
           name: epg-sports-merged
-          path: epg_sports_merged.xml*
+          path: epg_sports_merged_TR.xml*
           retention-days: 7
           if-no-files-found: error
 
