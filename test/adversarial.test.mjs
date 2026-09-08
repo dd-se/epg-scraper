@@ -1234,6 +1234,69 @@ describe('adversarial: CLI flags', () => {
     expect(neg.text).toMatch(/--delay-ms expects a non-negative integer/);
   });
 
+  it('rejects malformed --retries, --timeout-ms and --retry-delay-ms', async () => {
+    for (const bad of [
+      ['--retries', 'abc'],
+      ['--retries=1.5'],
+      ['--retries=-1'],
+      ['--timeout-ms', 'abc'],
+      ['--timeout-ms=0'],
+      ['--timeout-ms=-100'],
+      ['--retry-delay-ms', 'abc'],
+      ['--retry-delay-ms=2.5'],
+      ['--retry-delay-ms=-1'],
+    ]) {
+      const { exit, text } = await run(bad);
+      expect(exit, bad.join(' ')).toBe(1);
+      expect(text, bad.join(' ')).toMatch(
+        /--(retries|timeout-ms|retry-delay-ms) expects/
+      );
+    }
+  });
+
+  it('forwards --retries/--timeout-ms/--retry-delay-ms as fetchOptions', async () => {
+    let seen;
+    registerProvider({
+      id: 'transport-probe',
+      name: 'Transport Probe',
+      baseUrl: 'https://example.invalid',
+      scrape: async (opts) => {
+        seen = opts.fetchOptions;
+        return {
+          channels: [{ id: 'ATV.tr', name: 'ATV' }],
+          programmes: [
+            {
+              channel: 'ATV.tr',
+              start: '2026-09-08T06:00:00+03:00',
+              stop: '2026-09-08T07:00:00+03:00',
+              title: 'Probe Show',
+            },
+          ],
+          days: 1,
+          failures: 0,
+        };
+      },
+    });
+    const runProbe = async (argv) =>
+      runCli({
+        argv: ['--provider', 'transport-probe', '--no-gzip', '--out', path.join(tmpDir, 'transport-probe.xml'), ...argv],
+        stdout: { write: () => {} },
+        stderr: { write: () => {} },
+        cwd: tmpDir,
+      });
+
+    expect(await runProbe(['--retries', '5', '--timeout-ms', '8000', '--retry-delay-ms', '100'])).toBe(0);
+    expect(seen).toEqual({ retries: 5, timeoutMs: 8000, retryDelayMs: 100 });
+
+    // Partial flags forward only what was passed.
+    expect(await runProbe(['--retries', '0'])).toBe(0);
+    expect(seen).toEqual({ retries: 0 });
+
+    // Without flags nothing is forwarded — provider/transport defaults hold.
+    expect(await runProbe([])).toBe(0);
+    expect(seen).toEqual({});
+  });
+
   it('forwards --delay-ms to the provider as politenessDelayMs', async () => {
     let seen;
     registerProvider({

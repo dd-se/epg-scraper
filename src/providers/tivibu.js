@@ -26,16 +26,19 @@
 // NOTE: this provider POSTs form data + sends an antiforgery cookie, so it
 // is plain-HTTP only — do not run it with --browser.
 
-import { wallToIso } from './hurriyet.js';
-
-const DEFAULT_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
+import {
+  wallToIso,
+  normalizeChannelKey,
+  isRealCalendarDate,
+  finishResult,
+  defaultDates,
+} from './shared.js';
 
 export const BASE_URL = 'https://www.tivibu.com.tr';
 const PREVUE_URL = `${BASE_URL}/Channel/GetPrevueList`;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Curated channel table: display name -> page slug + XMLTV id.  None of
 // these channels exist in the epgshare01 reference yet, so ids use the
@@ -49,9 +52,7 @@ export const CHANNELS = [
   { name: 'Tivibu Spor 4', slug: 'tivibu-spor-4', id: 'TIVIBU.SPOR.4.tr' },
 ];
 
-export function normalizeChannelKey(name) {
-  return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
-}
+export { normalizeChannelKey };
 
 // name -> XMLTV id, exported so test/reference.test.mjs can enforce that
 // every curated id exists in the vendored epgshare01 snapshot (or is an
@@ -85,16 +86,8 @@ function parseWallTime(value) {
   // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
   // (month 13, Feb 30, day 32) would otherwise silently roll into a
   // different instant via wallToIso — reject them like the other providers
-  // do.  Date.UTC normalizes, so a round-trip comparison catches every
-  // overflow at once (same technique as toXmltvTimestamp).
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() + 1 !== month ||
-    check.getUTCDate() !== day
-  ) {
-    return undefined;
-  }
+  // do.
+  if (!isRealCalendarDate(year, month, day)) return undefined;
   return { date: `${match[1]}-${match[2]}-${match[3]}`, min: hours * 60 + minutes };
 }
 
@@ -161,24 +154,28 @@ function cookiePairs(setCookieHeader) {
   return pairs;
 }
 
-// GET a page and capture the antiforgery cookie(s) for the session.
-export async function sessionGet(url, { fetchImpl, userAgent = DEFAULT_UA } = {}) {
-  const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
-  const response = await doFetch(url, {
-    headers: { 'user-agent': userAgent, accept: 'text/html,*/*' },
-    redirect: 'follow',
+// GET a page and capture the antiforgery cookie(s) for the session.  Goes
+// through fetchResponseWithRetry (hard timeout, bounded retries, backoff);
+// the raw response is kept so the Set-Cookie header can be read.
+export async function sessionGet(url, { fetchImpl, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
+  const response = await fetchResponseWithRetry(url, {
+    // Keep the tight one-retry session default unless the caller overrides.
+    retries: 1,
+    ...retryOptions,
+    fetchImpl,
+    userAgent,
+    headers: { accept: 'text/html,*/*' },
+    method: 'GET',
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
-  }
   const html = await response.text();
-  const setCookie = typeof response.headers?.get === 'function' ? response.headers.get('set-cookie') : '';
+  const setCookie =
+    typeof response.headers?.get === 'function' ? response.headers.get('set-cookie') : '';
   return { html, cookie: cookiePairs(setCookie).join('; ') };
 }
 
-// POST GetPrevueList for one channel-day and return the parsed JSON.
-export async function prevuePost(url, payload, { fetchImpl, userAgent = DEFAULT_UA } = {}) {
-  const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
+// POST GetPrevueList for one channel-day and return the parsed JSON.  Goes
+// through fetchResponseWithRetry (hard timeout, bounded retries, backoff).
+export async function prevuePost(url, payload, { fetchImpl, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
   // The API takes the site's own dotted format ("2026.09.09 00:00:00").
   const dotted = payload.date.replaceAll('-', '.');
   const body = new URLSearchParams({
@@ -186,21 +183,20 @@ export async function prevuePost(url, payload, { fetchImpl, userAgent = DEFAULT_
     channelDateBegin: `${dotted} 00:00:00`,
     channelDateEnd: `${dotted} 23:59:59`,
   }).toString();
-  const response = await doFetch(url, {
-    method: 'POST',
+  const response = await fetchResponseWithRetry(url, {
+    ...retryOptions,
+    fetchImpl,
+    userAgent,
     headers: {
-      'user-agent': userAgent,
       'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'x-requested-with': 'XMLHttpRequest',
       'RequestVerificationToken': payload.token,
       cookie: payload.cookie,
       referer: payload.referer,
     },
+    method: 'POST',
     body,
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
-  }
   const text = await response.text();
   try {
     return JSON.parse(text);
@@ -223,10 +219,7 @@ export async function scrape({
   maxChannels = Infinity,
   fetchOptions = {},
 } = {}) {
-  const activeDates =
-    dates && dates.length > 0
-      ? dates
-      : [new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10)];
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];
@@ -236,7 +229,7 @@ export async function scrape({
     const pageUrl = channelPageUrl(channel.slug);
     let session;
     try {
-      session = await sessionGet(pageUrl, { fetchImpl });
+      session = await sessionGet(pageUrl, { fetchImpl, ...fetchOptions });
     } catch (error) {
       failures++;
       log(`warn: ${channel.name} session failed: ${error.message}`);
@@ -262,7 +255,7 @@ export async function scrape({
             referer: pageUrl,
             date,
           },
-          { fetchImpl }
+          { fetchImpl, ...fetchOptions }
         );
       } catch (error) {
         failures++;
@@ -294,26 +287,11 @@ export async function scrape({
     }
   }
 
-  // Dedupe exact (channel, start, stop, title) repeats, keep first.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  deduped.sort((a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start));
-
-  log(
-    `done:  ${channels.length} channels, ${deduped.length} programmes, ` +
-      `${failures} failed request(s)`
-  );
-
-  return {
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({
     channels: channels.map((c) => ({ id: c.id, name: c.name })),
-    programmes: deduped,
+    programmes,
     days: activeDates.length,
     failures,
-  };
+  });
 }

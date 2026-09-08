@@ -28,6 +28,13 @@ const HELP_TEXT = `Usage: epg-scraper [options]
   --delay-ms N         ms to wait between page fetches (default: provider
                        default — hurriyet 250, mynet 500; mynet fetches
                        ~90 channel pages per day, so keep this polite)
+  --retries N          transport retries per request after the first attempt
+                       (default: 2 for GET pages, 1 for API POSTs; a 5xx/
+                       429 or network error is retried, other statuses are
+                       not)
+  --timeout-ms N       per-request hard timeout in ms (default: 20000)
+  --retry-delay-ms N   base ms between retry attempts, scaled linearly per
+                       attempt (default: 400)
   --browser            launch a headless browser for JS-rendered providers
   --stealth            mask headless browser fingerprints in browser mode
                        (webdriver, plugins, Sec-CH-UA hints, locale) and
@@ -88,6 +95,9 @@ export async function runCli({
         'days-back': { type: 'string', default: '0' },
         'max-channels': { type: 'string' },
         'delay-ms': { type: 'string' },
+        retries: { type: 'string' },
+        'timeout-ms': { type: 'string' },
+        'retry-delay-ms': { type: 'string' },
         browser: { type: 'boolean', default: false },
         stealth: { type: 'boolean', default: false },
         compare: { type: 'boolean', default: false },
@@ -184,6 +194,16 @@ export async function runCli({
   const delayMs = parseDelayMs(values, fail);
   if (delayMs === null) return 1;
 
+  const transportOptions = parseTransportOptions(values, fail);
+  if (transportOptions === null) return 1;
+  if (Object.keys(transportOptions).length > 0) {
+    log(
+      `transport: retries=${transportOptions.retries ?? 'default'} timeout=${
+        transportOptions.timeoutMs ?? 'default'
+      }ms retry-delay=${transportOptions.retryDelayMs ?? 'default'}ms`
+    );
+  }
+
   // Optional channel-id alias map: canonicalize ids before compare/merge so
   // e.g. mynet's "AHABER.tr" and hurriyet's "A.HABER.tr" line up.
   let canonicalize = (id) => id;
@@ -209,6 +229,7 @@ export async function runCli({
         dates,
         values,
         delayMs,
+        transportOptions,
         log,
         fail,
         write,
@@ -223,6 +244,7 @@ export async function runCli({
       dates,
       values,
       delayMs,
+      transportOptions,
       log,
       fail,
       write,
@@ -239,6 +261,7 @@ export async function runCli({
       dates,
       values,
       delayMs,
+      transportOptions,
       log,
       fail,
       write,
@@ -276,7 +299,7 @@ export async function runCli({
   log(`window:   ${dates[0]} .. ${dates[dates.length - 1]} (${dates.length} day(s))`);
 
   try {
-    const scrapeOptions = { dates, log };
+    const scrapeOptions = { dates, log, fetchOptions: { ...transportOptions } };
     if (delayMs !== undefined) scrapeOptions.politenessDelayMs = delayMs;
     if (browserFetcher) {
       scrapeOptions.fetchImpl = browserFetcher.fetchImpl;
@@ -332,6 +355,39 @@ function parseDelayMs(values, fail) {
   return n;
 }
 
+// Parse `--retries`, `--timeout-ms` and `--retry-delay-ms` into an options
+// object forwarded to every provider (they pass it into the transport
+// layer).  Returns {} when no flag was passed, null after reporting an
+// invalid value (caller must exit 1).
+function parseTransportOptions(values, fail) {
+  const options = {};
+  if (values.retries != null) {
+    const n = Number(values.retries);
+    if (!Number.isInteger(n) || n < 0) {
+      fail('--retries expects a non-negative integer (retry attempts per request)');
+      return null;
+    }
+    options.retries = n;
+  }
+  if (values['timeout-ms'] != null) {
+    const n = Number(values['timeout-ms']);
+    if (!Number.isInteger(n) || n <= 0) {
+      fail('--timeout-ms expects a positive integer (milliseconds)');
+      return null;
+    }
+    options.timeoutMs = n;
+  }
+  if (values['retry-delay-ms'] != null) {
+    const n = Number(values['retry-delay-ms']);
+    if (!Number.isInteger(n) || n < 0) {
+      fail('--retry-delay-ms expects a non-negative integer (milliseconds)');
+      return null;
+    }
+    options.retryDelayMs = n;
+  }
+  return options;
+}
+
 // Strip a trailing .gz / .xml so `--compare` can derive the per-mode output
 // paths (guide.xml.gz -> guide.http.xml.gz + guide.browser.xml.gz).
 function stripXmltvExtension(outputPath) {
@@ -343,7 +399,7 @@ function stripXmltvExtension(outputPath) {
 
 // --compare: scrape the provider twice (plain HTTP, then headless browser),
 // report the structural differences, and write both guides for manual diffing.
-async function runCompare({ provider, dates, values, delayMs, log, fail, write, stdout, stderr, cwd, canonicalize }) {
+async function runCompare({ provider, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
   // Launch the browser first so a missing Playwright fails fast.
   let browserFetcher = null;
   try {
@@ -364,7 +420,7 @@ async function runCompare({ provider, dates, values, delayMs, log, fail, write, 
     const httpOutput = `${base}.http${extension}`;
     const browserOutput = `${base}.browser${extension}`;
 
-    const options = { dates };
+    const options = { dates, fetchOptions: { ...transportOptions } };
     if (delayMs !== undefined) options.politenessDelayMs = delayMs;
     if (values['max-channels'] != null) {
       const n = Number(values['max-channels']);
@@ -430,7 +486,7 @@ async function runCompare({ provider, dates, values, delayMs, log, fail, write, 
 // --merge: scrape every listed provider (sharing one browser when any of
 // them needs JS rendering), combine the results into a single complete guide
 // and write one XMLTV file.
-async function runMerge({ providers, dates, values, delayMs, log, fail, write, stdout, stderr, cwd, canonicalize }) {
+async function runMerge({ providers, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
   // Lazily create one browser fetcher shared by every provider that needs it.
   const needBrowser = values.browser || providers.some((p) => p.requiresBrowser);
   let browserFetcher = null;
@@ -463,6 +519,7 @@ async function runMerge({ providers, dates, values, delayMs, log, fail, write, s
       const result = await provider.scrape({
         dates,
         maxChannels,
+        fetchOptions: { ...transportOptions },
         politenessDelayMs: delayMs,
         fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
         log: (line) => log(`${provider.id}: ${line}`),
@@ -510,7 +567,7 @@ async function runMerge({ providers, dates, values, delayMs, log, fail, write, s
 // --compare with two providers: scrape both (each in its natural mode,
 // sharing one browser when any of them needs JS rendering), diff the guides
 // channel by channel, and write both sides for manual diffing.
-async function runProviderCompare({ providers, dates, values, delayMs, log, fail, write, stdout, stderr, cwd, canonicalize }) {
+async function runProviderCompare({ providers, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
   const needBrowser = values.browser || providers.some((p) => p.requiresBrowser);
   let browserFetcher = null;
   if (needBrowser) {
@@ -542,6 +599,7 @@ async function runProviderCompare({ providers, dates, values, delayMs, log, fail
       const result = await provider.scrape({
         dates,
         maxChannels,
+        fetchOptions: { ...transportOptions },
         politenessDelayMs: delayMs,
         fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
         log: (line) => log(`${provider.id}: ${line}`),

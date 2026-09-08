@@ -56,7 +56,11 @@ CLI tool and library.
 `bin/epg-scraper.js` is a thin wrapper that calls `runCli()` from
 `src/cli.js`. The module tree:
 
-1. `src/http.js` — `fetchText()` with UA, timeout, retries, abort control.
+1. `src/http.js` — `fetchText()` (GET) and `fetchResponseWithRetry()` (POST/raw
+   Response) with UA, hard timeout, bounded retries with backoff, abort
+   control.  `DEFAULT_UA` and `sleep` are exported for the browser layer.
+   The POST transport is what gives the JSON/form providers (tvplus,
+   digiturkburada, tivibu) the same failsafes the GET providers have.
 2. `src/browser.js` — `createBrowserFetcher()` lazy-loads Playwright, launches
    headless Chromium, returns a `fetchImpl`-compatible function that renders
    pages and returns HTML.  Also exports `isPlaywrightAvailable()`.  With
@@ -73,7 +77,11 @@ CLI tool and library.
    and `buildDateRange()` date helper.
 7. `src/xmltv.js` — XMLTV document writer (`generateXmltv` → string, `writeXmltv` → file),
    timestamp formatter, XML escaping.
-8. `src/providers/` — Provider adapters:
+8. `src/providers/` — Provider adapters (shared plumbing — wallToIso,
+   weekDays, weekdayIndex, normalizeChannelKey, calendar-date validation,
+   defaultDates, dedupe/sort, finishResult — lives in
+   `src/providers/shared.js`; wallToIso/weekDays are re-exported from
+   hurriyet.js for compatibility):
     - `hurriyet.js` — Hürriyet TV Rehberi: `parseDayPage(html)`, `scrape()`, day
       slug/date mapping, curated channel-id map.  Uses positional rail/row
       pairing; handles the `passive` class added by client-side JS.  Channel
@@ -94,8 +102,11 @@ CLI tool and library.
       `POST {base}/EPG/JSON/PlayBillList` per channel+day (explicit
       start/stop, pre-stamped `UTC+03:00`).  `parsePlaybill()` /
       `parsePlatformInfo()` / `parseApiInstant()` / `extractSessionCookie()`
-      are the pure parsers.  **Not browser-compatible** (POSTs JSON; do not
-      pass `--browser`).  Supports `maxChannels`.
+      are the pure parsers.  **Failsafe:** if a PlayBillList call exhausts
+      its transport retries, the session (rotating host + auth cookie) is
+      re-established once and the channel-day retried before it counts as a
+      failure.  **Not browser-compatible** (POSTs JSON; do not pass
+      `--browser`).  Supports `maxChannels`.
     - `beinsports.js` — beIN Sports Yayın Akışı: beIN Sports 1-4 via the
       `__NEXT_DATA__` JSON embedded in `beinsports.com.tr/yayin-akisi/
       {channel}/{weekday}` pages.  `parseDayPage()` / `parseChannelList()`
@@ -202,11 +213,21 @@ Every provider adapter must export:
     politenessDelayMs,     // ms between page fetches (provider default;
                              // hurriyet 250, mynet 500 — scale with page count;
                              // overridable via CLI --delay-ms)
-    fetchOptions,          // passed through to fetchText (retries, timeout, etc.)
+    fetchOptions,          // passed through to the transport (retries,
+                             // timeoutMs, retryDelayMs, ... — set by the CLI
+                             // flags --retries / --timeout-ms /
+                             // --retry-delay-ms)
     maxChannels,           // optional cap on the number of channels (mynet)
   }) => Promise<{ channels, programmes, days, failures }>
 }
 ```
+
+Transport failsafes are provided by `src/http.js`, not re-implemented per
+provider: `fetchText()` for GET providers, `fetchResponseWithRetry()` for
+the JSON/form POST providers.  Every request carries a hard timeout, is
+retried on transport errors AND transient non-2xx responses (5xx/429) with
+linear backoff, and a request that still fails degrades to a per-page
+warning — a provider run fails only when it cannot produce any data at all.
 
 When `requiresBrowser` is true (or `--browser` is passed), `fetchImpl` is
 a Playwright-backed function that opens each URL in a headless Chromium tab,

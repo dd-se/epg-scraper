@@ -20,7 +20,14 @@
 
 import { decodeEntities } from '../entities.js';
 import { fetchText } from '../http.js';
-import { weekDays, wallToIso } from './hurriyet.js';
+import {
+  wallToIso,
+  weekDays,
+  weekdayIndex,
+  normalizeChannelKey,
+  finishResult,
+  splitDate,
+} from './shared.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -56,9 +63,7 @@ export const CHANNEL_REWRITES = {
   'BEIN SPORTS 4': 'beinsports-4',
 };
 
-export function normalizeChannelKey(name) {
-  return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
-}
+export { normalizeChannelKey };
 
 export function mapChannelId(name) {
   return CHANNEL_ID_MAP[normalizeChannelKey(name)];
@@ -161,10 +166,7 @@ export async function scrape({
     log(`note: beinsports publishes one Mon-Sun week; scraping ${week[0]}..${week[6]}`);
   }
 
-  const tagsForWeek = week.map((date) => {
-    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
-    return DAY_TAGS[(weekday + 6) % 7];
-  });
+  const tagsForWeek = week.map((date) => DAY_TAGS[weekdayIndex(date)]);
 
   for (const name of Object.keys(CHANNEL_REWRITES)) {
     const id = mapChannelId(name);
@@ -193,7 +195,7 @@ export async function scrape({
         log(`warn: ${name} (${tag}) served ${servedDate}, expected ${date}`);
       }
 
-      const [year, month, day] = date.split('-').map(Number);
+      const { year, month, day } = splitDate(date);
       for (let s = 0; s < slots.length; s++) {
         const slot = slots[s];
         // The page only contains the selected channel's guide, so the slot's
@@ -211,14 +213,6 @@ export async function scrape({
     }
   }
 
-  // Dedupe exact (channel, start, stop, title) repeats, keep first.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return { channels, programmes: deduped, days: week.length, failures };
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({ channels, programmes, days: week.length, failures });
 }

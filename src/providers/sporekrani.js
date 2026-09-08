@@ -24,9 +24,18 @@
 // dates outside the window are silently skipped (one fetch per channel).
 
 import { fetchText } from '../http.js';
-import { wallToIso } from './hurriyet.js';
+import {
+  wallToIso,
+  normalizeChannelKey,
+  isRealCalendarDate,
+  finishResult,
+  defaultDates,
+  splitDate,
+} from './shared.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export { normalizeChannelKey };
 
 export const BASE_URL = 'https://www.sporekrani.com';
 
@@ -46,10 +55,6 @@ export const CHANNELS = [
   { name: 'tabii Spor 8', slug: 'tabii-spor-8', id: 'TABII.SPOR.8.tr' },
   { name: 'S Sport Plus', slug: 's-sport-plus', id: 'S.SPORT.PLUS.tr' },
 ];
-
-export function normalizeChannelKey(name) {
-  return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
-}
 
 // name -> XMLTV id, exported so test/reference.test.mjs can enforce that
 // every curated id exists in the vendored epgshare01 snapshot (or is an
@@ -129,6 +134,11 @@ export function parseChannelPage(html, channelName) {
     const hours = Number(timeMatch[4]);
     const minutes = Number(timeMatch[5]);
     if (hours > 24 || minutes > 59) continue;
+    // Impossible calendar dates (month 13, Feb 30) would silently roll into
+    // a different month via wallToIso — validate like the other parsers.
+    if (!isRealCalendarDate(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3]))) {
+      continue;
+    }
     const category =
       typeof event.sport_name === 'string' && event.sport_name.trim()
         ? event.sport_name.replace(/\s+/g, ' ').trim()
@@ -158,9 +168,7 @@ export async function scrape({
   fetchOptions = {},
 } = {}) {
   const activeDates =
-    dates && dates.length > 0
-      ? dates
-      : [new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10)];
+    dates && dates.length > 0 ? dates : defaultDates();
   const requested = new Set(activeDates);
 
   const channels = CHANNELS.slice(0, maxChannels);
@@ -189,12 +197,10 @@ export async function scrape({
       if (!requested.has(event.date)) continue;
       inWindow++;
       const next = events[i + 1];
-      const [year, month, day] = event.date.split('-').map(Number);
-      const [nextYear, nextMonth, nextDay] = next
-        ? next.date.split('-').map(Number)
-        : [year, month, day];
+      const { year, month, day } = splitDate(event.date);
+      const nextParts = next ? splitDate(next.date) : { year, month, day };
       const start = wallToIso(year, month, day, event.startMin);
-      const stop = wallToIso(nextYear, nextMonth, nextDay, next ? next.startMin : 24 * 60);
+      const stop = wallToIso(nextParts.year, nextParts.month, nextParts.day, next ? next.startMin : 24 * 60);
       // Two events with the same start time (simulcast listing duplicated)
       // would make a zero-length programme — skip it instead of emitting
       // garbage.  ISO strings compare correctly at a fixed +03:00 offset.
@@ -211,26 +217,11 @@ export async function scrape({
     await sleep(politenessDelayMs);
   }
 
-  // Dedupe exact (channel, start, stop, title) repeats, keep first.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  deduped.sort((a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start));
-
-  log(
-    `done:  ${channels.length} channels, ${deduped.length} programmes, ` +
-      `${failures} failed request(s)`
-  );
-
-  return {
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({
     channels: channels.map((c) => ({ id: c.id, name: c.name })),
-    programmes: deduped,
+    programmes,
     days: activeDates.length,
     failures,
-  };
+  });
 }

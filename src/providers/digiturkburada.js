@@ -22,13 +22,10 @@
 // it with --browser (the Playwright fetcher renders pages and cannot POST).
 
 import { decodeEntities } from '../entities.js';
-import { wallToIso } from './hurriyet.js';
+import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
+import { wallToIso, finishResult, defaultDates } from './shared.js';
 
 export const BASE_URL = 'https://www.digiturkburada.com.tr';
-
-const DEFAULT_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -130,23 +127,22 @@ export function parseDayPage(html) {
 }
 
 // ---- Form transport (plain HTTP only; the browser fetcher cannot POST) ----
+// Goes through fetchResponseWithRetry: hard timeout, bounded retries with
+// backoff, transient 5xx/429 tolerated.
 
-export async function formPost(url, body, { fetchImpl, userAgent = DEFAULT_UA } = {}) {
-  const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
-  const response = await doFetch(url, {
-    method: 'POST',
+export function formPost(url, body, { fetchImpl, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
+  return fetchResponseWithRetry(url, {
+    ...retryOptions,
+    fetchImpl,
+    userAgent,
     headers: {
-      'user-agent': userAgent,
       accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
       'content-type': 'application/x-www-form-urlencoded',
       referer: url,
     },
+    method: 'POST',
     body: new URLSearchParams(body).toString(),
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
-  }
-  return response;
 }
 
 // ---- scrape ----
@@ -159,12 +155,10 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 400,
+  fetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
-  const activeDates =
-    dates && dates.length > 0
-      ? dates
-      : [new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10)];
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];
@@ -177,7 +171,7 @@ export async function scrape({
       const body = { yayin: `${d}.${String(m).padStart(2, '0')}.${y}` };
       let response;
       try {
-        response = await formPost(url, body, { fetchImpl });
+        response = await formPost(url, body, { fetchImpl, ...fetchOptions });
       } catch (error) {
         failures++;
         log(`warn: ${channel.name} (${date}) failed: ${error.message}`);
@@ -205,26 +199,11 @@ export async function scrape({
     }
   }
 
-  // Dedupe exact (channel, start, stop, title) repeats, keep first.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  deduped.sort((a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start));
-
-  log(
-    `done:  ${channels.length} channels, ${deduped.length} programmes, ` +
-      `${failures} failed request(s)`
-  );
-
-  return {
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({
     channels: channels.map((c) => ({ id: c.id, name: c.name })),
-    programmes: deduped,
+    programmes,
     days: activeDates.length,
     failures,
-  };
+  });
 }

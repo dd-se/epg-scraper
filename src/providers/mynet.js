@@ -18,6 +18,16 @@
 import { decodeEntities } from '../entities.js';
 import { channelIdFromName } from '../slug.js';
 import { fetchText } from '../http.js';
+import {
+  wallToIso,
+  normalizeChannelKey,
+  dedupeProgrammes,
+  finishResult,
+  defaultDates,
+  splitDate,
+} from './shared.js';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://www.mynet.com';
 export const MAIN_URL = `${BASE_URL}/tv-rehberi`;
@@ -87,8 +97,6 @@ export const CHANNEL_ID_MAP = {
   'EKOTURK': 'EKOTÜRK.tr',
 };
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 function collapseWhitespace(text) {
   return decodeEntities(text).replace(/\s+/g, ' ').trim();
 }
@@ -98,9 +106,7 @@ function matchOne(source, pattern) {
   return match ? match[1] : undefined;
 }
 
-export function normalizeChannelKey(name) {
-  return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
-}
+export { normalizeChannelKey };
 
 export function mapChannelId(name) {
   return CHANNEL_ID_MAP[normalizeChannelKey(name)] || channelIdFromName(name);
@@ -192,11 +198,8 @@ export function parseChannelPage(html) {
   return slots;
 }
 
-// Wall-clock date + minutes since midnight -> ISO instant with +03:00.
-export function wallToIso(year, month, day, minutes) {
-  const ms = Date.UTC(year, month - 1, day, 0, minutes);
-  return new Date(ms).toISOString().slice(0, 19) + '+03:00';
-}
+// Re-exported: tests import wallToIso from this module (historical site).
+export { wallToIso };
 
 // Compute Istanbul wall-clock date for a day offset.  When an `anchor`
 // (YYYY-MM-DD, the first requested date) is given it is used as "today" so
@@ -226,7 +229,7 @@ function dayDate(offset, anchor) {
   };
 }
 
-// Convert dayDate() result to YYYY-MM-DD string.
+// Convert a dayDate() result to YYYY-MM-DD.
 function dateToString({ year, month, day }) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
@@ -246,6 +249,7 @@ export async function scrape({
   fetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
+  // Step 3: Fetch each channel's schedule for each active day.
   const channelsById = new Map();
   const channels = [];
   const programmes = [];
@@ -267,6 +271,8 @@ export async function scrape({
     return { channels: [], programmes: [], days: 0, failures: 0 };
   }
 
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
+
   // Respect maxChannels limit (for testing / faster runs).
   if (maxChannels < channelList.length) {
     channelList = channelList.slice(0, maxChannels);
@@ -278,15 +284,10 @@ export async function scrape({
   // anchored on the first requested date so --date is honored regardless of
   // the real clock (falls back to real "today" when no dates arrive).
   const anchor = dates && dates.length > 0 ? dates[0] : undefined;
-  const today = dayDate(0, anchor);
-  const tomorrow = dayDate(1, anchor);
-  const dayAfter = dayDate(2, anchor);
-  const dayMap = [
-    { date: dateToString(today), slug: 'bugun', offset: 0 },
-    { date: dateToString(tomorrow), slug: 'yarin', offset: 1 },
-    { date: dateToString(dayAfter), slug: 'sonraki-gun', offset: 2 },
-  ];
-
+  const dayMap = [0, 1, 2].map((offset) => ({
+    date: dateToString(dayDate(offset, anchor)),
+    slug: DAY_SLUGS[offset],
+  }));
   // Filter to only requested dates that fall within the 3-day window.
   const requestedDates = dates && dates.length > 0 ? dates : dayMap.map((d) => d.date);
   const activeDays = dayMap.filter((d) => requestedDates.includes(d.date));
@@ -326,7 +327,7 @@ export async function scrape({
       const slots = parseChannelPage(html);
       // Stamp with the resolved day date (anchored on the first requested
       // date), never the real clock.
-      const [year, month, dayNum] = day.date.split('-').map(Number);
+      const { year, month, day: dayNum } = splitDate(day.date);
 
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i];
@@ -350,16 +351,6 @@ export async function scrape({
     }
   }
 
-  // Dedupe exact repeats.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  log(`done:  ${channels.length} channels, ${deduped.length} programmes, ${failures} failures`);
-
-  return { channels, programmes: deduped, days: activeDays.length, failures };
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({ channels, programmes, days: activeDays.length, failures });
 }

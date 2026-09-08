@@ -26,13 +26,23 @@ npm test
 ```
 
 Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
-`--days-back N`, `--days-forward N`, `--delay-ms N`, `--browser`, `--stealth`, `--compare`,
+`--days-back N`, `--days-forward N`, `--delay-ms N`, `--retries N`,
+`--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
 `--merge`, `--alias-map <path>`, `--quiet`, `--list-providers`.
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
 digiturkburada 400, sporekrani 500, tivibu 400 —
 mynet fetches ~90 channel pages per day, so keep this polite).
+
+Transport failsafes are tunable: `--retries N` sets the retry attempts per
+request after the first (defaults: 2 for plain-HTTP page GETs, 1 for the
+JSON/form API POSTs), `--timeout-ms N` the per-request hard timeout
+(default 20000), and `--retry-delay-ms N` the base backoff between
+attempts (default 400, scaled linearly per attempt).  Transient failures
+(HTTP 5xx/429, network errors, timeouts) are retried; other statuses fail
+immediately.  Raise `--retries` for unreliable links, lower `--timeout-ms`
+ to fail fast on dead hosts.
 
 Sports channels are covered by the `tvplus`, `beinsports`, `digiturkburada`,
 `sporekrani`, and `tivibu` providers (37 channels together); see the

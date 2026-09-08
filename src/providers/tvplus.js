@@ -24,19 +24,28 @@
 // Times come pre-stamped with the fixed +03:00 offset, so the provider emits
 // them verbatim (after normalizing the literal " UTC+03:00" suffix).
 //
+// Failsafes: the session (rotating host + cookie) is re-established once
+// when a PlayBillList call fails mid-run — the load balancer rotates hosts
+// and sessions do expire during long scrapes — and every POST is retried
+// with backoff by the transport.  A channel-day that still fails after all
+// that degrades to a warning, never a crash.
+//
 // NOTE: this provider talks to a JSON API, so it is plain-HTTP only — do not
 // run it with --browser (the browser fetcher renders pages and cannot POST).
 
-import { wallToIso } from './hurriyet.js';
+import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
+import {
+  wallToIso,
+  normalizeChannelKey,
+  isRealCalendarDate,
+  finishResult,
+  defaultDates,
+} from './shared.js';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://tvplus.com.tr';
 export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
-
-const DEFAULT_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Curated channel table: display name -> { tvId (TV+ numeric id), id (XMLTV
 // id normalized to the epgshare01 reference) }.
@@ -63,9 +72,7 @@ export const CHANNELS = [
 // every curated id exists in the vendored epgshare01 snapshot.
 export const CHANNEL_ID_MAP = Object.fromEntries(CHANNELS.map((c) => [c.name, c.id]));
 
-export function normalizeChannelKey(name) {
-  return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
-}
+export { normalizeChannelKey };
 
 export function mapChannelId(name) {
   const entry = CHANNELS.find((c) => normalizeChannelKey(c.name) === normalizeChannelKey(name));
@@ -108,16 +115,8 @@ export function parseApiInstant(value) {
   // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
   // (month 13, Feb 30, day 32) would otherwise silently roll into a
   // different instant via wallToIso — reject them like the other providers
-  // do.  Date.UTC normalizes, so a round-trip comparison catches every
-  // overflow at once (same technique as toXmltvTimestamp).
-  const check = new Date(Date.UTC(year, month - 1, day));
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() + 1 !== month ||
-    check.getUTCDate() !== day
-  ) {
-    return null;
-  }
+  // do.
+  if (!isRealCalendarDate(year, month, day)) return null;
   return { year, month, day, minutes: hours * 60 + minutes };
 }
 
@@ -141,9 +140,9 @@ export function parsePlaybill(text) {
     const stopIso = wallToIso(stop.year, stop.month, stop.day, stop.minutes);
     // A corrupt response can give an end that precedes its begin (or a
     // zero-length isFillProgram gap): such a slot would become an invalid
-    // programme.  Drop it instead of emitting garbage — same guard as the
-    // tivibu provider.  The ISO strings share the fixed +03:00 offset, so
-    // lexicographic comparison is a true chronological comparison.
+    // programme.  Drop it instead of emitting garbage.  The ISO strings
+    // share the fixed +03:00 offset, so lexicographic comparison is a true
+    // chronological comparison.
     if (stopIso <= startIso) continue;
     const genre = typeof item.genres === 'string' && item.genres.trim() ? item.genres.trim() : undefined;
     slots.push({
@@ -176,25 +175,75 @@ export function extractSessionCookie(response) {
 }
 
 // ---- JSON transport (plain HTTP only; the browser fetcher cannot POST) ----
+//
+// Every POST goes through fetchResponseWithRetry: hard timeout, bounded
+// retries with backoff, transient 5xx/429 tolerated.  The response is NOT
+// consumed here — Authenticate needs its Set-Cookie headers read.
 
-export async function jsonPost(url, body, { fetchImpl, headers = {}, userAgent = DEFAULT_UA } = {}) {
-  const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
-  const response = await doFetch(url, {
-    method: 'POST',
+export function jsonPost(url, body, { fetchImpl, headers = {}, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
+  return fetchResponseWithRetry(url, {
+    ...retryOptions,
+    fetchImpl,
+    userAgent,
     headers: {
-      'user-agent': userAgent,
       accept: 'application/json, text/plain, */*',
       'content-type': 'application/json',
       origin: BASE_URL,
       referer: `${BASE_URL}/`,
       ...headers,
     },
+    method: 'POST',
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} for ${url}`);
+}
+
+// ---- Session lifecycle ----
+
+// Authenticate against the discovered API host and return the session
+// cookie string (or undefined when the server sets none).
+async function authenticate(apiBase, { fetchImpl, log, fetchOptions = {} }) {
+  const response = await jsonPost(
+    `${apiBase}/EPG/JSON/Authenticate`,
+    {
+      terminaltype: 'webtv',
+      terminalvendor:
+        '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
+      osversion: 'Win32',
+      userType: '3',
+      utcEnable: '1',
+      timezone: 'Europe/Istanbul',
+    },
+    { fetchImpl, ...fetchOptions }
+  );
+  await response.text();
+  const cookie = extractSessionCookie(response);
+  if (!cookie) {
+    log('warn: Authenticate set no session cookie — PlayBillList may be rejected');
   }
-  return response;
+  return cookie;
+}
+
+// Establish a session: discover the (rotating) API host, then authenticate.
+// Returns { apiBase, sessionCookie } or undefined when discovery/auth fails.
+async function establishSession({ fetchImpl, log, fetchOptions = {} }) {
+  let apiBase;
+  try {
+    const response = await jsonPost(PLATFORM_INFO_URL, { platform: 'production' }, { fetchImpl, ...fetchOptions });
+    const text = await response.text();
+    apiBase = parsePlatformInfo(text);
+    if (!apiBase) throw new Error('get-platform-info returned no https base');
+    log(`ok:   api base ${apiBase}`);
+  } catch (error) {
+    log(`error: failed to discover TV+ api base: ${error.message}`);
+    return undefined;
+  }
+  try {
+    const sessionCookie = await authenticate(apiBase, { fetchImpl, log, fetchOptions });
+    return { apiBase, sessionCookie };
+  } catch (error) {
+    log(`error: TV+ authentication failed: ${error.message}`);
+    return undefined;
+  }
 }
 
 // ---- scrape ----
@@ -210,56 +259,20 @@ export async function scrape({
   fetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
-  const seen = new Set();
   const programmes = [];
 
-  // 1. Discover the (rotating) API host.
-  let apiBase;
-  try {
-    const response = await jsonPost(PLATFORM_INFO_URL, { platform: 'production' }, { fetchImpl });
-    const text = await response.text();
-    apiBase = parsePlatformInfo(text);
-    if (!apiBase) throw new Error('get-platform-info returned no https base');
-    log(`ok:   api base ${apiBase}`);
-  } catch (error) {
-    log(`error: failed to discover TV+ api base: ${error.message}`);
-    return { channels: [], programmes: [], days: 0, failures: 1 };
-  }
-
-  // 2. Authenticate and keep the session cookie.
-  let sessionCookie;
-  try {
-    const response = await jsonPost(
-      `${apiBase}/EPG/JSON/Authenticate`,
-      {
-        terminaltype: 'webtv',
-        terminalvendor:
-          '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
-        osversion: 'Win32',
-        userType: '3',
-        utcEnable: '1',
-        timezone: 'Europe/Istanbul',
-      },
-      { fetchImpl }
-    );
-    await response.text();
-    sessionCookie = extractSessionCookie(response);
-    if (!sessionCookie) {
-      log('warn: Authenticate set no session cookie — PlayBillList may be rejected');
-    }
-  } catch (error) {
-    log(`error: TV+ authentication failed: ${error.message}`);
+  // 1. Session: rotating host + auth cookie.  Re-established once mid-run
+  //    if a PlayBillList call exhausts its retries (expired session).
+  // fetchOptions flows into every transport call (retries, timeoutMs, ...).
+  let session = await establishSession({ fetchImpl, log, fetchOptions });
+  if (!session) {
     return { channels: [], programmes: [], days: 0, failures: 1 };
   }
 
   const channels = CHANNELS.slice(0, maxChannels);
   // No dates supplied: cover today in Istanbul (UTC+3 year-round).
-  const activeDates =
-    dates && dates.length > 0
-      ? dates
-      : [new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10)];
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
-  const cookieHeaders = sessionCookie ? { cookie: sessionCookie } : {};
   let failuresCount = 0;
 
   for (const channel of channels) {
@@ -272,23 +285,40 @@ export async function scrape({
         endtime: `${compact}235959`,
         isFillProgram: 1,
       };
-      let response;
+      let text;
       try {
-        response = await jsonPost(`${apiBase}/EPG/JSON/PlayBillList`, body, {
+        const response = await jsonPost(`${session.apiBase}/EPG/JSON/PlayBillList`, body, {
           fetchImpl,
-          headers: cookieHeaders,
+          ...fetchOptions,
+          headers: session.sessionCookie ? { cookie: session.sessionCookie } : {},
         });
+        text = await response.text();
       } catch (error) {
-        failuresCount++;
-        log(`warn: ${channel.name} (${date}) failed: ${error.message}`);
-        continue;
+        // The load balancer rotates hosts and sessions expire: rebuild the
+        // session once and retry this channel-day before giving up on it.
+        log(`warn: ${channel.name} (${date}) failed (${error.message}); re-authenticating`);
+        const fresh = await establishSession({ fetchImpl, log });
+        if (!fresh) {
+          failuresCount++;
+          log(`warn: ${channel.name} (${date}) skipped: session re-establishment failed`);
+          continue;
+        }
+        session = fresh;
+        try {
+          const response = await jsonPost(`${session.apiBase}/EPG/JSON/PlayBillList`, body, {
+            fetchImpl,
+            ...fetchOptions,
+            headers: session.sessionCookie ? { cookie: session.sessionCookie } : {},
+          });
+          text = await response.text();
+        } catch (retryError) {
+          failuresCount++;
+          log(`warn: ${channel.name} (${date}) failed after re-auth: ${retryError.message}`);
+          continue;
+        }
       }
-      const text = await response.text();
       const slots = parsePlaybill(text);
       for (const slot of slots) {
-        const key = [channel.id, slot.start, slot.stop, slot.title].join('|');
-        if (seen.has(key)) continue;
-        seen.add(key);
         programmes.push({ channel: channel.id, ...slot });
       }
       log(`ok:   ${channel.name} (${date}): ${slots.length} programmes`);
@@ -296,20 +326,11 @@ export async function scrape({
     }
   }
 
-  programmes.sort((a, b) =>
-    a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start)
-  );
-
-  const channelEntries = channels.map((c) => ({ id: c.id, name: c.name }));
-  log(
-    `done:  ${channelEntries.length} channels, ${programmes.length} programmes, ` +
-      `${failuresCount} failed request(s)`
-  );
-
-  return {
-    channels: channelEntries,
+  const result = finishResult({
+    channels: channels.map((c) => ({ id: c.id, name: c.name })),
     programmes,
     days: activeDates.length,
     failures: failuresCount,
-  };
+  });
+  return result;
 }

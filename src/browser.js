@@ -18,11 +18,7 @@
 // simulates human interaction (incremental scrolling to load lazy content,
 // small mouse movements) before the DOM is snapshotted.
 
-const DEFAULT_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import { DEFAULT_UA, sleep } from './http.js';
 
 // Runs in every page before any site script.  Masks the headless tells that
 // anti-bot JS probes: navigator.webdriver, missing window.chrome, empty

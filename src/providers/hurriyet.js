@@ -13,6 +13,19 @@
 import { decodeEntities } from '../entities.js';
 import { channelIdFromName } from '../slug.js';
 import { fetchText } from '../http.js';
+import {
+  wallToIso,
+  weekDays,
+  weekdayIndex,
+  dedupeProgrammes,
+  finishResult,
+} from './shared.js';
+
+// Re-exported for the other providers and tests that import the wall-clock
+// and week helpers from this module (historical import site).
+export { wallToIso, weekDays };
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://www.hurriyet.com.tr';
 export const DAY_SLUGS = [
@@ -81,8 +94,6 @@ const CATEGORY_MAP = {
   cocuk: 'Çocuk',
   diger: 'Diğer',
 };
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function normalizeChannelKey(name) {
   return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
@@ -183,35 +194,8 @@ export function parseDayPage(html) {
   return { channels, slots, rowCount: rowChunks.length };
 }
 
-// Wall-clock date (Y/M/D in Istanbul) + minutes since midnight -> ISO instant
-// stamped with the provider's fixed +03:00 offset. Minutes >= 1440 (slots
-// crossing midnight) roll into the next day via Date.UTC overflow.
-export function wallToIso(year, month, day, minutes) {
-  const ms = Date.UTC(year, month - 1, day, 0, minutes);
-  return new Date(ms).toISOString().slice(0, 19) + '+03:00';
-}
-
-// Monday..Sunday (wall dates) of the week containing the reference date.
-export function weekDays(referenceDate = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const anchor = fmt.format(referenceDate); // YYYY-MM-DD
-  const base = new Date(`${anchor}T12:00:00Z`);
-  const monday = new Date(base.getTime() - ((base.getUTCDay() + 6) % 7) * 86400000);
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    days.push(new Date(monday.getTime() + i * 86400000).toISOString().slice(0, 10));
-  }
-  return days;
-}
-
 export function slugForDate(date) {
-  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
-  return DAY_SLUGS[(weekday + 6) % 7]; // Mon=0..Sun=6
+  return DAY_SLUGS[weekdayIndex(date)]; // Mon=0..Sun=6
 }
 
 // Scrape the whole week. `dates` (optional) only anchors the week: the source
@@ -298,14 +282,6 @@ export async function scrape({
     await sleep(politenessDelayMs);
   }
 
-  // Dedupe exact (channel, start, stop, title) repeats, keep first.
-  const seen = new Set();
-  const deduped = programmes.filter((p) => {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return { channels, programmes: deduped, days: week.length, failures };
+  // Dedupe exact repeats and return in the canonical (channel, start) order.
+  return finishResult({ channels, programmes, days: week.length, failures });
 }
