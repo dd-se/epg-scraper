@@ -96,7 +96,7 @@ jobs:
         run: npm ci
 
       - name: Merge sports providers
-        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --days-forward 2 --delay-ms 300
+        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --days-forward 2 --delay-ms 300 --out epg_sports_merged.xml.gz
 
       - name: List output
         run: ls -la epg_sports_merged.xml*
@@ -115,7 +115,7 @@ jobs:
   # Runs only when every provider scraped cleanly; otherwise yesterday's
   # release stays live and the app keeps working.
   publish:
-    needs: [scrape, merge]
+    needs: [scrape, epg-sports-merged]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
