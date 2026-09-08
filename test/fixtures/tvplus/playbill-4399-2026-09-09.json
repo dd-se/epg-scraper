@@ -1,0 +1,109 @@
+{
+  "counttotal": "13",
+  "playbilllist": [
+    {
+      "starttime": "2026-09-09 00:00:00 UTC+03:00",
+      "endtime": "2026-09-09 09:30:00 UTC+03:00",
+      "name": "TRT Spor Yıldız Ortak Yayın",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 09:30:00 UTC+03:00",
+      "endtime": "2026-09-09 09:55:00 UTC+03:00",
+      "name": "Futbolun En Büyük Sahnesi",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 09:55:00 UTC+03:00",
+      "endtime": "2026-09-09 10:20:00 UTC+03:00",
+      "name": "Contenders",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 10:20:00 UTC+03:00",
+      "endtime": "2026-09-09 12:00:00 UTC+03:00",
+      "name": "Şampiyonlar Ligi Futbol Karşılaşmasıclub Brugge - Aston Vılla",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 12:00:00 UTC+03:00",
+      "endtime": "2026-09-09 13:40:00 UTC+03:00",
+      "name": "Uefa Şampiyonlar Ligi Futbol Karşılaşmasıaek - Lask",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 13:40:00 UTC+03:00",
+      "endtime": "2026-09-09 14:05:00 UTC+03:00",
+      "name": "Futbolun En Büyük Sahnesi",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 14:05:00 UTC+03:00",
+      "endtime": "2026-09-09 15:50:00 UTC+03:00",
+      "name": "Uefa Şampiyonlar Ligi Futbol Karşılaşmasıporto - Manchester Cıty",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 15:50:00 UTC+03:00",
+      "endtime": "2026-09-09 17:35:00 UTC+03:00",
+      "name": "Uefa Şampiyonlar Ligi Futbol Karşılaşmasıborussıa Dortmund - Vıllarreal",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 17:35:00 UTC+03:00",
+      "endtime": "2026-09-09 18:00:00 UTC+03:00",
+      "name": "Contenders",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 18:00:00 UTC+03:00",
+      "endtime": "2026-09-09 19:45:00 UTC+03:00",
+      "name": "Uefa Şampiyonlar Ligi Futbol Karşılaşmasılılle - Real Betıs",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 19:45:00 UTC+03:00",
+      "endtime": "2026-09-09 22:00:00 UTC+03:00",
+      "name": "Barcelona - Feyenoord",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-09 22:00:00 UTC+03:00",
+      "endtime": "2026-09-10 00:00:00 UTC+03:00",
+      "name": "Liverpool - Atletico Madrid",
+      "genres": "Spor",
+      "isLive": "0",
+      "type": "PROGRAM"
+    },
+    {
+      "starttime": "2026-09-10 00:00:00 UTC+03:00",
+      "endtime": "2026-09-10 02:59:59 UTC+03:00",
+      "name": null,
+      "genres": null,
+      "isLive": "0",
+      "type": "PROGRAM"
+    }
+  ]
+}

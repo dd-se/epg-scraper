@@ -30,8 +30,14 @@ Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 `--merge`, `--alias-map <path>`, `--quiet`, `--list-providers`.
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
-fetches; defaults: hurriyet 250, mynet 500 — mynet fetches ~90 channel pages
-per day, so keep this polite).
+fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
+digiturkburada 400 —
+mynet fetches ~90 channel pages per day, so keep this polite).
+
+Sports channels are covered by the `tvplus`, `beinsports`, and
+`digiturkburada` providers (24 channels together); see the dedicated
+sections below and `UNSUCCESSFUL.md` for the channels that still have no
+public scrapeable source.
 
 ## Browser mode
 
@@ -352,6 +358,79 @@ transparent.
   (`dizi` → `Dizi`, `film` → `Film`, …). The source has no descriptions, so
   `<desc>` is not emitted.
 
+## Provider: tvplus
+
+- Source: `https://tvplus.com.tr/canli-tv/yayin-akisi/{channel}--{id}`
+  (Turkcell's OTT platform).  The web app is a Next.js SPA, but the schedule
+  it shows comes from a plain-HTTP JSON API (discovered via chrome-devtools):
+  1. `POST /get-platform-info` → the (rotating) EPG API base URL
+  2. `POST {base}/EPG/JSON/Authenticate` → session cookie
+  3. `POST {base}/EPG/JSON/PlayBillList` with `channelid` + `begintime`/
+     `endtime` → the day's programmes with explicit `starttime`/`endtime`
+     (already stamped `UTC+03:00`)
+- Coverage: **any requested date range** (the API serves past and future
+  days), for the channels TV+ carries:
+  TRT 1, TRT Spor, TRT Spor Yıldız, A Spor, HT Spor, FB TV, tabii spor,
+  S Sport, S Sport 2, Eurosport 1, Eurosport 2, Sports TV, ATV, TV8, TV8,5, A2.
+- **Plain HTTP only** — this provider POSTs JSON, so it cannot run under
+  `--browser` (the Playwright fetcher renders pages and cannot POST).  Do not
+  pass `--browser` with `--provider tvplus`.
+- Categories: the API's `genres` value (already a Turkish label like
+  "Spor", "Dizi") is emitted as `<category lang="tr">` when present.
+- The `--max-channels N` flag caps how many of the 16 channels are scraped.
+
+```bash
+# All 16 channels, today
+node bin/epg-scraper.js --provider tvplus --date 2026-09-09 --days-forward 0
+
+# A whole week
+node bin/epg-scraper.js --provider tvplus --date 2026-09-09
+```
+
+## Provider: digiturkburada
+
+- Source: `https://www.digiturkburada.com.tr/{page}.html` — a static
+  third-party mirror of the Digiturk guide (Digiturk's own site blocks
+  datacenter IPs at the network level, and beinsports.com.tr only publishes
+  beIN Sports 1-4).  Covers the feeds no other free source has:
+  **beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV**.
+- Page anatomy: one day's schedule as a `<table>` of
+  `NAME` / `HH:MM` cells (Turkish HTML entities decoded).  Multi-day works
+  via the page's own "Sonraki Gün" form: `POST` the same page with
+  `yayin=DD.MM.YYYY`; the served date is echoed in an `<h2>` heading and is
+  verified against the requested date before use.
+- Programme stop times are derived from the next programme's start
+  (24:00 for the last slot); timestamps use the fixed `+03:00` offset.
+- **Plain HTTP only** — this provider POSTs form data, so it cannot run
+  under `--browser`.
+
+```bash
+# beIN Sports 5 + Max 1-2 + GS TV for today and tomorrow
+node bin/epg-scraper.js --provider digiturkburada --date 2026-09-08 --days-forward 1
+```
+
+## Provider: beinsports
+
+- Source: `https://beinsports.com.tr/yayin-akisi/{channel}/{day}` where
+  `{channel}` ∈ `beinsports`, `beinsports-2`, `beinsports-3`, `beinsports-4`
+  and `{day}` is a weekday slug (`pazartesi`..`pazar`).
+- Page anatomy: server-rendered Next.js with the whole guide embedded in a
+  `__NEXT_DATA__` JSON script tag — `props.pageProps.activeLeagues` lists the
+  channels and `props.pageProps.data.listTvGuides` holds
+  `{ channel_id, event_time: "HH:MM:SS", name }` entries for the selected
+  channel.
+- Coverage: beIN Sports 1-4 (the site does not publish beIN Sports 5 or the
+  Max feeds — those live behind Digiturk's login; see `UNSUCCESSFUL.md`).
+- Like Hürriyet, the site publishes exactly one Mon–Sun week, so any
+  requested window is clamped to the week containing its first date.
+  Programme stop times are derived from the next programme's start
+  (24:00 for the last slot).
+
+```bash
+# All four beIN Sports feeds, current week
+node bin/epg-scraper.js --provider beinsports --date 2026-09-08
+```
+
 ## Provider: mynet
 
 - Source: `https://www.mynet.com/tv-rehberi`
@@ -382,6 +461,16 @@ node bin/epg-scraper.js --provider mynet --date 2026-09-08 --days-forward 2 --ma
 # Slow down further when scraping from a datacenter IP
 node bin/epg-scraper.js --provider mynet --delay-ms 1000
 ```
+
+### Sports guide from the sports providers
+
+```bash
+# One guide with all 24 scrapeable sports channels
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --out epg_sports_TR.xml.gz
+```
+
+`tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
+`digiturkburada` adds beIN Sports 5, Max 1-2 and GS TV.
 
 ## Scheduled scrapes (GitHub Actions)
 
@@ -462,7 +551,7 @@ src/model.js            channel/programme model + validation
 src/registry.js         provider registry + date-range helper
 src/xmltv.js            XMLTV writer (plain + gzip)
 src/cli.js              CLI implementation (testable)
-src/providers/          provider adapters (hurriyet, mynet, …)
+src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, …)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/scraper-server.js  static file server for EPG output
 test/                   vitest suites + fixtures

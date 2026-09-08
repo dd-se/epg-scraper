@@ -4,6 +4,10 @@
 #
 #   https://github.com/OWNER/REPO/releases/latest/download/epg_hurriyet_TR.xml.gz
 #   https://github.com/OWNER/REPO/releases/latest/download/epg_mynet_TR.xml.gz
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_tvplus_TR.xml.gz
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_beinsports_TR.xml.gz
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_digiturkburada_TR.xml.gz
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_sports_merged.xml.gz  (sports merge: tvplus + beinsports + digiturkburada)
 #
 # (Replace OWNER/REPO with this repository's path. The repo must be public —
 # release assets on private repos need authentication, which IPTV apps can't
@@ -52,7 +56,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -72,13 +76,46 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # One combined sports guide: union of tvplus (16), beinsports (4) and
+  # digiturkburada (4) channels.
+  epg-sports-merged:
+    needs: scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Merge sports providers
+        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada --merge --days-forward 2 --delay-ms 300
+
+      - name: List output
+        run: ls -la epg_sports_merged.xml*
+
+      - name: Upload merged guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: epg-sports-merged
+          path: epg_sports_merged.xml*
+          retention-days: 7
+          if-no-files-found: error
+
   # Collect the per-provider guides and (re)publish them as assets on a
   # rolling "latest" release. Asset names are stable, so
   # .../releases/latest/download/<name> is a permanent raw URL for IPTV apps.
   # Runs only when every provider scraped cleanly; otherwise yesterday's
   # release stays live and the app keeps working.
   publish:
-    needs: scrape
+    needs: [scrape, merge]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

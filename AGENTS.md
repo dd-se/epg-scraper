@@ -73,6 +73,29 @@ CLI tool and library.
       (today + 2 forward); supports `maxChannels` option.  Default
       `politenessDelayMs` is 500 (vs hurriyet's 250) because a full run is
       ~90 channel pages per day (~260 requests for 3 days).
+    - `tvplus.js` — TV+ (Turkcell) Yayın Akışı: a **plain-HTTP JSON API**
+      provider (16 channels incl. TRT Spor/Yıldız, A Spor, HT Spor, FB TV,
+      tabii spor, S Sport 1/2, Eurosport 1/2, Sports TV, TRT 1, ATV, TV8,
+      TV8,5, A2).  Flow: `POST /get-platform-info` → rotating API base,
+      `POST {base}/EPG/JSON/Authenticate` → session cookie, then
+      `POST {base}/EPG/JSON/PlayBillList` per channel+day (explicit
+      start/stop, pre-stamped `UTC+03:00`).  `parsePlaybill()` /
+      `parsePlatformInfo()` / `parseApiInstant()` / `extractSessionCookie()`
+      are the pure parsers.  **Not browser-compatible** (POSTs JSON; do not
+      pass `--browser`).  Supports `maxChannels`.
+    - `beinsports.js` — beIN Sports Yayın Akışı: beIN Sports 1-4 via the
+      `__NEXT_DATA__` JSON embedded in `beinsports.com.tr/yayin-akisi/
+      {channel}/{weekday}` pages.  `parseDayPage()` / `parseChannelList()`
+      are the pure parsers.  Like hurriyet, the site publishes one Mon–Sun
+      week; programme stops derive from the next slot (24:00 for the last).
+    - `digiturkburada.js` — DigiturkBurada Yayın Akışı: beIN Sports 5,
+      beIN Sports Max 1-2 and GS TV (feeds no other free source carries —
+      digiturk.com.tr is Azure-WAF-blocked for datacenter IPs and
+      beinsports.com.tr stops at beIN 4).  Static per-channel pages with a
+      `<table>` of NAME / HH:MM rows; multi-day via a `POST` of
+      `yayin=DD.MM.YYYY` (the served date in the `<h2>` is verified against
+      the request).  `parseDayPage()` / `parseServedDate()` are the pure
+      parsers.  **Not browser-compatible** (POSTs form data).
    - `index.js` — `loadProviders()` registry loader.
 9. `src/cli.js` — CLI argument parsing, orchestration, output writing.
    Exports `runCli({ argv, stdout, stderr, cwd })` for testability.
@@ -83,6 +106,11 @@ CLI tool and library.
     (two providers, channel by channel) share one `compareSides()` core;
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
     reports into text lines.
+
+Sports coverage: `tvplus` + `beinsports` + `digiturkburada` merged
+(`--provider tvplus,beinsports,digiturkburada --merge`) cover 24 of the 50
+sports channels; the rest have no public scrapeable source and are tracked in
+`UNSUCCESSFUL.md` (Tivibu/Tabi/Exxen login-walled, platform-exclusive feeds).
 11. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later

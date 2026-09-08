@@ -4,7 +4,13 @@
   "channelCount": 178,
   "knownGaps": {
     "DISNEY.JUNIOR.tr": "Used by both providers (live channel); upstream reference carries no Disney Junior entry as of 2026-09-08. Generic slug kept.",
-    "TV2.tr": "Mynet map fallback entry; mynet currently lists no TV2 feed (hurriyet maps TV2 onto TEVE2.tr). Kept for forward-compatibility."
+    "TV2.tr": "Mynet map fallback entry; mynet currently lists no TV2 feed (hurriyet maps TV2 onto TEVE2.tr). Kept for forward-compatibility.",
+    "TRT.SPOR.YILDIZ.tr": "TV+ provider channel TRT Spor Yıldız; upstream reference lists only TRT.SPOR.tr / TRT.SPOR.HD.tr as of 2026-09-08.",
+    "HT.SPOR.tr": "TV+ provider channel HT Spor; not present in the upstream reference as of 2026-09-08.",
+    "TABII.SPOR.tr": "TV+ provider channel tabii spor (joint TRT feed); upstream reference carries no tabii channel as of 2026-09-08.",
+    "TV8.5.tr": "TV+ provider channel TV8,5; upstream reference lists TV8.tr / TV8.HD.tr only as of 2026-09-08.",
+    "beIN.SPORTS.5.tr": "DigiturkBurada provider channel beIN Sports 5 (not published on beinsports.com.tr); upstream reference carries no beIN 5 as of 2026-09-08.",
+    "GS.TV.tr": "DigiturkBurada provider channel GS TV (Galatasaray club channel); not present in the upstream reference as of 2026-09-08."
   },
   "channels": [
     {

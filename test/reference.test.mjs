@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { CHANNEL_ID_MAP as HURRIYET_MAP } from '../src/providers/hurriyet.js';
 import { CHANNEL_ID_MAP as MYNET_MAP } from '../src/providers/mynet.js';
+import { CHANNEL_ID_MAP as TVPLUS_MAP } from '../src/providers/tvplus.js';
+import { CHANNEL_ID_MAP as BEINSPORTS_MAP } from '../src/providers/beinsports.js';
+import { CHANNEL_ID_MAP as DIGITURKBURADA_MAP } from '../src/providers/digiturkburada.js';
 
 // Enforces provider channel-id normalization against the source of truth:
 // test/fixtures/epgshare01/reference.json, a vendored snapshot of the
@@ -49,6 +52,9 @@ describe('epgshare01 reference snapshot', () => {
     const providers = [
       ['hurriyet', HURRIYET_MAP],
       ['mynet', MYNET_MAP],
+      ['tvplus', TVPLUS_MAP],
+      ['beinsports', BEINSPORTS_MAP],
+      ['digiturkburada', DIGITURKBURADA_MAP],
     ];
     for (const [provider, map] of providers) {
       for (const [name, id] of Object.entries(map)) {
