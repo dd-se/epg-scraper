@@ -1,0 +1,14 @@
+node_modules/
+*.log
+
+# scraper output artifacts
+epg_*.xml
+epg_*.xml.gz
+
+# local scratch / fetched reference files
+.tmp/
+
+# local environment files
+.agents
+.cline
+opencode.json

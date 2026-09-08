@@ -1,0 +1,110 @@
+# Daily EPG scrape — scrapes every provider on a schedule and publishes the
+# resulting XMLTV guides to a rolling "latest" GitHub Release, so IPTV apps
+# can fetch them from a stable URL:
+#
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_hurriyet_TR.xml.gz
+#   https://github.com/OWNER/REPO/releases/latest/download/epg_mynet_TR.xml.gz
+#
+# (Replace OWNER/REPO with this repository's path. The repo must be public —
+# release assets on private repos need authentication, which IPTV apps can't
+# do. The URLs start working after the first successful run.)
+#
+# Outputs are gitignored (`epg_*.xml*`), so nothing is committed.
+# Manual runs: Actions tab → "Daily EPG scrape" → "Run workflow".
+
+name: Daily EPG scrape
+
+on:
+  schedule:
+    # 00:30 UTC = 03:30 TRT, daily — after midnight when the source sites
+    # roll over to the new day's schedules.
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Scrapes are sequential politeness-sensitive page fetches; never run two
+# schedules concurrently against the sources.
+concurrency:
+  group: daily-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - provider: hurriyet
+            args: ''
+          - provider: mynet
+            # Mynet fetches ~90 channel pages per day (~260 requests for the
+            # full 3-day window). Keep an explicit polite per-request delay
+            # so scheduled runs from datacenter IPs don't hammer the source.
+            args: '--days-forward 2 --delay-ms 500'
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scrape ${{ matrix.provider }}
+        run: node bin/epg-scraper.js --provider ${{ matrix.provider }} ${{ matrix.args }}
+
+      - name: List output
+        run: ls -la epg_*.xml*
+
+      - name: Upload guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: epg-${{ matrix.provider }}
+          path: epg_*.xml*
+          retention-days: 7
+          if-no-files-found: error
+
+  # Collect the per-provider guides and (re)publish them as assets on a
+  # rolling "latest" release. Asset names are stable, so
+  # .../releases/latest/download/<name> is a permanent raw URL for IPTV apps.
+  # Runs only when every provider scraped cleanly; otherwise yesterday's
+  # release stays live and the app keeps working.
+  publish:
+    needs: scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download guides
+        uses: actions/download-artifact@v4
+        with:
+          pattern: epg-*
+          merge-multiple: true
+          path: guide
+
+      - name: List guides
+        run: ls -la guide/
+
+      - name: Stamp date
+        run: echo "GUIDE_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+
+      - name: Publish to "latest" release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest
+          commit: main
+          name: Latest EPG guides
+          body: Daily XMLTV guides for Türkiye, scraped ${{ env.GUIDE_DATE }} (00:30 UTC). Point your IPTV app's XMLTV/EPG source at the .xml.gz files below.
+          makeLatest: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: guide/epg_*.xml.gz

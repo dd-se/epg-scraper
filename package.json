@@ -1,0 +1,41 @@
+{
+  "name": "epg-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal EPG scraper with pluggable providers; outputs XMLTV gzip files.",
+  "type": "module",
+  "bin": {
+    "epg-scraper": "bin/epg-scraper.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "scrape": "node bin/epg-scraper.js --provider hurriyet",
+    "scrape:gz": "node bin/epg-scraper.js --provider hurriyet --gzip",
+    "update:reference": "node scripts/update-reference-ids.js",
+    "install:playwright": "npx playwright install chromium",
+    "check:browser": "node -e \"import('./src/browser.js').then(m=>m.isPlaywrightAvailable()).then(ok=>{console.log(ok?'Playwright ready':'Playwright not found — run: npm run install:playwright');process.exit(ok?0:1)})\"",
+    "dev": "node scripts/scraper-server.js",
+    "dev:up": "node scripts/dev-tools.js start",
+    "dev:down": "node scripts/dev-tools.js stop",
+    "dev:status": "node scripts/dev-tools.js status",
+    "dev:start": "node scripts/dev-tools.js start server",
+    "dev:check": "node scripts/dev-tools.js status server",
+    "dev:stop": "node scripts/dev-tools.js stop server",
+    "dev:logs": "node scripts/dev-tools.js logs server",
+    "chrome:headless": "node scripts/dev-tools.js start browser",
+    "chrome:check": "node scripts/dev-tools.js status browser",
+    "chrome:stop": "node scripts/dev-tools.js stop browser",
+    "chrome:logs": "node scripts/dev-tools.js logs browser"
+  },
+  "devDependencies": {
+    "saxes": "^6.0.0",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

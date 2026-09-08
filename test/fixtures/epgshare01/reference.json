@@ -1,0 +1,723 @@
+{
+  "source": "https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz",
+  "updated": "2026-09-08",
+  "channelCount": 178,
+  "knownGaps": {
+    "DISNEY.JUNIOR.tr": "Used by both providers (live channel); upstream reference carries no Disney Junior entry as of 2026-09-08. Generic slug kept.",
+    "TV2.tr": "Mynet map fallback entry; mynet currently lists no TV2 feed (hurriyet maps TV2 onto TEVE2.tr). Kept for forward-compatibility."
+  },
+  "channels": [
+    {
+      "id": "24.TV.HD.tr",
+      "name": "24 TV HD"
+    },
+    {
+      "id": "24.TV.tr",
+      "name": "24 TV"
+    },
+    {
+      "id": "24KITCHEN.tr",
+      "name": "24KITCHEN"
+    },
+    {
+      "id": "360.HD.tr",
+      "name": "360 HD"
+    },
+    {
+      "id": "360.TUNE.BOX.tr",
+      "name": "360 TUNE BOX"
+    },
+    {
+      "id": "360.tr",
+      "name": "360"
+    },
+    {
+      "id": "A.HABER.HD.tr",
+      "name": "A HABER HD"
+    },
+    {
+      "id": "A.HABER.tr",
+      "name": "A HABER"
+    },
+    {
+      "id": "A.NEWS.HD.tr",
+      "name": "A NEWS HD"
+    },
+    {
+      "id": "A.PARA.tr",
+      "name": "A PARA"
+    },
+    {
+      "id": "A.SPOR.HD.tr",
+      "name": "A SPOR HD"
+    },
+    {
+      "id": "A.SPOR.tr",
+      "name": "A SPOR"
+    },
+    {
+      "id": "A2.HD.tr",
+      "name": "A2 HD"
+    },
+    {
+      "id": "A2.tr",
+      "name": "A2"
+    },
+    {
+      "id": "AKİT.TV.tr",
+      "name": "AKİT TV"
+    },
+    {
+      "id": "AL.JAZEERA.ARABIC.tr",
+      "name": "AL JAZEERA ARABIC"
+    },
+    {
+      "id": "AL.JAZEERA.INTERNATIONAL.tr",
+      "name": "AL JAZEERA INTERNATIONAL"
+    },
+    {
+      "id": "AL.SUNNAH.AL.NABAWIYAH.tr",
+      "name": "AL SUNNAH AL NABAWIYAH"
+    },
+    {
+      "id": "ANIMAL.PLANET.HD.tr",
+      "name": "ANIMAL PLANET HD"
+    },
+    {
+      "id": "ANIMAUX.tr",
+      "name": "ANIMAUX"
+    },
+    {
+      "id": "ARIRANG.tr",
+      "name": "ARIRANG"
+    },
+    {
+      "id": "ATV.HD.tr",
+      "name": "ATV HD"
+    },
+    {
+      "id": "ATV.tr",
+      "name": "ATV"
+    },
+    {
+      "id": "AUTOMOTO.HD.tr",
+      "name": "AUTOMOTO HD"
+    },
+    {
+      "id": "AZ.TV.1.tr",
+      "name": "AZ TV 1"
+    },
+    {
+      "id": "BABY.TV.tr",
+      "name": "BABY TV"
+    },
+    {
+      "id": "BBC.ENTERTAINMENT.tr",
+      "name": "BBC ENTERTAINMENT"
+    },
+    {
+      "id": "BBC.WORLD.NEWS.tr",
+      "name": "BBC WORLD NEWS"
+    },
+    {
+      "id": "BENGÜ.TÜRK.tr",
+      "name": "BENGÜ TÜRK"
+    },
+    {
+      "id": "BEYAZ.TV.HD.tr",
+      "name": "BEYAZ TV HD"
+    },
+    {
+      "id": "BEYAZ.TV.tr",
+      "name": "BEYAZ TV"
+    },
+    {
+      "id": "BEYKENT.TV.tr",
+      "name": "BEYKENT TV"
+    },
+    {
+      "id": "BLOOMBERG.HT.HD.tr",
+      "name": "BLOOMBERG HT HD"
+    },
+    {
+      "id": "BLOOMBERG.HT.tr",
+      "name": "BLOOMBERG HT"
+    },
+    {
+      "id": "BLOOMBERG.TV.tr",
+      "name": "BLOOMBERG TV"
+    },
+    {
+      "id": "BRT.1.HD.tr",
+      "name": "BRT 1 HD"
+    },
+    {
+      "id": "BRT.1.tr",
+      "name": "BRT 1"
+    },
+    {
+      "id": "Bein.Sports.Haber.tr",
+      "name": "Bein Sports Haber"
+    },
+    {
+      "id": "Beinsports.2.tr",
+      "name": "Beinsports 2"
+    },
+    {
+      "id": "Beinsports.3.tr",
+      "name": "Beinsports 3"
+    },
+    {
+      "id": "Beinsports.4.tr",
+      "name": "Beinsports 4"
+    },
+    {
+      "id": "Beinsports.tr",
+      "name": "Beinsports"
+    },
+    {
+      "id": "CARTOON.NETWORK.tr",
+      "name": "CARTOON NETWORK"
+    },
+    {
+      "id": "CCTV.4.tr",
+      "name": "CCTV 4"
+    },
+    {
+      "id": "CGTN.9.DOCUMENTARY.tr",
+      "name": "CGTN 9 DOCUMENTARY"
+    },
+    {
+      "id": "CGTN.tr",
+      "name": "CGTN"
+    },
+    {
+      "id": "CHASSE.ET.PECHE.tr",
+      "name": "CHASSE ET PECHE"
+    },
+    {
+      "id": "CNN.INTERNATIONAL.tr",
+      "name": "CNN INTERNATIONAL"
+    },
+    {
+      "id": "CNN.TÜRK.HD.tr",
+      "name": "CNN TÜRK HD"
+    },
+    {
+      "id": "CNN.TÜRK.tr",
+      "name": "CNN TÜRK"
+    },
+    {
+      "id": "DA.VINCI.LEARNING.HD.tr",
+      "name": "DA VINCI LEARNING HD"
+    },
+    {
+      "id": "DEUTSCHE.WELLE.(DE).tr",
+      "name": "DEUTSCHE WELLE (DE)"
+    },
+    {
+      "id": "DEUTSCHE.WELLE.(EN).tr",
+      "name": "DEUTSCHE WELLE (EN)"
+    },
+    {
+      "id": "DISCOVERY.ID.tr",
+      "name": "DISCOVERY ID"
+    },
+    {
+      "id": "DISCOVERY.SCIENCE.HD.tr",
+      "name": "DISCOVERY SCIENCE HD"
+    },
+    {
+      "id": "DISNEY.CHANNEL.tr",
+      "name": "DISNEY CHANNEL"
+    },
+    {
+      "id": "DMAX.HD.tr",
+      "name": "DMAX HD"
+    },
+    {
+      "id": "DMAX.tr",
+      "name": "DMAX"
+    },
+    {
+      "id": "DOCUBOX.HD.tr",
+      "name": "DOCUBOX HD"
+    },
+    {
+      "id": "DREAM.TV.tr",
+      "name": "DREAM TV"
+    },
+    {
+      "id": "DUCKTV.HD.tr",
+      "name": "DUCKTV HD"
+    },
+    {
+      "id": "EKOTÜRK.tr",
+      "name": "EKOTÜRK"
+    },
+    {
+      "id": "EM.TV.tr",
+      "name": "EM TV"
+    },
+    {
+      "id": "ENGLISH.CLUB.TV.HD.tr",
+      "name": "ENGLISH CLUB TV HD"
+    },
+    {
+      "id": "EUROSPORT.1.HD.tr",
+      "name": "EUROSPORT 1 HD"
+    },
+    {
+      "id": "EUROSPORT.2.TR.HD.tr",
+      "name": "EUROSPORT 2 TR HD"
+    },
+    {
+      "id": "FAST.AND.FUN.HD.tr",
+      "name": "FAST AND FUN HD"
+    },
+    {
+      "id": "FENERBAHÇE.TV.tr",
+      "name": "FENERBAHÇE TV"
+    },
+    {
+      "id": "FIGHTBOX.HD.tr",
+      "name": "FIGHTBOX HD"
+    },
+    {
+      "id": "FILMBOX.ARTHOUSE.tr",
+      "name": "FILMBOX ARTHOUSE"
+    },
+    {
+      "id": "FILMBOX.HD.tr",
+      "name": "FILMBOX HD"
+    },
+    {
+      "id": "FOX.CRIME.HD.tr",
+      "name": "FOX CRIME HD"
+    },
+    {
+      "id": "FOX.HD.tr",
+      "name": "FOX HD"
+    },
+    {
+      "id": "FOX.LIFE.HD.tr",
+      "name": "FOX LIFE HD"
+    },
+    {
+      "id": "FOX.SPORTS.HD.tr",
+      "name": "FOX SPORTS HD"
+    },
+    {
+      "id": "FOX.tr",
+      "name": "FOX"
+    },
+    {
+      "id": "FRANCE.24.HD-EN.tr",
+      "name": "FRANCE 24 HD-EN"
+    },
+    {
+      "id": "FRANCE.24.HD-FR.tr",
+      "name": "FRANCE 24 HD-FR"
+    },
+    {
+      "id": "FUNBOX.UHD.4K.tr",
+      "name": "FUNBOX UHD 4K"
+    },
+    {
+      "id": "FX.HD.tr",
+      "name": "FX HD"
+    },
+    {
+      "id": "GAMETOON.HD.tr",
+      "name": "GAMETOON HD"
+    },
+    {
+      "id": "HABERTÜRK.HD.tr",
+      "name": "HABERTÜRK HD"
+    },
+    {
+      "id": "HABERTÜRK.tr",
+      "name": "HABERTÜRK"
+    },
+    {
+      "id": "HAYAT.PLUS.tr",
+      "name": "HAYAT PLUS"
+    },
+    {
+      "id": "KABLO.INFO.tr",
+      "name": "KABLO INFO"
+    },
+    {
+      "id": "KANAL.16.tr",
+      "name": "KANAL 16"
+    },
+    {
+      "id": "KANAL.7.HD.tr",
+      "name": "KANAL 7 HD"
+    },
+    {
+      "id": "KANAL.7.tr",
+      "name": "KANAL 7"
+    },
+    {
+      "id": "KANAL.B.tr",
+      "name": "KANAL B"
+    },
+    {
+      "id": "KANAL.D.HD.tr",
+      "name": "KANAL D HD"
+    },
+    {
+      "id": "KANAL.D.tr",
+      "name": "KANAL D"
+    },
+    {
+      "id": "KAZAKH.TV.tr",
+      "name": "KAZAKH TV"
+    },
+    {
+      "id": "KBS.TV.tr",
+      "name": "KBS TV"
+    },
+    {
+      "id": "KIBRIS.GENÇ.TV.tr",
+      "name": "KIBRIS GENÇ TV"
+    },
+    {
+      "id": "KON.TV.tr",
+      "name": "KON TV"
+    },
+    {
+      "id": "LIFETIME.tr",
+      "name": "LIFETIME"
+    },
+    {
+      "id": "LINETV.tr",
+      "name": "LINETV"
+    },
+    {
+      "id": "MİNİKA.GO.tr",
+      "name": "MİNİKA GO"
+    },
+    {
+      "id": "MİNİKA.ÇOCUK.tr",
+      "name": "MİNİKA ÇOCUK"
+    },
+    {
+      "id": "NAT.GEO.PEOPLE.HD.tr",
+      "name": "NAT GEO PEOPLE HD"
+    },
+    {
+      "id": "NATIONAL.GEOGRAPHIC.HD.tr",
+      "name": "NATIONAL GEOGRAPHIC HD"
+    },
+    {
+      "id": "NATIONAL.GEOGRAPHIC.WILD.tr",
+      "name": "NATIONAL GEOGRAPHIC WILD"
+    },
+    {
+      "id": "NATIONAL.GEOGRAPHIC.tr",
+      "name": "NATIONAL GEOGRAPHIC"
+    },
+    {
+      "id": "NHK.WORLD.tr",
+      "name": "NHK WORLD"
+    },
+    {
+      "id": "NTV.HD.tr",
+      "name": "NTV HD"
+    },
+    {
+      "id": "NTV.tr",
+      "name": "NTV"
+    },
+    {
+      "id": "OLAY.TV.tr",
+      "name": "OLAY TV"
+    },
+    {
+      "id": "POWER.TV.HD.tr",
+      "name": "POWER TV HD"
+    },
+    {
+      "id": "RTG.INT.tr",
+      "name": "RTG INT"
+    },
+    {
+      "id": "RTR.PLANETA.tr",
+      "name": "RTR PLANETA"
+    },
+    {
+      "id": "RUSSIA.24.tr",
+      "name": "RUSSIA 24"
+    },
+    {
+      "id": "SAUDI.QURAN.tr",
+      "name": "SAUDI QURAN"
+    },
+    {
+      "id": "SAUDI.TV.1.tr",
+      "name": "SAUDI TV 1"
+    },
+    {
+      "id": "SCIENCE.&amp;.VIE.HD.tr",
+      "name": "SCIENCE & VIE HD"
+    },
+    {
+      "id": "SHOW.TV.HD.tr",
+      "name": "SHOW TV HD"
+    },
+    {
+      "id": "SHOW.TV.tr",
+      "name": "SHOW TV"
+    },
+    {
+      "id": "SPORTS.TV.tr",
+      "name": "SPORTS TV"
+    },
+    {
+      "id": "SSport.2.tr",
+      "name": "SSport 2"
+    },
+    {
+      "id": "SSport.tr",
+      "name": "SSport"
+    },
+    {
+      "id": "STAR.TV.HD.tr",
+      "name": "STAR TV HD"
+    },
+    {
+      "id": "STAR.TV.tr",
+      "name": "STAR TV"
+    },
+    {
+      "id": "SİNEMA.1001.HD.tr",
+      "name": "SİNEMA 1001 HD"
+    },
+    {
+      "id": "SİNEMA.1002.tr",
+      "name": "SİNEMA 1002"
+    },
+    {
+      "id": "SİNEMA.2.HD.tr",
+      "name": "SİNEMA 2 HD"
+    },
+    {
+      "id": "SİNEMA.AKSİYON.2.HD.tr",
+      "name": "SİNEMA AKSİYON 2 HD"
+    },
+    {
+      "id": "SİNEMA.AKSİYON.HD.tr",
+      "name": "SİNEMA AKSİYON HD"
+    },
+    {
+      "id": "SİNEMA.AİLE.2.HD.tr",
+      "name": "SİNEMA AİLE 2 HD"
+    },
+    {
+      "id": "SİNEMA.AİLE.HD.tr",
+      "name": "SİNEMA AİLE HD"
+    },
+    {
+      "id": "SİNEMA.KOMEDİ.2.HD.tr",
+      "name": "SİNEMA KOMEDİ 2 HD"
+    },
+    {
+      "id": "SİNEMA.KOMEDİ.HD.tr",
+      "name": "SİNEMA KOMEDİ HD"
+    },
+    {
+      "id": "SİNEMA.TV.HD.tr",
+      "name": "SİNEMA TV HD"
+    },
+    {
+      "id": "SİNEMA.YERLİ.2.tr",
+      "name": "SİNEMA YERLİ 2"
+    },
+    {
+      "id": "SİNEMA.YERLİ.tr",
+      "name": "SİNEMA YERLİ"
+    },
+    {
+      "id": "TEVE2.HD.tr",
+      "name": "TEVE2 HD"
+    },
+    {
+      "id": "TEVE2.tr",
+      "name": "TEVE2"
+    },
+    {
+      "id": "TGRT.HABER.tr",
+      "name": "TGRT HABER"
+    },
+    {
+      "id": "TLC.HD.tr",
+      "name": "TLC HD"
+    },
+    {
+      "id": "TLC.tr",
+      "name": "TLC"
+    },
+    {
+      "id": "TMB.tr",
+      "name": "TMB"
+    },
+    {
+      "id": "TRACE.SPORT.STARS.HD.tr",
+      "name": "TRACE SPORT STARS HD"
+    },
+    {
+      "id": "TRACE.URBAN.HD.tr",
+      "name": "TRACE URBAN HD"
+    },
+    {
+      "id": "TREK.HD.tr",
+      "name": "TREK HD"
+    },
+    {
+      "id": "TRT.1.HD.tr",
+      "name": "TRT 1 HD"
+    },
+    {
+      "id": "TRT.1.tr",
+      "name": "TRT 1"
+    },
+    {
+      "id": "TRT.3.-..SPOR.tr",
+      "name": "TRT 3 - SPOR"
+    },
+    {
+      "id": "TRT.AVAZ.HD.tr",
+      "name": "TRT AVAZ HD"
+    },
+    {
+      "id": "TRT.BELGESEL.HD.tr",
+      "name": "TRT BELGESEL HD"
+    },
+    {
+      "id": "TRT.BELGESEL.tr",
+      "name": "TRT BELGESEL"
+    },
+    {
+      "id": "TRT.HABER.HD.tr",
+      "name": "TRT HABER HD"
+    },
+    {
+      "id": "TRT.HABER.tr",
+      "name": "TRT HABER"
+    },
+    {
+      "id": "TRT.KURDİ.tr",
+      "name": "TRT KURDİ"
+    },
+    {
+      "id": "TRT.MÜZİK.tr",
+      "name": "TRT MÜZİK"
+    },
+    {
+      "id": "TRT.SPOR.HD.tr",
+      "name": "TRT SPOR HD"
+    },
+    {
+      "id": "TRT.SPOR.tr",
+      "name": "TRT SPOR"
+    },
+    {
+      "id": "TRT.TÜRK.tr",
+      "name": "TRT TÜRK"
+    },
+    {
+      "id": "TRT.WORLD.HD.tr",
+      "name": "TRT WORLD HD"
+    },
+    {
+      "id": "TRT.ÇOCUK.HD.tr",
+      "name": "TRT ÇOCUK HD"
+    },
+    {
+      "id": "TRT.ÇOCUK.tr",
+      "name": "TRT ÇOCUK"
+    },
+    {
+      "id": "TV5.MONDE.tr",
+      "name": "TV5 MONDE"
+    },
+    {
+      "id": "TV8.HD.tr",
+      "name": "TV8 HD"
+    },
+    {
+      "id": "TV8.tr",
+      "name": "TV8"
+    },
+    {
+      "id": "TVNET.HD.tr",
+      "name": "TVNET HD"
+    },
+    {
+      "id": "TVNET.tr",
+      "name": "TVNET"
+    },
+    {
+      "id": "TVT.tr",
+      "name": "TVT"
+    },
+    {
+      "id": "TÜRKMENELİ.TV.HD.tr",
+      "name": "TÜRKMENELİ TV HD"
+    },
+    {
+      "id": "ULUSAL.KANAL.tr",
+      "name": "ULUSAL KANAL"
+    },
+    {
+      "id": "UÇANKUŞ.TV.tr",
+      "name": "UÇANKUŞ TV"
+    },
+    {
+      "id": "VIASAT.EXPLORE.tr",
+      "name": "VIASAT EXPLORE"
+    },
+    {
+      "id": "VIASAT.NATURE.-.HISTORY.tr",
+      "name": "VIASAT NATURE - HISTORY"
+    },
+    {
+      "id": "beIN.SPORTS.1.tr",
+      "name": "beIN SPORTS 1"
+    },
+    {
+      "id": "beIN.SPORTS.2.tr",
+      "name": "beIN SPORTS 2"
+    },
+    {
+      "id": "beIN.SPORTS.3.tr",
+      "name": "beIN SPORTS 3"
+    },
+    {
+      "id": "beIN.SPORTS.4.tr",
+      "name": "beIN SPORTS 4"
+    },
+    {
+      "id": "beIN.SPORTS.HABER.HD.tr",
+      "name": "beIN SPORTS HABER HD"
+    },
+    {
+      "id": "beIN.SPORTS.MAX.1.tr",
+      "name": "beIN SPORTS MAX 1"
+    },
+    {
+      "id": "beIN.SPORTS.MAX.2.tr",
+      "name": "beIN SPORTS MAX 2"
+    },
+    {
+      "id": "ÜLKE.TV.HD.tr",
+      "name": "ÜLKE TV HD"
+    },
+    {
+      "id": "ÜLKE.TV.tr",
+      "name": "ÜLKE TV"
+    }
+  ]
+}
