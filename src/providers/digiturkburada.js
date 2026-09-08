@@ -194,6 +194,9 @@ export async function scrape({
         const slot = slots[s];
         const start = wallToIso(year, month, day, slot.startMin);
         const endMin = s + 1 < slots.length ? slots[s + 1].startMin : 24 * 60;
+        // Repeated times on a page (same slot listed twice) would make a
+        // zero-length programme — skip it instead of emitting garbage.
+        if (endMin <= slot.startMin) continue;
         const stop = wallToIso(year, month, day, endMin);
         programmes.push({ channel: channel.id, start, stop, title: slot.title });
       }
@@ -211,7 +214,7 @@ export async function scrape({
     return true;
   });
 
-  programmes.sort((a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start));
+  deduped.sort((a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start));
 
   log(
     `done:  ${channels.length} channels, ${deduped.length} programmes, ` +

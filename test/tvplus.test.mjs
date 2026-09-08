@@ -62,6 +62,37 @@ describe('tvplus pure parsers', () => {
     expect(parseApiInstant(undefined)).toBeNull();
   });
 
+  it('rejects out-of-clock wall times instead of rolling them forward', () => {
+    // 25:00 / 10:99 would silently become tomorrow's 01:00 via wallToIso.
+    expect(parseApiInstant('2026-09-09 25:00:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-09-09 10:99:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-09-09 99:99:00 UTC+03:00')).toBeNull();
+    // End-of-day 24:00 is a legal wall instant.
+    expect(parseApiInstant('2026-09-09 24:00:00 UTC+03:00')).toEqual({
+      year: 2026,
+      month: 9,
+      day: 9,
+      minutes: 1440,
+    });
+  });
+
+  it('rejects impossible calendar dates instead of rolling them forward', () => {
+    // Month 13 / Feb 30 / day 32 would silently land in a different month
+    // via wallToIso — reject them like the out-of-clock times.
+    expect(parseApiInstant('2026-13-09 10:00:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-02-30 10:00:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-04-31 10:00:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-09-00 10:00:00 UTC+03:00')).toBeNull();
+    expect(parseApiInstant('2026-09-32 10:00:00 UTC+03:00')).toBeNull();
+    // Legal leap-day instants still parse.
+    expect(parseApiInstant('2028-02-29 23:30:00 UTC+03:00')).toEqual({
+      year: 2028,
+      month: 2,
+      day: 29,
+      minutes: 23 * 60 + 30,
+    });
+  });
+
   it('parsePlaybill maps API entries to +03:00 programme slots', () => {
     const slots = parsePlaybill(playbill4399);
     // The live API occasionally returns a null-name gap filler; it is dropped.
@@ -76,6 +107,35 @@ describe('tvplus pure parsers', () => {
     expect(slots[slots.length - 1].title).toBe('Liverpool - Atletico Madrid');
     expect(parsePlaybill('not json')).toEqual([]);
     expect(parsePlaybill(undefined)).toEqual([]);
+  });
+
+  it('parsePlaybill drops slots with out-of-clock or missing times', () => {
+    const slots = parsePlaybill(
+      JSON.stringify({
+        playbilllist: [
+          {
+            name: 'Ok',
+            starttime: '2026-09-09 10:00:00 UTC+03:00',
+            endtime: '2026-09-09 11:00:00 UTC+03:00',
+          },
+          {
+            name: 'Bogus Hours',
+            starttime: '2026-09-09 25:00:00 UTC+03:00',
+            endtime: '2026-09-09 26:00:00 UTC+03:00',
+          },
+          {
+            name: 'Bogus Minutes',
+            starttime: '2026-09-09 10:99:00 UTC+03:00',
+            endtime: '2026-09-09 11:00:00 UTC+03:00',
+          },
+          { name: 'No Times', starttime: 'garbage', endtime: 'garbage' },
+          { name: null, starttime: '2026-09-09 10:00:00 UTC+03:00', endtime: '2026-09-09 11:00:00 UTC+03:00' },
+        ],
+      })
+    );
+    expect(slots).toHaveLength(1);
+    expect(slots[0].title).toBe('Ok');
+    expect(slots[0].start).toBe('2026-09-09T10:00:00+03:00');
   });
 
   it('extractSessionCookie reads XSESSIONID/JSESSIONID pairs', () => {

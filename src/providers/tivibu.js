@@ -78,7 +78,23 @@ function parseWallTime(value) {
   if (!match) return undefined;
   const hours = Number(match[4]);
   const minutes = Number(match[5]);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
   if (hours > 24 || minutes > 59) return undefined;
+  // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
+  // (month 13, Feb 30, day 32) would otherwise silently roll into a
+  // different instant via wallToIso — reject them like the other providers
+  // do.  Date.UTC normalizes, so a round-trip comparison catches every
+  // overflow at once (same technique as toXmltvTimestamp).
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return undefined;
+  }
   return { date: `${match[1]}-${match[2]}-${match[3]}`, min: hours * 60 + minutes };
 }
 
@@ -105,6 +121,12 @@ export function parsePrevueResponse(json) {
     const begin = parseWallTime(item?.beginTime);
     const end = parseWallTime(item?.endTime);
     if (!title || !begin || !end) continue;
+    // A corrupt response can give an end that precedes its begin (same-day
+    // rollback); such a slot would become a negative-duration programme.
+    // Drop it instead of emitting garbage.
+    if (end.date < begin.date || (end.date === begin.date && end.min <= begin.min)) {
+      continue;
+    }
     const category =
       typeof item?.genre === 'string' && item.genre.trim() ? item.genre.trim() : undefined;
     const desc =

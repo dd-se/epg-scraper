@@ -173,6 +173,24 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     expect(result.programmes).toEqual([]);
     expect(result.failures).toBe(4);
   });
+
+  it('returns programmes sorted by channel then start', async () => {
+    const result = await scrape({
+      dates: ['2026-09-08'],
+      fetchImpl: async (url) =>
+        response(String(url).includes('gs-tv') ? gsTv : bein5),
+      log: () => {},
+      politenessDelayMs: 0,
+    });
+    const keys = result.programmes.map((p) => [p.channel, p.start]);
+    const sorted = [...keys].sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+    expect(keys).toEqual(sorted);
+    // Channels in XMLTV id order, GS TV last.
+    expect(result.programmes[result.programmes.length - 1].channel).toBe('GS.TV.tr');
+    // Within one channel, starts ascend.
+    const gs = result.programmes.filter((p) => p.channel === 'GS.TV.tr');
+    expect(gs.map((p) => p.start)).toEqual([...gs.map((p) => p.start)].sort());
+  });
 });
 
 describe('digiturkburada cli integration (stubbed fetch, temp output)', () => {

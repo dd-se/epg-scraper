@@ -138,11 +138,27 @@ export function generateXmltv({ channels, programmes, generatorInfoName = 'epg-s
 
   const knownIds = new Set(channels.map((c) => c.id));
   for (const programme of programmes) {
+    // A null entry (hostile provider result that slipped past merge/compare
+    // filtering) must fail with a clear message, never a raw TypeError.
+    if (!programme) {
+      throw new Error('programmes must not contain null entries');
+    }
     if (!knownIds.has(programme.channel)) {
       throw new Error(`Programme references unknown channel "${programme.channel}"`);
     }
     toXmltvTimestamp(programme.start);
     toXmltvTimestamp(programme.stop);
+    // A programme whose stop does not follow its start (zero-length or
+    // reversed) is corrupt data — cross-midnight mishandling and bad
+    // provider math both produce it.  Refuse to emit it instead of writing
+    // a guide no consumer can trust.  ISO strings compare correctly as
+    // instants because providers emit a single fixed offset (see sort below).
+    if (programme.stop <= programme.start) {
+      throw new Error(
+        `Programme "${programme.title}" on "${programme.channel}" has stop <= start ` +
+          `(${programme.stop} <= ${programme.start})`
+      );
+    }
   }
 
   // ISO strings compare lexicographically as instants only when offsets are

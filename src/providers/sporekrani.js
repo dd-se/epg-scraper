@@ -195,6 +195,10 @@ export async function scrape({
         : [year, month, day];
       const start = wallToIso(year, month, day, event.startMin);
       const stop = wallToIso(nextYear, nextMonth, nextDay, next ? next.startMin : 24 * 60);
+      // Two events with the same start time (simulcast listing duplicated)
+      // would make a zero-length programme — skip it instead of emitting
+      // garbage.  ISO strings compare correctly at a fixed +03:00 offset.
+      if (stop <= start) continue;
       programmes.push({
         channel: channel.id,
         start,

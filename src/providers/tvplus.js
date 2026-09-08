@@ -99,7 +99,26 @@ export function parseApiInstant(value) {
   );
   if (!match) return null;
   const [, y, mo, d, h, mi] = match;
-  return { year: Number(y), month: Number(mo), day: Number(d), minutes: Number(h) * 60 + Number(mi) };
+  const hours = Number(h);
+  const minutes = Number(mi);
+  const year = Number(y);
+  const month = Number(mo);
+  const day = Number(d);
+  if (hours > 24 || minutes > 59) return null;
+  // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
+  // (month 13, Feb 30, day 32) would otherwise silently roll into a
+  // different instant via wallToIso — reject them like the other providers
+  // do.  Date.UTC normalizes, so a round-trip comparison catches every
+  // overflow at once (same technique as toXmltvTimestamp).
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day, minutes: hours * 60 + minutes };
 }
 
 // Parse a PlayBillList response body into programme slots.  Degrades to [].
@@ -118,10 +137,18 @@ export function parsePlaybill(text) {
     const start = parseApiInstant(item.starttime);
     const stop = parseApiInstant(item.endtime);
     if (!start || !stop) continue;
+    const startIso = wallToIso(start.year, start.month, start.day, start.minutes);
+    const stopIso = wallToIso(stop.year, stop.month, stop.day, stop.minutes);
+    // A corrupt response can give an end that precedes its begin (or a
+    // zero-length isFillProgram gap): such a slot would become an invalid
+    // programme.  Drop it instead of emitting garbage — same guard as the
+    // tivibu provider.  The ISO strings share the fixed +03:00 offset, so
+    // lexicographic comparison is a true chronological comparison.
+    if (stopIso <= startIso) continue;
     const genre = typeof item.genres === 'string' && item.genres.trim() ? item.genres.trim() : undefined;
     slots.push({
-      start: wallToIso(start.year, start.month, start.day, start.minutes),
-      stop: wallToIso(stop.year, stop.month, stop.day, stop.minutes),
+      start: startIso,
+      stop: stopIso,
       title: name,
       ...(genre ? { category: genre } : {}),
     });

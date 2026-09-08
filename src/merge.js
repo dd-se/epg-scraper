@@ -28,7 +28,9 @@ export function mergeResults(results, canonicalize = (id) => id) {
 
   for (const result of results) {
     if (!result) continue; // hostile/absent entry: skip, never crash
-    for (const channel of result.channels || []) {
+    const resultChannels = Array.isArray(result.channels) ? result.channels : [];
+    const resultProgrammes = Array.isArray(result.programmes) ? result.programmes : [];
+    for (const channel of resultChannels) {
       if (channel && channel.id) {
         const canonicalId = canonicalize(channel.id);
         const existing = channelsById.get(canonicalId);
@@ -43,7 +45,8 @@ export function mergeResults(results, canonicalize = (id) => id) {
         }
       }
     }
-    for (const programme of result.programmes || []) {
+    for (const programme of resultProgrammes) {
+      if (!programme) continue; // hostile/absent entry: skip, never crash
       programmes.push({ ...programme, channel: canonicalize(programme.channel) });
     }
   }

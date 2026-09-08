@@ -269,7 +269,7 @@ export async function runCli({
   const extension = values.gzip ? '.xml.gz' : '.xml';
   const outputPath =
     values.out != null
-      ? values.out
+      ? path.resolve(cwd, values.out)
       : path.join(cwd, `epg_${provider.id}_TR${extension}`);
 
   log(`provider: ${provider.id} (${provider.name})`);
@@ -359,7 +359,7 @@ async function runCompare({ provider, dates, values, delayMs, log, fail, write, 
     const extension = values.gzip ? '.xml.gz' : '.xml';
     const base =
       values.out != null
-        ? stripXmltvExtension(values.out)
+        ? path.resolve(cwd, stripXmltvExtension(values.out))
         : path.join(cwd, `epg_${provider.id}_TR`);
     const httpOutput = `${base}.http${extension}`;
     const browserOutput = `${base}.browser${extension}`;
@@ -487,7 +487,7 @@ async function runMerge({ providers, dates, values, delayMs, log, fail, write, s
 
     const extension = values.gzip ? '.xml.gz' : '.xml';
     const outputPath =
-      values.out != null ? values.out : path.join(cwd, `epg_merged_TR${extension}`);
+      values.out != null ? path.resolve(cwd, values.out) : path.join(cwd, `epg_merged_TR${extension}`);
     const { bytes } = await writeXmltv({
       channels: merged.channels,
       programmes: merged.programmes,
@@ -566,7 +566,7 @@ async function runProviderCompare({ providers, dates, values, delayMs, log, fail
     const extension = values.gzip ? '.xml.gz' : '.xml';
     const base =
       values.out != null
-        ? stripXmltvExtension(values.out)
+        ? path.resolve(cwd, stripXmltvExtension(values.out))
         : path.join(cwd, 'epg_compare');
     const aOutput = `${base}.${a.providerId}${extension}`;
     const bOutput = `${base}.${b.providerId}${extension}`;

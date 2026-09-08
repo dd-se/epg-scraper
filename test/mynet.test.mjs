@@ -274,9 +274,67 @@ describe('mynet scrape (stubbed)', () => {
       maxChannels: 1,
     });
 
-    // Only today (2026-09-08) is within the 3-day window; other dates are outside.
-    // channelUrls excludes the main page fetch.
+    // Only the first requested date is within the 3-day window; the other
+    // dates are outside.  channelUrls excludes the main page fetch.
     expect(channelUrls).toHaveLength(1);
+  });
+
+  it('skips zero-length slots when a page repeats a time (Al Jazeera quirk)', async () => {
+    // The real Al Jazeera page lists every programme twice (00:00, 00:00,
+    // 01:00, 01:00, ...).  Stop derivation from the next slot would make the
+    // first of each pair zero-length; those must be skipped, not emitted.
+    const repeatedPage =
+      '<ul>' +
+      '<li><strong class="program-time">00:00</strong><p class="program-name">Newshour</p></li>' +
+      '<li><strong class="program-time">00:00</strong><p class="program-name">Newshour</p></li>' +
+      '<li><strong class="program-time">01:00</strong><p class="program-name">News Live</p></li>' +
+      '<li><strong class="program-time">01:00</strong><p class="program-name">News Live</p></li>' +
+      '<li><strong class="program-time">02:00</strong><p class="program-name">Inside Story</p></li>' +
+      '</ul>';
+    const channels = parseMainPage(mainHtml).slice(0, 1);
+    const mainUrl = 'https://www.mynet.com/tv-rehberi';
+    const result = await scrape({
+      dates: ['2026-09-08'],
+      fetchImpl: async (url) => {
+        const u = String(url);
+        if (u === mainUrl) return response(mainHtml);
+        return response(repeatedPage);
+      },
+      log: () => {},
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.programmes.length).toBeGreaterThan(0);
+    // No programme may have a stop that does not follow its start.
+    for (const p of result.programmes) {
+      expect(p.stop > p.start).toBe(true);
+    }
+    // The schedule covers 00:00 -> 02:00 with no gaps: one entry per hour.
+    expect(result.programmes.map((p) => p.start)).toEqual([
+      '2026-09-08T00:00:00+03:00',
+      '2026-09-08T01:00:00+03:00',
+      '2026-09-08T02:00:00+03:00',
+    ]);
+  });
+
+  it('anchors the 3-day window on the first requested date, not the real clock', async () => {
+    // A --date in the past must map bugun/yarin/sonraki-gun onto the
+    // requested window; otherwise the real clock would scrap nothing.
+    const channels = parseMainPage(mainHtml).slice(0, 1);
+    const fetchMap = buildFetchMap(channels, ['bugun', 'yarin', 'sonraki-gun']);
+    const result = await scrape({
+      dates: ['2026-09-05', '2026-09-06', '2026-09-07'],
+      fetchImpl: stubFetch(fetchMap),
+      log: () => {},
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.days).toBe(3);
+    expect(result.programmes.length).toBeGreaterThan(0);
+    // Every programme is stamped on one of the requested anchor dates.
+    const starts = result.programmes.map((p) => p.start.slice(0, 10));
+    expect(new Set(starts)).toEqual(new Set(['2026-09-05', '2026-09-06', '2026-09-07']));
+    expect(result.programmes.some((p) => p.start.startsWith('2026-09-05'))).toBe(true);
   });
 });
 

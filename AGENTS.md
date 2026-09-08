@@ -39,6 +39,17 @@ CLI tool and library.
 - **Fixed-offset timestamps.** Programme `start`/`stop` are ISO 8601
   strings with one fixed UTC offset (Turkey: `+03:00` year-round).
   Providers must never emit fractional seconds or bare UTC offsets.
+- **Hostile-input hardening.** Every parser must apply the same guards as
+  the existing providers: reject out-of-clock wall times (hours > 24,
+  minutes > 59) and impossible calendar dates (month 13, Feb 30, day 32)
+  before converting with `wallToIso()` — `Date.UTC` normalizes overflow, so
+  validate with a round-trip comparison like `toXmltvTimestamp()` does
+  (a bare month/day range check misses Feb 30); drop reversed/zero-length
+  slots (`stop <= start`, compared on the ISO strings after conversion);
+  skip null/hostile channel and programme entries; degrade non-string /
+  non-array fields to empty.  Providers must never push a corrupt slot
+  into the merge/compare pipeline — the writer (`generateXmltv`) is the
+  last line of defense, not the first.
 
 ## Runtime map
 
@@ -67,12 +78,14 @@ CLI tool and library.
       slug/date mapping, curated channel-id map.  Uses positional rail/row
       pairing; handles the `passive` class added by client-side JS.  Channel
       logos come from the rail `<img src>` with the `?v=…` query stripped.
-    - `mynet.js` — Mynet TV Rehberi: `parseMainPage(html)` discovers channels
+    - `mynet.js` — Mynet TV Rehberi:     `parseMainPage(html)` discovers channels
       (slug, name, logo from card `data-original`/`src`),
      `parseChannelPage(html)` extracts time/name slots.  3-day coverage
-      (today + 2 forward); supports `maxChannels` option.  Default
-      `politenessDelayMs` is 500 (vs hurriyet's 250) because a full run is
-      ~90 channel pages per day (~260 requests for 3 days).
+      (today + 2 forward), anchored on the first requested date so `--date`
+      is honored regardless of the real clock; supports `maxChannels`
+      option.  Default `politenessDelayMs` is 500 (vs hurriyet's 250)
+      because a full run is ~90 channel pages per day (~260 requests for 3
+      days).
     - `tvplus.js` — TV+ (Turkcell) Yayın Akışı: a **plain-HTTP JSON API**
       provider (16 channels incl. TRT Spor/Yıldız, A Spor, HT Spor, FB TV,
       tabii spor, S Sport 1/2, Eurosport 1/2, Sports TV, TRT 1, ATV, TV8,
@@ -144,7 +157,8 @@ yet; Exxen stays login-walled and the rest are platform-exclusive feeds.
 12. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
-    differ between providers line up.
+    differ between providers line up.  Resolution is transitive (alias
+    chains collapse onto one id) and cycle-safe.
 
 Script load order is not critical (ES modules resolve automatically), but
 the dependency chain flows upward: providers → registry/http/xmltv/model/slug → cli.
@@ -202,7 +216,13 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
 ### Adding a provider
 
 1. Create `src/providers/<id>.js` with:
-   - Pure parser function(s) — no I/O, fully fixture-testable.
+   - Pure parser function(s) — no I/O, fully fixture-testable.  Apply the
+     hostile-input hardening rules from the constraints above: validate
+     wall-clock times AND calendar dates before `wallToIso()` (a `Date.UTC`
+     round-trip catches month 13 / Feb 30 / day 32), drop reversed /
+     zero-length slots and null entries, and degrade malformed bodies to
+     empty results — never emit a slot whose instant would silently roll
+     into a different day/month.
    - `scrape()` — fetches pages, parses, merges, dedupes.
    - A curated channel-id map for channels that need case-sensitive or
      aliased ids (see `hurriyet.js` for the pattern).  Ids are normalized

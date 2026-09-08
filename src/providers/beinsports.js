@@ -200,6 +200,9 @@ export async function scrape({
         // channel is the one we fetched (channel_id in the payload matches).
         const start = wallToIso(year, month, day, slot.startMin);
         const endMin = s + 1 < slots.length ? slots[s + 1].startMin : 24 * 60;
+        // Repeated times on a page (same slot listed twice) would make a
+        // zero-length programme — skip it instead of emitting garbage.
+        if (endMin <= slot.startMin) continue;
         const stop = wallToIso(year, month, day, endMin);
         programmes.push({ channel: id, start, stop, title: slot.title });
       }

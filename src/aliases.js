@@ -4,7 +4,8 @@
 // hurriyet's curated "A.HABER.tr" vs mynet's generic-slug "AHABER.tr".  A
 // JSON alias map { "aliasId": "canonicalId" } makes --compare and --merge
 // treat them as one channel.  Aliases are directional: the key is replaced,
-// the value is kept.
+// the value is kept, and resolution is transitive so alias chains
+// ({ A: B, B: C }) collapse onto one canonical id.
 
 import { readFileSync } from 'node:fs';
 
@@ -29,7 +30,17 @@ export function loadAliasMap(filePath) {
 }
 
 // Build an id -> canonical id function (identity when not in the map).
+// Resolution is transitive: { A: B, B: C } collapses A and B onto C so a
+// chain of aliases converges on one id.  A cycle ({ A: B, B: A }) terminates
+// by returning the first id already visited — never an infinite loop.
 export function createCanonicalizer(aliasMap) {
   const map = aliasMap || {};
-  return (id) => (id in map ? map[id] : id);
+  return (id) => {
+    const visited = new Set();
+    while (id in map && !visited.has(id)) {
+      visited.add(id);
+      id = map[id];
+    }
+    return id;
+  };
 }

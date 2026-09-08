@@ -89,6 +89,77 @@ describe('tivibu pure parsers', () => {
     });
   });
 
+  it('drops slots whose end precedes or equals their begin (corrupt responses)', () => {
+    const { slots } = parsePrevueResponse({
+      mobilPrevueViewModel: [
+        {
+          prevueName: 'Good',
+          beginTime: '2026.09.08 10:00:00',
+          endTime: '2026.09.08 11:00:00',
+        },
+        {
+          prevueName: 'Reversed same day',
+          beginTime: '2026.09.08 23:30:00',
+          endTime: '2026.09.08 01:15:00',
+        },
+        {
+          prevueName: 'Zero length',
+          beginTime: '2026.09.08 10:00:00',
+          endTime: '2026.09.08 10:00:00',
+        },
+        {
+          prevueName: 'End before begin entirely',
+          beginTime: '2026.09.09 10:00:00',
+          endTime: '2026.09.08 11:00:00',
+        },
+        {
+          prevueName: 'Cross midnight',
+          beginTime: '2026.09.08 23:30:00',
+          endTime: '2026.09.09 01:15:00',
+        },
+      ],
+    });
+    expect(slots.map((s) => s.title)).toEqual(['Good', 'Cross midnight']);
+  });
+
+  it('rejects impossible calendar dates instead of rolling them forward', () => {
+    // Month 13 / Feb 30 / day 32 would silently land in a different month
+    // via wallToIso — drop the slot rather than stamp it a month off.
+    const { slots } = parsePrevueResponse({
+      mobilPrevueViewModel: [
+        {
+          prevueName: 'Month 13',
+          beginTime: '2026.13.09 10:00:00',
+          endTime: '2026.13.09 11:00:00',
+        },
+        {
+          prevueName: 'Feb 30',
+          beginTime: '2026.02.30 10:00:00',
+          endTime: '2026.02.30 11:00:00',
+        },
+        {
+          prevueName: 'Apr 31',
+          beginTime: '2026.04.31 10:00:00',
+          endTime: '2026.04.31 11:00:00',
+        },
+        {
+          prevueName: 'Day 0',
+          beginTime: '2026.09.00 10:00:00',
+          endTime: '2026.09.00 11:00:00',
+        },
+      ],
+    });
+    expect(slots).toEqual([]);
+    // Legal leap-day instants still parse.
+    const leap = parsePrevueResponse({
+      mobilPrevueViewModel: [
+        { prevueName: 'Leap', beginTime: '2028.02.29 23:30:00', endTime: '2028.03.01 00:30:00' },
+      ],
+    });
+    expect(leap.slots[0].beginDate).toBe('2028-02-29');
+    expect(leap.slots[0].endDate).toBe('2028-03-01');
+  });
+
   it('maps display names to slugs and ids', () => {
     expect(mapChannelId('Tivibu Spor 1')).toBe('TIVIBU.SPOR.1.tr');
     expect(mapChannelId('TIVIBU SPOR 4')).toBe('TIVIBU.SPOR.4.tr');

@@ -198,15 +198,25 @@ export function wallToIso(year, month, day, minutes) {
   return new Date(ms).toISOString().slice(0, 19) + '+03:00';
 }
 
-// Compute Istanbul wall-clock date for a day offset from today.
-function dayDate(offset) {
-  const now = new Date();
-  // Istanbul is UTC+3 year-round.
-  const istanbulMs = now.getTime() + 3 * 3600000;
-  const istanbulDate = new Date(istanbulMs);
-  const y = istanbulDate.getUTCFullYear();
-  const m = istanbulDate.getUTCMonth() + 1;
-  const d = istanbulDate.getUTCDate();
+// Compute Istanbul wall-clock date for a day offset.  When an `anchor`
+// (YYYY-MM-DD, the first requested date) is given it is used as "today" so
+// the 3-day window maps onto the requested window — otherwise a --date in
+// the past would silently scrape nothing because the real clock is "today".
+function dayDate(offset, anchor) {
+  let y;
+  let m;
+  let d;
+  if (anchor) {
+    [y, m, d] = anchor.split('-').map(Number);
+  } else {
+    // Istanbul is UTC+3 year-round.
+    const now = new Date();
+    const istanbulMs = now.getTime() + 3 * 3600000;
+    const istanbulDate = new Date(istanbulMs);
+    y = istanbulDate.getUTCFullYear();
+    m = istanbulDate.getUTCMonth() + 1;
+    d = istanbulDate.getUTCDate();
+  }
   const ms = Date.UTC(y, m - 1, d + offset);
   const result = new Date(ms);
   return {
@@ -264,11 +274,13 @@ export async function scrape({
   }
 
   // Step 2: Determine which day slugs to fetch.
-  // Mynet provides exactly 3 days: bugun, yarin, sonraki-gun.
-  // Map requested dates to day slugs.
-  const today = dayDate(0);
-  const tomorrow = dayDate(1);
-  const dayAfter = dayDate(2);
+  // Mynet provides exactly 3 days: bugun, yarin, sonraki-gun.  The window is
+  // anchored on the first requested date so --date is honored regardless of
+  // the real clock (falls back to real "today" when no dates arrive).
+  const anchor = dates && dates.length > 0 ? dates[0] : undefined;
+  const today = dayDate(0, anchor);
+  const tomorrow = dayDate(1, anchor);
+  const dayAfter = dayDate(2, anchor);
   const dayMap = [
     { date: dateToString(today), slug: 'bugun', offset: 0 },
     { date: dateToString(tomorrow), slug: 'yarin', offset: 1 },
@@ -312,13 +324,19 @@ export async function scrape({
       }
 
       const slots = parseChannelPage(html);
-      const { year, month, day: dayNum } = dayDate(day.offset);
+      // Stamp with the resolved day date (anchored on the first requested
+      // date), never the real clock.
+      const [year, month, dayNum] = day.date.split('-').map(Number);
 
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i];
         const start = wallToIso(year, month, dayNum, slot.startMin);
         // Stop time = next programme's start, or end of day (24:00 = 1440 min).
         const endMin = i + 1 < slots.length ? slots[i + 1].startMin : 24 * 60;
+        // Some pages repeat a time (e.g. Al Jazeera lists every slot twice);
+        // a stop that does not follow the start would be a zero-length slot.
+        // Skip it — the duplicated row carries the real start.
+        if (endMin <= slot.startMin) continue;
         const stop = wallToIso(year, month, dayNum, endMin);
         programmes.push({
           channel: id,
