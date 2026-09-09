@@ -28,7 +28,7 @@ npm test
 Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 `--days-back N`, `--days-forward N`, `--delay-ms N`, `--retries N`,
 `--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
-`--merge`, `--alias-map <path>`, `--quiet`, `--list-providers`.
+`--merge`, `--from <files>`, `--alias-map <path>`, `--quiet`, `--list-providers`.
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
@@ -200,6 +200,22 @@ node bin/epg-scraper.js --provider hurriyet,mynet --merge
 # Scrape everything both sources have, hurriyet winning conflicts
 node bin/epg-scraper.js --provider hurriyet,mynet --merge --out out/guide.xml.gz
 ```
+
+### Offline merge (reuse scraped guides, zero live hits)
+
+`--merge --from` merges **already-scraped XMLTV files** instead of scraping —
+no server is contacted at all. File order sets the precedence (first file
+wins conflicts), mirroring `--provider` order for live scrapes:
+
+```bash
+node bin/epg-scraper.js --merge --from guides/epg_a_TR.xml.gz,guides/epg_b_TR.xml.gz --out out/guide.xml.gz
+```
+
+- Accepts plain `.xml` and gzipped `.xml.gz` (detected by extension).
+- `--provider` is ignored when `--from` is given; `--alias-map` still
+  applies, so aliased channel ids collapse across files.
+- This is how CI avoids scraping twice: per-provider jobs upload their
+  guides, the sports-merge job downloads them and merges offline.
 
 ## Channel-id aliases
 
@@ -545,7 +561,10 @@ tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4.
 `.github/workflows/scrape.yml` scrapes every provider daily at 00:30 UTC
 (03:30 TRT) and publishes the XMLTV guides as assets on a rolling `latest`
 GitHub Release. Mynet runs with an explicit `--delay-ms 500` because a
-full run is ~260 page fetches. Outputs are gitignored, so nothing is
+full run is ~260 page fetches. Each provider is scraped **exactly once**:
+the sports-merge job downloads the per-provider artifacts and merges them
+offline (`--merge --from`), so the sports sources are never hit twice.
+Outputs are gitignored, so nothing is
 committed — and if a day's scrape fails, the previous release stays live.
 
 ### Using the guide in an IPTV app
@@ -617,7 +636,7 @@ src/entities.js         HTML entity decoder
 src/slug.js             generic channel-id slug
 src/model.js            channel/programme model + validation
 src/registry.js         provider registry + date-range helper
-src/xmltv.js            XMLTV writer (plain + gzip)
+src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
 src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, …)
 scripts/dev-tools.js    lifecycle manager for browser + server

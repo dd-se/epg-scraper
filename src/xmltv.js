@@ -20,6 +20,7 @@
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { decodeEntities } from './entities.js';
 
 // "2026-09-07T15:00:00+03:00" -> "20260907150000 +0300"
 export function toXmltvTimestamp(iso) {
@@ -204,4 +205,127 @@ export async function writeXmltv({ channels, programmes, outputPath, gzip = true
     await pipeline(nodeStream, out);
   }
   return { bytes: Buffer.byteLength(xml), gzip };
+}
+
+// XMLTV reader — the inverse of the writer above, so already-scraped guides
+// can be reused without hitting live servers again (CI merge reuses the
+// per-provider artifacts).  Regex/string parsing only, like the providers:
+// never eval scraped content.  Hostile input degrades to skipped entries,
+// never a throw — the writer remains the final validator.
+
+function attrValue(attrs, name) {
+  const match = new RegExp(`${name}\\s*=\\s*"([^"]*)"`).exec(attrs || '');
+  return match ? decodeEntities(match[1]) : undefined;
+}
+
+function firstTagText(body, tag) {
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`).exec(body || '');
+  return match ? decodeEntities(match[1]).trim() : undefined;
+}
+
+function firstIconSrc(body) {
+  const match = /<icon\s[^>]*src\s*=\s*"([^"]*)"[^>]*\/?>/.exec(body || '');
+  return match ? decodeEntities(match[1]) : undefined;
+}
+
+// "20260907150000 +0300" -> "2026-09-07T15:00:00+03:00".  Throws on malformed
+// or impossible input (validated with a Date.UTC round-trip, mirroring
+// toXmltvTimestamp).
+export function fromXmltvTimestamp(value) {
+  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-])(\d{2})(\d{2})$/.exec(
+    String(value == null ? '' : value).trim()
+  );
+  if (!match) {
+    throw new Error(`Invalid XMLTV timestamp: ${JSON.stringify(value)}`);
+  }
+  const [, y, mo, d, h, mi, s, sign, oh, om] = match;
+  const check = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)));
+  if (
+    check.getUTCFullYear() !== Number(y) ||
+    check.getUTCMonth() + 1 !== Number(mo) ||
+    check.getUTCDate() !== Number(d) ||
+    check.getUTCHours() !== Number(h) ||
+    check.getUTCMinutes() !== Number(mi) ||
+    check.getUTCSeconds() !== Number(s) ||
+    Number(oh) > 23 ||
+    Number(om) > 59
+  ) {
+    throw new Error(`Impossible XMLTV timestamp: ${JSON.stringify(value)}`);
+  }
+  return `${y}-${mo}-${d}T${h}:${mi}:${s}${sign}${oh}:${om}`;
+}
+
+// Parse an XMLTV document string into the internal { channels, programmes }
+// model.  Skips hostile/corrupt entries (bad timestamps, reversed slots,
+// missing titles, dangling channel refs) instead of throwing.
+export function parseXmltv(xml) {
+  const source = xml == null ? '' : String(xml);
+  const channels = [];
+  const channelIds = new Set();
+  const channelRe = /<channel\b([^>]*)>([\s\S]*?)<\/channel>/g;
+  let channelMatch;
+  while ((channelMatch = channelRe.exec(source)) !== null) {
+    const id = attrValue(channelMatch[1], 'id');
+    if (!id) continue;
+    const body = channelMatch[2];
+    const name = firstTagText(body, 'display-name') || id;
+    const icon = firstIconSrc(body);
+    const url = firstTagText(body, 'url') || undefined;
+    if (channelIds.has(id)) continue;
+    channelIds.add(id);
+    channels.push({
+      id,
+      name,
+      ...(icon != null && icon !== '' ? { icon } : {}),
+      ...(url != null && url !== '' ? { url } : {}),
+    });
+  }
+
+  const programmes = [];
+  const programmeRe = /<programme\s([^>]*?)>([\s\S]*?)<\/programme>/g;
+  let programmeMatch;
+  while ((programmeMatch = programmeRe.exec(source)) !== null) {
+    const attrs = programmeMatch[1];
+    const body = programmeMatch[2];
+    const channel = attrValue(attrs, 'channel');
+    let start;
+    let stop;
+    try {
+      start = fromXmltvTimestamp(attrValue(attrs, 'start'));
+      stop = fromXmltvTimestamp(attrValue(attrs, 'stop'));
+    } catch {
+      continue; // malformed/impossible timestamp: skip, never throw
+    }
+    const title = firstTagText(body, 'title');
+    if (!channel || !title) continue;
+    if (!channelIds.has(channel)) continue; // dangling ref: skip
+    if (stop <= start) continue; // reversed/zero-length slot: skip
+    const subTitle = firstTagText(body, 'sub-title');
+    const desc = firstTagText(body, 'desc');
+    const category = firstTagText(body, 'category');
+    const icon = firstIconSrc(body);
+    programmes.push({
+      channel,
+      start,
+      stop,
+      title,
+      ...(subTitle ? { subTitle } : {}),
+      ...(desc ? { desc } : {}),
+      ...(category ? { category } : {}),
+      ...(icon ? { icon } : {}),
+    });
+  }
+
+  return { channels, programmes };
+}
+
+// Read an XMLTV file (.xml or .xml.gz, detected by extension) into the
+// internal model.  Rejects on missing/unreadable files; corrupt entries
+// inside degrade to skips via parseXmltv.
+export async function readXmltvFile(filePath) {
+  const fs = await import('node:fs');
+  const { gunzipSync } = await import('node:zlib');
+  const raw = fs.readFileSync(filePath);
+  const text = /[.]gz$/i.test(filePath) ? gunzipSync(raw).toString('utf8') : raw.toString('utf8');
+  return parseXmltv(text);
 }

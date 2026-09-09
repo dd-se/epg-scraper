@@ -5,7 +5,7 @@ import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { loadProviders } from './providers/index.js';
 import { getProvider, buildDateRange } from './registry.js';
-import { writeXmltv } from './xmltv.js';
+import { writeXmltv, readXmltvFile } from './xmltv.js';
 import {
   compareResults,
   renderCompareReport,
@@ -45,6 +45,10 @@ const HELP_TEXT = `Usage: epg-scraper [options]
                        by channel
   --merge              combine the listed providers into one guide: the first
                        provider wins conflicts, later ones fill the gaps
+  --from <files>       with --merge, skip scraping and merge already-scraped
+                       XMLTV files instead (comma-separated .xml/.xml.gz
+                       paths) — reuses earlier outputs without hitting live
+                       servers again
   --alias-map <path>   JSON file { aliasId: canonicalId } mapping channel ids
                        that differ between providers onto one canonical id
                        (used by --compare and --merge)
@@ -70,7 +74,11 @@ Merge mode:
   --provider hurriyet,mynet --merge scrapes every listed provider and writes
   one guide (epg_merged_TR.xml[.gz]) with the union of channels and
   programmes.  Conflicting slots (same channel + time) keep the first
-  provider's version, so list the most authoritative source first.`;
+  provider's version, so list the most authoritative source first.  With
+  --from, no server is hit at all: already-scraped guides are merged
+  offline (file order sets the precedence):
+
+    node bin/epg-scraper.js --merge --from guides/a.xml.gz,guides/b.xml.gz --out epg_merged_TR.xml.gz`;
 
 export async function runCli({
   argv = process.argv.slice(2),
@@ -102,6 +110,7 @@ export async function runCli({
         stealth: { type: 'boolean', default: false },
         compare: { type: 'boolean', default: false },
         merge: { type: 'boolean', default: false },
+        from: { type: 'string' },
         'alias-map': { type: 'string' },
         quiet: { type: 'boolean', default: false },
         'list-providers': { type: 'boolean', default: false },
@@ -189,6 +198,24 @@ export async function runCli({
     return 1;
   }
 
+  // Offline merge inputs: --merge --from a.xml.gz,b.xml.gz reuses
+  // already-scraped guides instead of hitting live servers.
+  const fromFiles =
+    values.from != null
+      ? String(values.from)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+  if (values.from != null && !values.merge) {
+    fail('--from requires --merge (it merges already-scraped XMLTV files)');
+    return 1;
+  }
+  if (values.from != null && fromFiles.length === 0) {
+    fail('--from expects at least one file path');
+    return 1;
+  }
+
   const log = values.quiet ? () => {} : (line) => write(stdout, line);
 
   const delayMs = parseDelayMs(values, fail);
@@ -255,8 +282,11 @@ export async function runCli({
   }
 
   if (values.merge) {
+    // Offline merge reuses files and never touches providers or the network.
+    const providers = fromFiles.length > 0 ? [] : providerIds.map((id) => getProvider(id));
     return runMerge({
-      providers: providerIds.map((id) => getProvider(id)),
+      providers,
+      fromFiles,
       canonicalize,
       dates,
       values,
@@ -304,14 +334,9 @@ export async function runCli({
     if (browserFetcher) {
       scrapeOptions.fetchImpl = browserFetcher.fetchImpl;
     }
-    if (values['max-channels'] != null) {
-      const n = Number(values['max-channels']);
-      if (!Number.isInteger(n) || n < 1) {
-        fail('--max-channels expects a positive integer');
-        return 1;
-      }
-      scrapeOptions.maxChannels = n;
-    }
+    const maxChannels = parseMaxChannels(values, fail);
+    if (maxChannels === null) return 1;
+    if (maxChannels !== undefined) scrapeOptions.maxChannels = maxChannels;
 
     const { channels, programmes, days, failures } = await provider.scrape(scrapeOptions);
     log(
@@ -323,7 +348,7 @@ export async function runCli({
       return 1;
     }
 
-    const { bytes } = await writeXmltv({
+    const { bytes } = await writeGuideFile({
       channels,
       programmes,
       outputPath,
@@ -397,6 +422,25 @@ function stripXmltvExtension(outputPath) {
   return base;
 }
 
+// Parse `--max-channels` once for all modes.  Returns the cap, undefined
+// when the flag was not passed, or null after reporting an invalid value
+// (caller must exit 1).
+function parseMaxChannels(values, fail) {
+  if (values['max-channels'] == null) return undefined;
+  const n = Number(values['max-channels']);
+  if (!Number.isInteger(n) || n < 1) {
+    fail('--max-channels expects a positive integer');
+    return null;
+  }
+  return n;
+}
+
+// Write one guide file.  Small shared helper so single/merge/compare don't
+// each re-implement the writeXmltv call.
+async function writeGuideFile({ channels, programmes, outputPath, gzip, generatorInfoName }) {
+  return writeXmltv({ channels, programmes, outputPath, gzip, generatorInfoName });
+}
+
 // --compare: scrape the provider twice (plain HTTP, then headless browser),
 // report the structural differences, and write both guides for manual diffing.
 async function runCompare({ provider, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
@@ -422,14 +466,9 @@ async function runCompare({ provider, dates, values, delayMs, transportOptions =
 
     const options = { dates, fetchOptions: { ...transportOptions } };
     if (delayMs !== undefined) options.politenessDelayMs = delayMs;
-    if (values['max-channels'] != null) {
-      const n = Number(values['max-channels']);
-      if (!Number.isInteger(n) || n < 1) {
-        fail('--max-channels expects a positive integer');
-        return 1;
-      }
-      options.maxChannels = n;
-    }
+    const maxChannels = parseMaxChannels(values, fail);
+    if (maxChannels === null) return 1;
+    if (maxChannels !== undefined) options.maxChannels = maxChannels;
 
     log('compare: scraping with plain HTTP fetch');
     const httpResult = await provider.scrape({
@@ -455,7 +494,7 @@ async function runCompare({ provider, dates, values, delayMs, transportOptions =
         write(stdout, `note: ${label} produced no data — skipping ${outputPath}`);
         return;
       }
-      const { bytes } = await writeXmltv({
+      const { bytes } = await writeGuideFile({
         channels: result.channels,
         programmes: result.programmes,
         outputPath,
@@ -484,11 +523,13 @@ async function runCompare({ provider, dates, values, delayMs, transportOptions =
 }
 
 // --merge: scrape every listed provider (sharing one browser when any of
-// them needs JS rendering), combine the results into a single complete guide
-// and write one XMLTV file.
-async function runMerge({ providers, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
+// them needs JS rendering), or reuse already-scraped XMLTV files with
+// --from (zero network), then combine into a single complete guide and write
+// one XMLTV file.
+async function runMerge({ providers, fromFiles = [], dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
+  const offline = fromFiles.length > 0;
   // Lazily create one browser fetcher shared by every provider that needs it.
-  const needBrowser = values.browser || providers.some((p) => p.requiresBrowser);
+  const needBrowser = !offline && (values.browser || providers.some((p) => p.requiresBrowser));
   let browserFetcher = null;
   if (needBrowser) {
     try {
@@ -502,55 +543,69 @@ async function runMerge({ providers, dates, values, delayMs, transportOptions = 
   }
 
   try {
-    let maxChannels;
-    if (values['max-channels'] != null) {
-      const n = Number(values['max-channels']);
-      if (!Number.isInteger(n) || n < 1) {
-        fail('--max-channels expects a positive integer');
-        return 1;
-      }
-      maxChannels = n;
-    }
+    const maxChannels = parseMaxChannels(values, fail);
+    if (maxChannels === null) return 1;
 
     const results = [];
-    for (const provider of providers) {
-      const useBrowser = values.browser || provider.requiresBrowser;
-      log(`merge: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`);
-      const result = await provider.scrape({
-        dates,
-        maxChannels,
-        fetchOptions: { ...transportOptions },
-        politenessDelayMs: delayMs,
-        fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
-        log: (line) => log(`${provider.id}: ${line}`),
-      });
-      results.push({ providerId: provider.id, ...result });
-      log(
-        `merge: ${provider.id} contributed ${result.channels.length} channels, ` +
-          `${result.programmes.length} programmes (${result.failures} failed page(s))`
-      );
+    if (offline) {
+      for (const file of fromFiles) {
+        const resolved = path.resolve(cwd, file);
+        let parsed;
+        try {
+          parsed = await readXmltvFile(resolved);
+        } catch (error) {
+          fail(`--from "${file}": ${error && error.message ? error.message : String(error)}`);
+          return 1;
+        }
+        const label = path.basename(file);
+        results.push({ providerId: label, ...parsed });
+        log(`merge: ${label} loaded ${parsed.channels.length} channels, ${parsed.programmes.length} programmes`);
+      }
+    } else {
+      for (const provider of providers) {
+        const useBrowser = values.browser || provider.requiresBrowser;
+        log(`merge: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`);
+        const result = await provider.scrape({
+          dates,
+          maxChannels,
+          fetchOptions: { ...transportOptions },
+          politenessDelayMs: delayMs,
+          fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
+          log: (line) => log(`${provider.id}: ${line}`),
+        });
+        results.push({ providerId: provider.id, ...result });
+        log(
+          `merge: ${provider.id} contributed ${result.channels.length} channels, ` +
+            `${result.programmes.length} programmes (${result.failures} failed page(s))`
+        );
+      }
     }
 
     const merged = mergeResults(results, canonicalize);
+    const sourceCount = offline ? fromFiles.length : providers.length;
+    const sourceNoun = offline ? 'file(s)' : 'provider(s)';
     log(
       `merge: ${merged.channels.length} channels, ${merged.programmes.length} programmes ` +
-        `from ${providers.length} provider(s), ${merged.duplicates} duplicate programme(s) removed`
+        `from ${sourceCount} ${sourceNoun}, ${merged.duplicates} duplicate programme(s) removed`
     );
 
     if (merged.channels.length === 0 || merged.programmes.length === 0) {
-      fail('nothing scraped — refusing to write an empty guide');
+      fail(offline ? 'nothing merged — refusing to write an empty guide' : 'nothing scraped — refusing to write an empty guide');
       return 1;
     }
 
     const extension = values.gzip ? '.xml.gz' : '.xml';
     const outputPath =
       values.out != null ? path.resolve(cwd, values.out) : path.join(cwd, `epg_merged_TR${extension}`);
-    const { bytes } = await writeXmltv({
+    const generatorInfoName = offline
+      ? `epg-scraper (merged files: ${fromFiles.map((f) => path.basename(f)).join('+')})`
+      : `epg-scraper (merged: ${providers.map((p) => p.id).join('+')})`;
+    const { bytes } = await writeGuideFile({
       channels: merged.channels,
       programmes: merged.programmes,
       outputPath,
       gzip: values.gzip,
-      generatorInfoName: `epg-scraper (merged: ${providers.map((p) => p.id).join('+')})`,
+      generatorInfoName,
     });
     log(`written: ${outputPath} (${bytes} bytes uncompressed XML)`);
     return 0;
@@ -582,15 +637,8 @@ async function runProviderCompare({ providers, dates, values, delayMs, transport
   }
 
   try {
-    let maxChannels;
-    if (values['max-channels'] != null) {
-      const n = Number(values['max-channels']);
-      if (!Number.isInteger(n) || n < 1) {
-        fail('--max-channels expects a positive integer');
-        return 1;
-      }
-      maxChannels = n;
-    }
+    const maxChannels = parseMaxChannels(values, fail);
+    if (maxChannels === null) return 1;
 
     const results = [];
     for (const provider of providers) {
@@ -635,7 +683,7 @@ async function runProviderCompare({ providers, dates, values, delayMs, transport
         write(stdout, `note: ${label} produced no data — skipping ${outputPath}`);
         return;
       }
-      const { bytes } = await writeXmltv({
+      const { bytes } = await writeGuideFile({
         channels: result.channels,
         programmes: result.programmes,
         outputPath,

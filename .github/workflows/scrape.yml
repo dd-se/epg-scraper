@@ -100,11 +100,13 @@ jobs:
           if-no-files-found: error
 
   # One combined sports guide: union of tvplus (16), beinsports (4),
-  # digiturkburada (4), sporekrani (9) and tivibu (4) channels.
+  # digiturkburada (4), sporekrani (9) and tivibu (4) channels.  Reuses the
+  # per-provider guides scraped above — zero live-server hits: the artifacts
+  # are downloaded and merged offline with --merge --from.
   epg-sports-merged:
     needs: scrape
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - name: Check out
         uses: actions/checkout@v5
@@ -113,13 +115,19 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Download sports guides
+        uses: actions/download-artifact@v6
+        with:
+          pattern: epg-*
+          merge-multiple: true
+          path: guides
 
-      - name: Merge sports providers
-        run: node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge --days-forward 2 --delay-ms 300 --out epg_sports_merged_TR.xml.gz
+      - name: List guides
+        run: ls -la guides/
+
+      - name: Merge sports providers (offline, no scraping)
+        run: node bin/epg-scraper.js --merge --from guides/epg_tvplus_TR.xml.gz,guides/epg_beinsports_TR.xml.gz,guides/epg_digiturkburada_TR.xml.gz,guides/epg_sporekrani_TR.xml.gz,guides/epg_tivibu_TR.xml.gz --out epg_sports_merged_TR.xml.gz
 
       - name: List output
         run: ls -la epg_sports_merged_TR.xml*

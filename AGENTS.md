@@ -76,7 +76,9 @@ CLI tool and library.
 6. `src/registry.js` — Provider registry (`registerProvider`/`getProvider`/`listProviders`)
    and `buildDateRange()` date helper.
 7. `src/xmltv.js` — XMLTV document writer (`generateXmltv` → string, `writeXmltv` → file),
-   timestamp formatter, XML escaping.
+   timestamp formatter, XML escaping, plus the reader (`parseXmltv` ← string,
+   `readXmltvFile` ← `.xml`/`.xml.gz`, `fromXmltvTimestamp` for `start`/`stop`)
+   so already-scraped guides can be reused without hitting live servers.
 8. `src/providers/` — Provider adapters (shared plumbing — wallToIso,
    weekDays, weekdayIndex, normalizeChannelKey, calendar-date validation,
    defaultDates, dedupe/sort, finishResult — lives in
@@ -188,7 +190,10 @@ the dependency chain flows upward: providers → registry/http/xmltv/model/slug 
   `epg_compare.<id>.xml[.gz]`.  Requires Playwright + Chromium.
 - **Merge (`--merge`)** — scrapes every listed provider and writes ONE guide
   (`epg_merged_TR.xml[.gz]`) with the union of channels and programmes; the
-  first provider wins conflicts, later ones fill the gaps.
+  first provider wins conflicts, later ones fill the gaps.  With `--from
+  a.xml.gz,b.xml.gz` no server is hit: already-scraped guides are merged
+  offline (file order sets the precedence) — this is how CI scrapes each
+  provider exactly once and merges the artifacts.
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
   canonicalizes channel ids in compare and merge (e.g. mynet's `AHABER.tr`
   and hurriyet's `A.HABER.tr` collapse onto one channel).
