@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "scrape": "node bin/epg-scraper.js --provider hurriyet",
     "scrape:gz": "node bin/epg-scraper.js --provider hurriyet --gzip",
+    "scrape:mynet-sports": "node bin/epg-scraper.js --provider mynet,tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge --alias-map aliases.mynet-sports.json --days-forward 2 --delay-ms 300 --out epg_mynet_sports_merged_TR.xml.gz",
     "update:reference": "node scripts/update-reference-ids.js",
     "install:playwright": "npx playwright install chromium",
     "check:browser": "node -e \"import('./src/browser.js').then(m=>m.isPlaywrightAvailable()).then(ok=>{console.log(ok?'Playwright ready':'Playwright not found — run: npm run install:playwright');process.exit(ok?0:1)})\"",

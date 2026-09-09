@@ -208,6 +208,47 @@ describe('cli --merge', () => {
     expect(xml.match(/channel="KANAL.D.tr"/g)).toHaveLength(1);
   });
 
+  it('merges the mynet+sports alias map into canonical channel ids', async () => {
+    // Regression test for aliases.mynet-sports.json: mynet emits FB.TV.tr /
+    // ULUSAL.TV.tr while tvplus / the reference use FENERBAHÇE.TV.tr /
+    // ULUSAL.KANAL.tr. The shipped map must stay valid JSON and collapse both.
+    const aliasMap = JSON.parse(
+      readFileSync(path.join(process.cwd(), 'aliases.mynet-sports.json'), 'utf8')
+    );
+    const canonicalize = createCanonicalizer(aliasMap);
+
+    const merged = mergeResults(
+      [
+        {
+          channels: [{ id: 'FB.TV.tr', name: 'FB TV' }],
+          programmes: [
+            {
+              channel: 'FB.TV.tr',
+              start: '2026-09-07T15:00:00+03:00',
+              stop: '2026-09-07T16:00:00+03:00',
+              title: 'Mynet FB Show',
+            },
+          ],
+        },
+        {
+          channels: [
+            { id: 'FENERBAHÇE.TV.tr', name: 'FB TV' },
+            { id: 'ULUSAL.TV.tr', name: 'ULUSAL TV' },
+          ],
+          programmes: [],
+        },
+      ],
+      canonicalize
+    );
+    // FB collapses onto the canonical tvplus id; ULUSAL onto the reference id.
+    expect(merged.channels.map((c) => c.id).sort()).toEqual([
+      'FENERBAHÇE.TV.tr',
+      'ULUSAL.KANAL.tr',
+    ]);
+    expect(merged.channels.every((c) => c.id !== 'FB.TV.tr')).toBe(true);
+    expect(merged.programmes[0].channel).toBe('FENERBAHÇE.TV.tr');
+  });
+
   it('merges aliased channel ids into one canonical channel via --alias-map', async () => {
     const aliasPath = path.join(tmpDir, 'aliases.json');
     writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'A.HABER.tr' }));
