@@ -45,8 +45,8 @@ immediately.  Raise `--retries` for unreliable links, lower `--timeout-ms`
  to fail fast on dead hosts.
 
 Sports channels are covered by the `tvplus`, `beinsports`, `digiturkburada`,
-`sporekrani`, and `tivibu` providers (37 channels together); see the
-dedicated sections below and `UNSUCCESSFUL.md` for the channels that still
+`sporekrani`, `tivibu`, and `idmantv` providers (38 channels together); see
+the dedicated sections below and `UNSUCCESSFUL.md` for the channels that still
 have no public scrapeable source.
 
 ## Browser mode
@@ -491,6 +491,33 @@ node bin/epg-scraper.js --provider sporekrani --date 2026-09-08
 node bin/epg-scraper.js --provider tivibu --date 2026-09-08
 ```
 
+## Provider: idmantv
+
+- Source: `https://idmantv.az/az/program` — the official weekly programme of
+  **İdman TV** (İdman Televiziyası, Azerbaijan's first sports channel).  The
+  old `idmantv.com.tr` domain is dead; the real site is `idmantv.az`.
+- Page anatomy: static server-rendered HTML (Webflow) — no JS, no API, no
+  login.  Each `div.day-card` holds one day of the current Mon–Sun week:
+  `<h3 class="day-title">Bazar ertəsi / 07.09.2026</h3>` followed by
+  `.prog-row` entries of `<span class="prog-time">HH:MM</span>` +
+  `<span class="prog-name">Title</span>` (Azerbaijani titles).
+- Like beinsports, the site publishes exactly one Mon–Sun week, so any
+  requested window is served from it and dates outside are skipped with a
+  warning.  **One fetch** covers all seven days.  Programme stop times are
+  derived from the next programme's start (24:00 for the last slot).
+- The page occasionally appends a stray cross-channel note to the last
+  Sunday slots (e.g. "… (canlı) Mədəniyyət TV") — emitted verbatim, as
+  published.
+- Offset caveat: the site's HH:MM are Baku wall times (UTC+4, UTC+5 during
+  Azerbaijan's late-March → late-October DST).  Timestamps are stamped with
+  the repo's fixed `+03:00` like every provider so the merged guide keeps a
+  single offset.
+
+```bash
+# Any day inside the published week (fixture dates: 2026-09-07 .. 2026-09-13)
+node bin/epg-scraper.js --provider idmantv --date 2026-09-12
+```
+
 ## Provider: beinsports
 
 - Source: `https://beinsports.com.tr/yayin-akisi/{channel}/{day}` where
@@ -547,13 +574,14 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
 ### Sports guide from the sports providers
 
 ```bash
-# One guide with all 37 scrapeable sports channels
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge --out epg_sports_merged_TR.xml.gz
+# One guide with all 38 scrapeable sports channels
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu,idmantv --merge --out epg_sports_merged_TR.xml.gz
 ```
 
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
 `digiturkburada` adds beIN Sports 5, Max 1-2 and GS TV; `sporekrani` adds
-tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4.
+tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
+adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
 
 ## Scheduled scrapes (GitHub Actions)

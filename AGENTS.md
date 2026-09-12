@@ -143,6 +143,19 @@ CLI tool and library.
       programme belongs to the day it starts on).  **Not browser-
       compatible** (POSTs form data + antiforgery cookie).  Supports
       `maxChannels`.
+    - `idmantv.js` — iDMAN TV Yayın Proqramı (İdman Televiziyası,
+      Azerbaijan's first sports channel): the old `idmantv.com.tr` domain is
+      dead; the real site is `idmantv.az/az/program`, a static SSR weekly
+      page (no JS/API/login) that publishes exactly one Mon–Sun week of
+      HH:MM slots in Azerbaijani.  `parseWeeklyPage()` / `parseDayTitle()`
+      are the pure parsers; one fetch covers all seven requested days and
+      dates outside the published week are skipped with a warning.  Stops
+      derive from the next slot (24:00 for the last), matching beinsports.
+      Titles are emitted verbatim (the page sometimes appends a stray
+      cross-channel note to the last Sunday slots).  Baku wall times are
+      stamped with the repo's fixed `+03:00` like every provider — Baku is
+      UTC+4/+5, so idmantv instants can sit an hour behind the Turkish
+      channels while Azerbaijan observes summer time.
    - `index.js` — `loadProviders()` registry loader.
 9. `src/cli.js` — CLI argument parsing, orchestration, output writing.
    Exports `runCli({ argv, stdout, stderr, cwd })` for testability.
@@ -155,12 +168,12 @@ CLI tool and library.
     reports into text lines.
 
 Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekrani` +
-`tivibu` merged (`--provider tvplus,beinsports,digiturkburada,sporekrani,
-tivibu --merge`) cover 37 of the 50 sports channels; the rest are tracked
-in `UNSUCCESSFUL.md`.  `sporekrani` adds the tabii spor 1-8 simulcast feeds
-and S Sport Plus; `tivibu` adds Tivibu Spor 1-4.  iDMAN TV now has a
-**verified candidate source** listed in `UNSUCCESSFUL.md` but no provider
-yet; Exxen stays login-walled and the rest are platform-exclusive feeds.
+`tivibu` + `idmantv` merged (`--provider tvplus,beinsports,digiturkburada,
+sporekrani,tivibu,idmantv --merge`) cover 38 of the 50 sports channels; the
+rest are tracked in `UNSUCCESSFUL.md`.  `sporekrani` adds the tabii spor 1-8
+simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
+adds İdman TV (an Azerbaijani charter, not in the epgshare01 reference).
+Exxen stays login-walled and the rest are platform-exclusive feeds.
 11. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later
@@ -321,8 +334,9 @@ node bin/epg-scraper.js --list-providers
   `test/browser.test.mjs` — Playwright fetcher (mocked);
   `test/compare.test.mjs` — http-vs-browser + provider-vs-provider diff
   logic and CLI; `test/merge.test.mjs` — merge logic and CLI;
-  `test/reference.test.mjs` — provider id normalization against the
-  vendored epgshare01 snapshot (no network; see below).
+  `test/idmantv.test.mjs` — iDMAN TV weekly-page parser, scrape, CLI
+  integration; `test/reference.test.mjs` — provider id normalization against
+  the vendored epgshare01 snapshot (no network; see below).
 
 ### Channel-id reference snapshot (keep ≤ 7 days fresh)
 

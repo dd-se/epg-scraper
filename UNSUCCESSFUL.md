@@ -5,9 +5,10 @@ could **not** scrape (as of 2026-09-09), the source(s) tried, and why they
 failed.  Each entry is a fix-me note: the channel either needs a different
 source, login/auth flow, or a bespoke scraper to be built later.
 Statements about live sites below were re-verified on 2026-09-09 unless a
-fixture/test is cited instead.
+fixture/test is cited instead; the `idmantv.az` weekly page was re-fetched
+live on 2026-09-12 when the `idmantv` provider landed.
 
-Covered today (37 channels):
+Covered today (38 channels):
 
 | Provider | Channels |
 | --- | --- |
@@ -16,11 +17,12 @@ Covered today (37 channels):
 | `digiturkburada` | beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV |
 | `sporekrani` | tabii spor 1, tabii spor 2, tabii spor 3, tabii spor 4, tabii spor 5, tabii spor 6, tabii spor 7, tabii spor 8, S Sport Plus |
 | `tivibu` | Tivibu Spor 1, Tivibu Spor 2, Tivibu Spor 3, Tivibu Spor 4 |
+| `idmantv` | İdman TV |
 
-Run all five and merge into one guide:
+Run all six and merge into one guide:
 
 ```bash
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu --merge
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu,idmantv --merge
 ```
 
 Notes:
@@ -55,7 +57,7 @@ no provider exists yet, the row is a verified candidate for future work:
 | `sporekrani.com/home/channel/tabii-spor-{1..8}` | tabii spor 1-8 | **IMPLEMENTED** as the `sporekrani` provider (rolling multi-day event list — 5/3/2/0 events for spor 1/2/3/4 in the 2026-09-08 fixtures; events-only, stops derive from the next event; only channels with scheduled simulcast events carry entries — an empty result is correct, not a failure). |
 | `sporekrani.com/home/channel/s-sport-plus` | S Sport Plus | **IMPLEMENTED** as the `sporekrani` provider (rolling multi-day event list — 120 events over 14 distinct days in the 2026-09-08 fixture, incl. FIBA Women's World Cup, Saudi Pro League, Bundesliga/Serie A/La Liga, MotoGP practice sessions; events-only, stops derive from the next event). |
 | `tivibu.com.tr/kanallar/tivibu-spor-{1,2,3,4}` | Tivibu Spor 1-4 | **IMPLEMENTED** as the `tivibu` provider (session GET for cookie/token/channel-code, then `POST /Channel/GetPrevueList` per channel-day; explicit start/stop, any date).  Spor 2-4 carry only a repeating "Tivibu Spor Tanıtım" promo loop in the 2026-09-09 fixtures (5 slots each, emitted as-is).  The general grid `tivibu.com.tr/canli-tv/spor` (re-verified live 2026-09-09: date chips 02–16.09.2026 plus Dün/Bugün/Yarın, per-slot `start → stop` ranges for the same four channels) uses the same backend but the provider drives the per-channel `/kanallar/<slug>` pages + `GetPrevueList` API directly. |
-| `idmantv.az/az/program` | iDMAN TV | Candidate — re-verified live 2026-09-09: static SSR weekly programme "Həftənin bütün günlərinin TV proqramları (07.09.2026 - 13.09.2026)" with HH:MM start times per weekday (Bazar ertəsi / 07.09.2026, Ç. axşamı / 08.09.2026, … Bazar / 13.09.2026), Azerbaijani titles, no login wall. No provider yet. (The old `idmantv.com.tr` domain is dead; the real site is `idmantv.az`.) |
+| `idmantv.az/az/program` | iDMAN TV | **IMPLEMENTED** as the `idmantv` provider (re-verified live 2026-09-09 + fixture 2026-09-07: static SSR weekly programme "Həftənin bütün günlərinin TV proqramları (07.09.2026 - 13.09.2026)" with HH:MM start times per weekday (Bazar ertəsi / 07.09.2026, Ç. axşamı / 08.09.2026, … Bazar / 13.09.2026), Azerbaijani titles, no login wall).  One fetch covers the whole Mon–Sun week; dates outside it are skipped with a warning (the site only publishes the current week, like beinsports).  Stops derive from the next slot (24:00 for the last).  (The old `idmantv.com.tr` domain is dead; the real site is `idmantv.az`.) |
 | `cbcsport.az/teleproqram/` | CBC Sport | Re-check result (2026-09-09): page is live (165 KB HTML) but the fetched markup contains the `Teleproqram` heading/nav and news/verilişler lists with **no dated programme rows** — schedule content is not in the static HTML (JS-rendered or auth-gated: page also embeds a login form "Sizin hesabınıza daxil"). Still needs `--browser` verification before trusting it; the old "no TR feed page found" note is dropped (there is exactly one CBC Sport feed; the strikethrough was misleading). |
 | `trt.net.tr/yayin-akisi` | tabii spor (joint TRT feed, already via tvplus) | First-party sanity check, re-verified live 2026-09-09: the page renders full dated grids for TRT 1/2/Belgesel/Haber/Spor/Spor Yıldız/Çocuk/… **and** a "Tabii Spor Yayın Akışı" grid (09.30 Futbolun En Büyük Sahnesi, 10.20 CLUB BRUGGE - ASTON VILLA, 12.00 AEK - LASK, …) matching the same UCL fixtures the `sporekrani` tabii-spor-1/2/3 fixtures carry. Confirms tvplus id 4399 covers the joint feed; per-feed tabii spor 1-8 detail still comes only from `sporekrani`. |
 
@@ -83,7 +85,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 | ~~Tivibu Spor 4~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× promo loop, same as Spor 2). |
 | Smart Spor 1 | smartspor.com.tr (no response — not re-verified 2026-09-09), sporekrani.com/home/channel/smart-spor-1 | Re-verified live 2026-09-09: aggregator page exists but renders "Etkinlik Bulunamadı — Önümüzdeki 30 gün içerisinde aradığınız kriterlere uygun etkinlik bulunmamaktadır". "Looks defunct" is an inference from the empty window, not a verified shutdown — treat as no-current-events unless a future scrape shows data. |
 | Smart Spor 2 | smartspor.com.tr (not re-verified), sporekrani.com/home/channel/smart-spor-2 (not re-fetched 2026-09-09) | Same status as Smart Spor 1 by analogy only — smart-spor-2 page not re-verified; do not claim emptiness without fetching it. Likely no-current-events. |
-| iDMAN TV | ~~idmantv.com.tr~~ (dead domain) | **SOURCE FOUND, NO PROVIDER YET** — official weekly programme at `idmantv.az/az/program` (re-verified live 2026-09-09, see "New sources" row above). |
+| ~~iDMAN TV~~ | ~~idmantv.com.tr~~ (dead domain) | **NOW COVERED** via the `idmantv` provider (`idmantv.az/az/program`, fixture 2026-09-07: static weekly page, one fetch = 7 days, Azerbaijani titles; 133 programme rows in the fixture). |
 | TJK TV (TAY TV) | tjktv.org.tr (no response), tjk.org/TR/Kurumsal/Query/Page/YayinAkisi, sporekrani.com legacy path `/tv-yayin-akisi/kanallar/tjk-tv`, tvyayinakisi.com/tjk-tv-yayin-akisi/ | tjk.org's Yayın Akışı page is live but data loads via an AJAX query (empty on plain fetch — needs the underlying API + `--browser`); the legacy sporekrani path renders "Yayın bilgisi bulunamadı" (re-verified live 2026-09-09); tvyayinakisi.com not re-verified. Still no scrapeable EPG. |
 | NBA TV | nba.com/tv (404) | Aggregator coverage not re-verified (macrehberi page not fetched 2026-09-09; sporekrani NBA TV page not fetched either). Off-season hypothesis stands but is unconfirmed — re-check at season start (October) on sporekrani/macrehberi. |
 | ~~Tabii Spor 1~~ | ~~tabii.com~~ (live pages 404), ~~tvplus.com.tr~~ (only the joint "tabii spor" feed, id 4399) | **NOW COVERED** via the `sporekrani` provider (fixture: 5 UCL events 08–10.09.2026). |
@@ -108,14 +110,12 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 
 ## Likely next steps (in rough order of effort)
 
-1. **iDMAN TV** — `idmantv.az/az/program` is a static weekly page; a small
-   parser turns it into 7 days of programmes (Azerbaijani titles).
-2. **CBC Sport** — verify `cbcsport.az/teleproqram/` renders under
+1. **CBC Sport** — verify `cbcsport.az/teleproqram/` renders under
    `--browser`; if the schedule is there, it is one more small provider.
-3. **TJK TV (TAY TV)** — reverse-engineer the AJAX query behind
+2. **TJK TV (TAY TV)** — reverse-engineer the AJAX query behind
    `tjk.org/TR/Kurumsal/Query/Page/YayinAkisi` (medium effort; the page
    itself loads no data server-side).
-4. **Exxen / NBA TV / Smart Spor** — Exxen's aggregator pages are live but
+3. **Exxen / NBA TV / Smart Spor** — Exxen's aggregator pages are live but
    show an empty 30-day window (re-verified 2026-09-09 for `exxen` and
    `exxen-sports-1`); exxen.com itself is login-walled. NBA TV coverage was
    not re-verified — re-check at season start (October) on
@@ -164,6 +164,21 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 - **Tivibu's API needs an ASP.NET antiforgery session** (cookie + hidden
   input token + channel code from the page) before any `GetPrevueList` POST;
   the provider refreshes the session per channel on every run.
+- **idmantv publishes one static Mon–Sun week** — a single fetch of
+  `idmantv.az/az/program` covers all seven days; dates outside the
+  published week are skipped with a warning (no server-side week
+  navigation).  Programme titles are Azerbaijani, and the site occasionally
+  appends a stray cross-channel note (e.g. "Mədəniyyət TV", "AZTV") to the
+  last Sunday slots — emitted verbatim.  **Baku offset caveat:** the site's
+  wall times are Baku time (UTC+4, UTC+5 during Azerbaijan's late-March →
+  late-October DST), but the provider stamps the repo's fixed `+03:00`
+  (like every other provider) so the merged guide keeps one offset —
+  iDMAN TV's slot instants can be an hour behind the guide's other Turkish
+  channels while Baku observes summer time.
+- **idmantv's channel id** `IDMAN.TV.tr` was added to `knownGaps` in
+  `test/fixtures/epgshare01/reference.json` (the upstream snapshot carries
+  no iDMAN TV entry); `src/providers/idmantv.js` `CHANNEL_ID_MAP` maps both
+  "İdman TV" and the site's "İDMAN TELEVİZİYASI" heading onto it.
 - All uncovered channels keep their epgshare01-style ids unmapped; when a
   source lands, add the id to `CHANNEL_ID_MAP` and (if missing upstream)
   to `knownGaps` in `test/fixtures/epgshare01/reference.json`.
