@@ -9,6 +9,7 @@ import * as beinsports from './beinsports.js';
 import * as digiturkburada from './digiturkburada.js';
 import * as sporekrani from './sporekrani.js';
 import * as tivibu from './tivibu.js';
+import * as idmantv from './idmantv.js';
 
 let loaded = false;
 
@@ -59,6 +60,12 @@ export function loadProviders() {
       // Plain-HTTP form POSTs + antiforgery cookie only — the Playwright
       // fetcher cannot POST.
       scrape: tivibu.scrape,
+    });
+    registerProvider({
+      id: 'idmantv',
+      name: 'iDMAN TV (İdman Televiziyası) Həftəlik Proqram',
+      baseUrl: idmantv.BASE_URL,
+      scrape: idmantv.scrape,
     });
     loaded = true;
   }

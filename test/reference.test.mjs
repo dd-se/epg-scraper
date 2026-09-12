@@ -9,6 +9,7 @@ import { CHANNEL_ID_MAP as BEINSPORTS_MAP } from '../src/providers/beinsports.js
 import { CHANNEL_ID_MAP as DIGITURKBURADA_MAP } from '../src/providers/digiturkburada.js';
 import { CHANNEL_ID_MAP as SPOREKRANI_MAP } from '../src/providers/sporekrani.js';
 import { CHANNEL_ID_MAP as TIVIBU_MAP } from '../src/providers/tivibu.js';
+import { CHANNEL_ID_MAP as IDMAN_MAP } from '../src/providers/idmantv.js';
 
 // Enforces provider channel-id normalization against the source of truth:
 // test/fixtures/epgshare01/reference.json, a vendored snapshot of the
@@ -59,6 +60,7 @@ describe('epgshare01 reference snapshot', () => {
       ['digiturkburada', DIGITURKBURADA_MAP],
       ['sporekrani', SPOREKRANI_MAP],
       ['tivibu', TIVIBU_MAP],
+      ['idmantv', IDMAN_MAP],
     ];
     for (const [provider, map] of providers) {
       for (const [name, id] of Object.entries(map)) {

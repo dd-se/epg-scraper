@@ -23,7 +23,8 @@
     "TIVIBU.SPOR.1.tr": "Tivibu provider channel Tivibu Spor 1; not present in the upstream reference as of 2026-09-08.",
     "TIVIBU.SPOR.2.tr": "Tivibu provider channel Tivibu Spor 2; not present in the upstream reference as of 2026-09-08.",
     "TIVIBU.SPOR.3.tr": "Tivibu provider channel Tivibu Spor 3; not present in the upstream reference as of 2026-09-08.",
-    "TIVIBU.SPOR.4.tr": "Tivibu provider channel Tivibu Spor 4; not present in the upstream reference as of 2026-09-08."
+    "TIVIBU.SPOR.4.tr": "Tivibu provider channel Tivibu Spor 4; not present in the upstream reference as of 2026-09-08.",
+    "IDMAN.TV.tr": "Idmantv provider channel İdman TV (Azerbaijan's first sports channel, idmantv.az — the old idmantv.com.tr domain is dead); not present in the upstream reference as of 2026-09-08. Generic ASCII slug of the Latin brand \"iDMAN TV\" (the dotted capital İ would not survive the slug rule)."
   },
   "channels": [
     {
