@@ -129,6 +129,22 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 - The **TV+ JSON API** (`POST /EPG/JSON/PlayBillList`) returns full-day
   schedules for any channel id TV+ carries — if a channel above appears on
   TV+ later, adding it is one row in `src/providers/tvplus.js` `CHANNELS`.
+  The platform's full channel universe was enumerated live on 2026-09-09
+  via `POST {apiBase}/EPG/JSON/ChannelList` (body
+  `{"fromIndex":"0","toIndex":"200"}`, after the same
+  get-platform-info → Authenticate handshake PlayBillList needs): it
+  carries exactly **171 entries** — the 154 channels of the public
+  `tvplus.com.tr/canli-tv` directory, the "TV+" promo channel (id 177,
+  8 promo slots/day, not in the epgshare01 reference), and 16 VOD genre
+  rails (FANTASTİK DÜNYALAR, SAVAŞ FİLMLERİ, … ids 2004–2439) whose
+  PlayBillList responses are empty.  **None of the channels above
+  (beIN Sports 1-5/Max, S Sport Plus, Smart Spor 1-2, Tivibu Spor 1-4,
+  tabii spor 1-8, GS TV, iDMAN TV, TJK TV, NBA TV, CBC Sport, Exxen*)
+  is carried** — unknown ids (1, 4, 9, 33, 150, 200, 4395, 4397, 4398,
+  4401, 4402, …) also return `{"counttotal":"0","playbilllist":[]}`, so
+  there is no hidden EPG beyond the directory.  Re-probe after any TV+
+  lineup change with the ChannelList call above; a new sports channel
+  would then need its id + epgshare01-style id in `CHANNELS`.
 - beinsports.com.tr's embedded `activeLeagues` array is the source of truth
   for which beIN feeds are public — check it when BeIN Sports 5 appears.
 - **tabii spor 1-8 are match-day simulcast channels** — most days most of

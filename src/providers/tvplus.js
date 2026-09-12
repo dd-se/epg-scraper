@@ -21,6 +21,13 @@
 //             "2026-09-09 00:00:00 UTC+03:00", "endtime": "...",
 //             "name":"TRT Spor Yıldız Ortak Yayın", "genres":"Spor", ... }]}
 //
+//   Channel discovery (used once to enumerate the lineup, 2026-09-09):
+//   POST {base}/EPG/JSON/ChannelList {"fromIndex":"0","toIndex":"200"}
+//   returns the full platform list — 154 public channels + the TV+ promo
+//   channel (177) + 16 empty VOD rails.  Re-run it when looking for newly
+//   added channels (see UNSUCCESSFUL.md "Notes for future work"); unknown
+//   channel ids simply return counttotal 0 from PlayBillList.
+//
 // Times come pre-stamped with the fixed +03:00 offset, so the provider emits
 // them verbatim (after normalizing the literal " UTC+03:00" suffix).
 //
