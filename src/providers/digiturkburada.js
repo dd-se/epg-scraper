@@ -105,6 +105,24 @@ export function parseServedDate(text) {
   return `${match[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+// Parse the channel logo out of a channel page: the page header carries one
+// `<img border="0" src="/kanal3/kanal-buyuk/<slug>-buyuk.png?rkt=…">` (the
+// `border="0"` attribute distinguishes it from the site-chrome images).
+// Returns an absolute URL with the `?rkt=` cache-buster stripped (it churns
+// like hurriyet's `?v=`), or undefined on missing/malformed markup.
+export function parseChannelLogo(html) {
+  const source = html == null ? '' : String(html);
+  const tag = /<img[^>]*\bborder="0"[^>]*>/.exec(source);
+  if (!tag) return undefined;
+  const src = /src="([^"]*)"/.exec(tag[0]);
+  if (!src) return undefined;
+  const href = String(src[1]).trim();
+  if (!href || href.startsWith('data:') || /[\s|]/.test(href)) return undefined;
+  const absolute = /^https?:\/\//i.test(href) ? href : `${BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
+  if (!/^https?:\/\/[^\s|]+$/.test(absolute)) return undefined;
+  return absolute.split(/[?#]/, 1)[0] || undefined;
+}
+
 // Parse one day page into { date: "YYYY-MM-DD", slots: [{ startMin, title }] }.
 // Missing/malformed markup degrades to an empty result, never a crash.
 export function parseDayPage(html) {
@@ -161,10 +179,13 @@ export async function scrape({
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
   const channels = CHANNELS.slice(0, maxChannels);
+  const channelEntries = channels.map((c) => ({ id: c.id, name: c.name }));
   const programmes = [];
   let failures = 0;
 
-  for (const channel of channels) {
+  for (let ci = 0; ci < channels.length; ci++) {
+    const channel = channels[ci];
+    const entry = channelEntries[ci];
     const url = dayPageUrl(channel.page);
     for (const date of activeDates) {
       const [y, m, d] = date.split('-').map(Number);
@@ -178,6 +199,12 @@ export async function scrape({
         continue;
       }
       const html = await response.text();
+      // The schedule page doubles as the logo source — capture the channel
+      // logo once (first day wins); every day page carries the same header.
+      if (entry.icon == null) {
+        const logo = parseChannelLogo(html);
+        if (logo) entry.icon = logo;
+      }
       const { date: servedDate, slots } = parseDayPage(html);
       if (servedDate && servedDate !== date) {
         log(`warn: ${channel.name} (${date}) served ${servedDate} — skipped`);
@@ -201,7 +228,7 @@ export async function scrape({
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
   return finishResult({
-    channels: channels.map((c) => ({ id: c.id, name: c.name })),
+    channels: channelEntries,
     programmes,
     days: activeDates.length,
     failures,

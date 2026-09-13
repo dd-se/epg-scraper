@@ -7,7 +7,8 @@
 // `__NEXT_DATA__` JSON script tag (discovered via chrome-devtools):
 //
 //   props.pageProps.days             — the 7 weekday tags (pazartesi..pazar)
-//   props.pageProps.activeLeagues    — the beIN channels (rewriteId + channelId)
+//   props.pageProps.activeLeagues    — the beIN channels (rewriteId + channelId
+//                                        + image logo URL)
 //   props.pageProps.data.event_date  — "YYYY-MM-DD" the day page actually serves
 //   props.pageProps.data.listTvGuides — [{ channel_id, event_time: "HH:MM:SS",
 //                                        name, ... }] for the selected channel
@@ -97,6 +98,17 @@ function pageProps(html) {
   }
 }
 
+// A channel logo is only accepted when it is a single clean http(s) URL.
+// This deliberately rejects pipe-joined garbage like the upstream
+// epgshare01 file carries ("url1|url2|url3|url4") — such a string must
+// never become a channel <icon>.
+function cleanLogoUrl(value) {
+  if (typeof value !== 'string') return undefined;
+  const url = value.trim();
+  if (!/^https?:\/\/[^\s|]+$/.test(url)) return undefined;
+  return url;
+}
+
 // Parse a yayin-akisi page into the channels it advertises (activeLeagues).
 // Degrades to [] on missing/malformed markup.
 export function parseChannelList(html) {
@@ -109,7 +121,10 @@ export function parseChannelList(html) {
     const channelId = league?.channelId;
     if (rewriteId && channelId != null && !seen.has(rewriteId)) {
       seen.add(rewriteId);
-      channels.push({ rewriteId, channelId: Number(channelId) });
+      const entry = { rewriteId, channelId: Number(channelId) };
+      const image = cleanLogoUrl(league?.image);
+      if (image) entry.image = image;
+      channels.push(entry);
     }
   }
   return channels;
@@ -188,6 +203,15 @@ export async function scrape({
         failures++;
         log(`warn: ${name} (${tag}) fetch failed: ${error.message}`);
         continue;
+      }
+
+      // Every day page carries the full activeLeagues table including each
+      // channel's logo — capture our own channel's icon once (first wins).
+      // No extra requests: this parses HTML already fetched for the guide.
+      const entry = channelsById.get(id);
+      if (entry && entry.icon == null) {
+        const advertised = parseChannelList(html).find((c) => c.rewriteId === rewriteId);
+        if (advertised?.image) entry.icon = advertised.image;
       }
 
       const { date: servedDate, slots } = parseDayPage(html);

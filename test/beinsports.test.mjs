@@ -49,9 +49,43 @@ describe('beinsports parseDayPage (fixtures)', () => {
   it('discovers channels from activeLeagues', () => {
     const channels = parseChannelList(day1Html);
     expect(channels).toEqual([
-      { rewriteId: 'beinsports', channelId: 1 },
-      { rewriteId: 'beinsports-2', channelId: 2 },
+      {
+        rewriteId: 'beinsports',
+        channelId: 1,
+        image: 'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports1.png',
+      },
+      {
+        rewriteId: 'beinsports-2',
+        channelId: 2,
+        image: 'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports2.png',
+      },
     ]);
+  });
+
+  it('rejects pipe-joined and non-URL logo garbage', () => {
+    const pipe = 'https://a.example/x.png|https://a.example/x.png';
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+      props: {
+        pageProps: {
+          activeLeagues: [
+            { rewriteId: 'good', channelId: 1, image: 'https://cdn.example.com/logo.png' },
+            { rewriteId: 'piped', channelId: 2, image: pipe },
+            { rewriteId: 'relative', channelId: 3, image: '/gfx/logo.png' },
+            { rewriteId: 'blank', channelId: 4, image: '' },
+            { rewriteId: 'missing', channelId: 5 },
+          ],
+        },
+      },
+    })}</script>`;
+    const channels = parseChannelList(html);
+    expect(channels.find((c) => c.rewriteId === 'good').image).toBe(
+      'https://cdn.example.com/logo.png'
+    );
+    // Pipe-joined (the epgshare01 failure mode), relative, blank and
+    // missing images degrade to no image — never a corrupt icon.
+    for (const id of ['piped', 'relative', 'blank', 'missing']) {
+      expect(channels.find((c) => c.rewriteId === id)).not.toHaveProperty('image');
+    }
   });
 });
 
@@ -97,6 +131,22 @@ describe('beinsports scrape (stubbed week)', () => {
       'beIN.SPORTS.3.tr',
       'beIN.SPORTS.4.tr',
     ]);
+    // Channel logos come from activeLeagues[].image on the already-fetched
+    // day pages — single clean URLs, never pipe-joined.  (The stub serves
+    // the ch1/ch2 fixtures for every channel, so only 1 & 2 find their own
+    // rewriteId advertised; live pages advertise all four.)
+    const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
+    expect(icons['beIN.SPORTS.1.tr']).toBe(
+      'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports1.png'
+    );
+    expect(icons['beIN.SPORTS.2.tr']).toBe(
+      'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports2.png'
+    );
+    for (const icon of Object.values(icons)) {
+      if (icon == null) continue;
+      expect(icon).toMatch(/^https?:\/\/[^\s|]+$/);
+      expect(icon).not.toContain('|');
+    }
     // 7 days x 7 days-worth of slots: channels 1/3/4 serve 7 slots, channel
     // 2 serves 4 (the stub returns the matching fixture per channel).
     expect(result.programmes).toHaveLength(7 * (7 + 4 + 7 + 7));

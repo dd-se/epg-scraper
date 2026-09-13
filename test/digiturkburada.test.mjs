@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   parseDayPage,
   parseServedDate,
+  parseChannelLogo,
   mapChannelId,
   normalizeChannelKey,
   channelPage,
@@ -58,6 +59,30 @@ describe('digiturkburada pure parsers', () => {
     expect(parseDayPage(max2).date).toBe('2026-09-08');
   });
 
+  it('extracts the channel logo with the cache-buster stripped', () => {
+    expect(parseChannelLogo(bein5)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
+    );
+    expect(parseChannelLogo(max1)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-max-1-hd-buyuk.png'
+    );
+    expect(parseChannelLogo(max2)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-max-2-hd-buyuk.png'
+    );
+    expect(parseChannelLogo(gsTv)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/gs-tv-hd-buyuk.png'
+    );
+  });
+
+  it('degrades gracefully on logo-less or hostile markup', () => {
+    expect(parseChannelLogo('<html>nothing</html>')).toBeUndefined();
+    expect(parseChannelLogo(undefined)).toBeUndefined();
+    expect(parseChannelLogo('<img border="0" src="data:image/gif;base64,AAA" />')).toBeUndefined();
+    expect(
+      parseChannelLogo('<img border="0" src="https://a.example/x.png|https://a.example/x.png" />')
+    ).toBeUndefined();
+  });
+
   it('degrades gracefully on malformed markup', () => {
     expect(parseDayPage('<html>nothing</html>')).toEqual({ date: undefined, slots: [] });
     expect(parseDayPage(undefined)).toEqual({ date: undefined, slots: [] });
@@ -108,6 +133,19 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       'beIN.SPORTS.MAX.2.tr',
       'GS.TV.tr',
     ]);
+    // Every channel carries its page-header logo — absolute, query-free,
+    // single URLs (never pipe-joined).
+    const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
+    expect(icons['beIN.SPORTS.5.tr']).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
+    );
+    expect(icons['GS.TV.tr']).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/gs-tv-hd-buyuk.png'
+    );
+    for (const icon of Object.values(icons)) {
+      expect(icon).toMatch(/^https?:\/\/[^\s|?#]+$/);
+      expect(icon).not.toContain('|');
+    }
     expect(result.programmes).toHaveLength(13 + 11 + 11 + 15);
     expect(bodies).toHaveLength(4);
     expect(bodies.every((b) => b === 'yayin=8.09.2026')).toBe(true);

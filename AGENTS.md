@@ -114,14 +114,19 @@ CLI tool and library.
       {channel}/{weekday}` pages.  `parseDayPage()` / `parseChannelList()`
       are the pure parsers.  Like hurriyet, the site publishes one Mon–Sun
       week; programme stops derive from the next slot (24:00 for the last).
+      Channel logos come from `activeLeagues[].image` (single clean URLs
+      only — pipe-joined garbage like upstream epgshare01 carries is
+      rejected).
     - `digiturkburada.js` — DigiturkBurada Yayın Akışı: beIN Sports 5,
       beIN Sports Max 1-2 and GS TV (feeds no other free source carries —
       digiturk.com.tr is Azure-WAF-blocked for datacenter IPs and
       beinsports.com.tr stops at beIN 4).  Static per-channel pages with a
       `<table>` of NAME / HH:MM rows; multi-day via a `POST` of
       `yayin=DD.MM.YYYY` (the served date in the `<h2>` is verified against
-      the request).  `parseDayPage()` / `parseServedDate()` are the pure
-      parsers.  **Not browser-compatible** (POSTs form data).
+      the request).  `parseDayPage()` / `parseServedDate()` /
+      `parseChannelLogo()` are the pure parsers (logos come from the
+      `border="0"` header `<img>`, `?rkt=` query stripped).  **Not browser-
+      compatible** (POSTs form data).
     - `sporekrani.js` — Spor Ekranı Yayın Akışı: tabii spor 1-8 (match-day
       simulcast feeds) and S Sport Plus via `sporekrani.com/home/channel/
       {slug}` pages.  Quasar SSR with the schedule in a `window.__INITIAL_
