@@ -166,13 +166,25 @@ jobs:
       - name: Stamp date
         run: echo "GUIDE_DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
 
+      # Release notes list which provider scraped which channels, generated
+      # from the downloaded guides themselves (scripts/build-release-notes.js)
+      # so the notes stay accurate when lineups change.
+      - name: Build release notes
+        run: |
+          BODY=$(node scripts/build-release-notes.js --guides guide --date "$GUIDE_DATE")
+          {
+            echo 'RELEASE_BODY<<EOF'
+            echo "$BODY"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+
       - name: Publish to "latest" release
         uses: ncipollo/release-action@v1
         with:
           tag: latest
           commit: main
           name: Latest EPG guides
-          body: Daily XMLTV guides for Türkiye, scraped ${{ env.GUIDE_DATE }} (00:30 UTC). Point your IPTV app's XMLTV/EPG source at the .xml.gz files below.
+          body: ${{ env.RELEASE_BODY }}
           makeLatest: true
           allowUpdates: true
           replacesArtifacts: true
