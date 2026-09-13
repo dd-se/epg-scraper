@@ -418,8 +418,9 @@ node bin/epg-scraper.js --provider tvplus --date 2026-09-09
 - Source: `https://www.digiturkburada.com.tr/{page}.html` — a static
   third-party mirror of the Digiturk guide (Digiturk's own site blocks
   datacenter IPs at the network level, and beinsports.com.tr only publishes
-  beIN Sports 1-4).  Covers the feeds no other free source has:
-  **beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV**.
+  beIN Sports 1-4).  Covers **beIN Sports 1-5, beIN Sports Max 1,
+  beIN Sports Max 2, GS TV** — including the feeds no other free source
+  has (5, Max 1-2, GS TV).
 - Page anatomy: one day's schedule as a `<table>` of
   `NAME` / `HH:MM` cells (Turkish HTML entities decoded).  Multi-day works
   via the page's own "Sonraki Gün" form: `POST` the same page with
@@ -431,7 +432,7 @@ node bin/epg-scraper.js --provider tvplus --date 2026-09-09
   under `--browser`.
 
 ```bash
-# beIN Sports 5 + Max 1-2 + GS TV for today and tomorrow
+# beIN Sports 1-5 + Max 1-2 + GS TV for today and tomorrow
 node bin/epg-scraper.js --provider digiturkburada --date 2026-09-08 --days-forward 1
 ```
 
@@ -579,7 +580,8 @@ node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,t
 ```
 
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
-`digiturkburada` adds beIN Sports 5, Max 1-2 and GS TV; `sporekrani` adds
+`digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV
+exist nowhere else); `sporekrani` adds
 tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
 adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)

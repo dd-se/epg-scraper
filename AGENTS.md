@@ -117,13 +117,16 @@ CLI tool and library.
       Channel logos come from `activeLeagues[].image` (single clean URLs
       only — pipe-joined garbage like upstream epgshare01 carries is
       rejected).
-    - `digiturkburada.js` — DigiturkBurada Yayın Akışı: beIN Sports 5,
-      beIN Sports Max 1-2 and GS TV (feeds no other free source carries —
-      digiturk.com.tr is Azure-WAF-blocked for datacenter IPs and
-      beinsports.com.tr stops at beIN 4).  Static per-channel pages with a
+    - `digiturkburada.js` — DigiturkBurada Yayın Akışı: beIN Sports 1-5,
+      beIN Sports Max 1-2 and GS TV.  beIN 1-4 intentionally duplicate the
+      beinsports provider (same feed, verified title agreement ~96%; this
+      source keeps full-day schedules while beinsports.com.tr prunes
+      already-aired slots intraday) so the daily CI can cover beIN 1-4
+      without the beinsports week-scrape.  Static per-channel pages with a
       `<table>` of NAME / HH:MM rows; multi-day via a `POST` of
       `yayin=DD.MM.YYYY` (the served date in the `<h2>` is verified against
-      the request).  `parseDayPage()` / `parseServedDate()` /
+      the request; the site purges past days, so only recent/future dates
+      serve slots).  `parseDayPage()` / `parseServedDate()` /
       `parseChannelLogo()` are the pure parsers (logos come from the
       `border="0"` header `<img>`, `?rkt=` query stripped).  **Not browser-
       compatible** (POSTs form data).
@@ -175,7 +178,9 @@ CLI tool and library.
 Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekrani` +
 `tivibu` + `idmantv` merged (`--provider tvplus,beinsports,digiturkburada,
 sporekrani,tivibu,idmantv --merge`) cover 38 of the 50 sports channels; the
-rest are tracked in `UNSUCCESSFUL.md`.  `sporekrani` adds the tabii spor 1-8
+rest are tracked in `UNSUCCESSFUL.md`.  The daily CI merge skips
+`beinsports` (its 1-4 feeds are covered by `digiturkburada`, which keeps
+full-day schedules).  `sporekrani` adds the tabii spor 1-8
 simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
 adds İdman TV (an Azerbaijani charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.

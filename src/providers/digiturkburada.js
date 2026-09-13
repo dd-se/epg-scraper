@@ -1,4 +1,4 @@
-// DigiturkBurada provider — beIN Sports 5, beIN Sports Max 1-2, GS TV.
+// DigiturkBurada provider — beIN Sports 1-5, beIN Sports Max 1-2, GS TV.
 //
 // Source: https://www.digiturkburada.com.tr/{page}.html
 // (e.g. https://www.digiturkburada.com.tr/bein-sports-5-hd-yayin-akisi-154.html)
@@ -31,7 +31,31 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Curated channel table: display name -> page slug + XMLTV id (normalized to
 // the epgshare01 reference where the reference carries the channel).
+// beIN Sports 1-4 duplicate the beinsports provider's feeds on purpose:
+// this source keeps full-day schedules (and its own logos) while
+// beinsports.com.tr prunes already-aired slots intraday, so either side can
+// stand in for the other.
 export const CHANNELS = [
+  {
+    name: 'beIN Sports 1',
+    page: '/bein-sports-1-hd-yayin-akisi-60.html',
+    id: 'beIN.SPORTS.1.tr',
+  },
+  {
+    name: 'beIN Sports 2',
+    page: '/bein-sports-2-hd-yayin-akisi-61.html',
+    id: 'beIN.SPORTS.2.tr',
+  },
+  {
+    name: 'beIN Sports 3',
+    page: '/bein-sports-3-hd-yayin-akisi-62.html',
+    id: 'beIN.SPORTS.3.tr',
+  },
+  {
+    name: 'beIN Sports 4',
+    page: '/bein-sports-4-hd-yayin-akisi-63.html',
+    id: 'beIN.SPORTS.4.tr',
+  },
   {
     name: 'beIN Sports 5',
     page: '/bein-sports-5-hd-yayin-akisi-154.html',

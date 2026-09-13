@@ -42,7 +42,7 @@ export function loadProviders() {
     });
     registerProvider({
       id: 'digiturkburada',
-      name: 'DigiturkBurada Yayın Akışı (beIN Sports 5 / Max / GS TV)',
+      name: 'DigiturkBurada Yayın Akışı (beIN Sports 1-5 / Max / GS TV)',
       baseUrl: digiturkburada.BASE_URL,
       // Plain-HTTP form POSTs only — the Playwright fetcher cannot POST.
       scrape: digiturkburada.scrape,

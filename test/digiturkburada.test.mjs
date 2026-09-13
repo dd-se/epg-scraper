@@ -20,6 +20,10 @@ const fixture = (name) =>
 
 const bein5 = fixture('bein-sports-5-2026-09-08.html');
 const bein5Tomorrow = fixture('bein-sports-5-2026-09-09.html');
+const bein1 = fixture('bein-sports-1-2026-09-08.html');
+const bein2 = fixture('bein-sports-2-2026-09-08.html');
+const bein3 = fixture('bein-sports-3-2026-09-08.html');
+const bein4 = fixture('bein-sports-4-2026-09-08.html');
 const max1 = fixture('bein-sports-max-1-2026-09-08.html');
 const max2 = fixture('bein-sports-max-2-2026-09-08.html');
 const gsTv = fixture('gs-tv-2026-09-08.html');
@@ -60,6 +64,18 @@ describe('digiturkburada pure parsers', () => {
   });
 
   it('extracts the channel logo with the cache-buster stripped', () => {
+    expect(parseChannelLogo(bein1)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-1-buyuk.png'
+    );
+    expect(parseChannelLogo(bein2)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-2-buyuk.png'
+    );
+    expect(parseChannelLogo(bein3)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-3-buyuk-1.png'
+    );
+    expect(parseChannelLogo(bein4)).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-4-buyuk.png'
+    );
     expect(parseChannelLogo(bein5)).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
     );
@@ -89,11 +105,14 @@ describe('digiturkburada pure parsers', () => {
   });
 
   it('maps display names to page slugs and epgshare01 ids', () => {
+    expect(mapChannelId('beIN Sports 1')).toBe('beIN.SPORTS.1.tr');
+    expect(mapChannelId('beIN Sports 2')).toBe('beIN.SPORTS.2.tr');
+    expect(mapChannelId('beIN Sports 3')).toBe('beIN.SPORTS.3.tr');
+    expect(mapChannelId('beIN Sports 4')).toBe('beIN.SPORTS.4.tr');
     expect(mapChannelId('beIN Sports 5')).toBe('beIN.SPORTS.5.tr');
     expect(mapChannelId('beIN Sports Max 1')).toBe('beIN.SPORTS.MAX.1.tr');
     expect(mapChannelId('beIN Sports Max 2')).toBe('beIN.SPORTS.MAX.2.tr');
     expect(mapChannelId('GS TV')).toBe('GS.TV.tr');
-    expect(mapChannelId('BEIN SPORTS 1')).toBeUndefined(); // served by beinsports, not here
     expect(normalizeChannelKey('  beIN   SPORTS 5 ')).toBe('BEIN SPORTS 5');
     expect(channelPage('beIN Sports 5')).toBe('/bein-sports-5-hd-yayin-akisi-154.html');
     expect(dayPageUrl('/gs-tv-hd-yayin-akisi-58.html')).toBe(
@@ -113,6 +132,10 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       expect(options.method).toBe('POST');
       expect(options.headers['content-type']).toContain('x-www-form-urlencoded');
       bodies.push(options.body);
+      if (url.includes('bein-sports-1-hd')) return response(bein1);
+      if (url.includes('bein-sports-2-hd')) return response(bein2);
+      if (url.includes('bein-sports-3-hd')) return response(bein3);
+      if (url.includes('bein-sports-4-hd')) return response(bein4);
       if (url.includes('bein-sports-max-1')) return response(max1);
       if (url.includes('bein-sports-max-2')) return response(max2);
       if (url.includes('gs-tv')) return response(gsTv);
@@ -128,6 +151,10 @@ describe('digiturkburada scrape (stubbed POST)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
+      'beIN.SPORTS.1.tr',
+      'beIN.SPORTS.2.tr',
+      'beIN.SPORTS.3.tr',
+      'beIN.SPORTS.4.tr',
       'beIN.SPORTS.5.tr',
       'beIN.SPORTS.MAX.1.tr',
       'beIN.SPORTS.MAX.2.tr',
@@ -136,6 +163,9 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     // Every channel carries its page-header logo — absolute, query-free,
     // single URLs (never pipe-joined).
     const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
+    expect(icons['beIN.SPORTS.1.tr']).toBe(
+      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-1-buyuk.png'
+    );
     expect(icons['beIN.SPORTS.5.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
     );
@@ -146,8 +176,8 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       expect(icon).toMatch(/^https?:\/\/[^\s|?#]+$/);
       expect(icon).not.toContain('|');
     }
-    expect(result.programmes).toHaveLength(13 + 11 + 11 + 15);
-    expect(bodies).toHaveLength(4);
+    expect(result.programmes).toHaveLength(16 + 19 + 20 + 20 + 13 + 11 + 11 + 15);
+    expect(bodies).toHaveLength(8);
     expect(bodies.every((b) => b === 'yayin=8.09.2026')).toBe(true);
     const ids = new Set(result.channels.map((c) => c.id));
     expect(result.programmes.every((p) => ids.has(p.channel))).toBe(true);
@@ -162,7 +192,9 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       politenessDelayMs: 0,
       maxChannels: 1,
     });
-    const ch5 = result.programmes.filter((p) => p.channel === 'beIN.SPORTS.5.tr');
+    // maxChannels: 1 keeps beIN Sports 1; the stub serves the beIN 5
+    // fixture for every URL, so its slots land on beIN.SPORTS.1.tr.
+    const ch5 = result.programmes.filter((p) => p.channel === 'beIN.SPORTS.1.tr');
     expect(ch5[0].start).toBe('2026-09-08T00:00:00+03:00');
     expect(ch5[0].stop).toBe('2026-09-08T01:47:00+03:00'); // next slot
     expect(ch5[ch5.length - 1].start).toBe('2026-09-08T20:19:00+03:00');
@@ -209,7 +241,7 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       fetchOptions: {},
     });
     expect(result.programmes).toEqual([]);
-    expect(result.failures).toBe(4);
+    expect(result.failures).toBe(8);
   });
 
   it('returns programmes sorted by channel then start', async () => {
@@ -284,6 +316,9 @@ describe('digiturkburada cli integration (stubbed fetch, temp output)', () => {
         argv: [
           '--provider', 'digiturkburada',
           '--out', path.join(tmpDir, 'none.xml.gz'),
+          '--date', '2026-09-08',
+          '--days-forward', '0',
+          '--delay-ms', '0',
           '--quiet',
         ],
         stdout: { write: () => {} },
