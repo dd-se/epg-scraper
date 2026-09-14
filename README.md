@@ -597,6 +597,14 @@ offline (`--merge --from`), so the sports sources are never hit twice.
 Outputs are gitignored, so nothing is
 committed — and if a day's scrape fails, the previous release stays live.
 
+Resilience: each provider scrape is retried (3 attempts with backoff, plus
+hardened `--retries 4 --timeout-ms 30000` transport flags), one provider
+failing never blocks the others (`fail-fast: false`, `if-no-files-found:
+warn`), and the merge/publish jobs run with `if: !cancelled()` so they
+merge and publish whatever guides survived — guides are validated
+(size, gzip integrity, `<tv>` root) before they can overwrite the release,
+and a run with zero valid guides leaves the previous release untouched.
+
 ### Using the guide in an IPTV app
 
 Paste one of these stable URLs into your app's XMLTV/EPG source field
