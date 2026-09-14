@@ -27,6 +27,12 @@ async function attemptOnce(doFetch, url, init, timeoutMs) {
 // truncated body) is retried like any other attempt.  After `retries + 1`
 // attempts the last error is rethrown, annotated with the request for
 // context (non-2xx errors already carry it).
+//
+// `nonRetryableStatuses` opts a transport out for deterministic failures:
+// a 404/410 page or a WAF 403 will answer the same way on every attempt,
+// so retrying only delays the per-page degradation.  The POST transports
+// deliberately keep 403 retryable — the TV+/Tivibu APIs answer 403 when a
+// session expires, which the providers repair by re-authenticating.
 async function requestWithRetry(url, options = {}) {
   const {
     timeoutMs = 20000,
@@ -36,6 +42,7 @@ async function requestWithRetry(url, options = {}) {
     buildInit = () => ({}),
     finalize = (response) => response.text(),
     describe = () => url,
+    nonRetryableStatuses,
   } = options;
   // Resolve fetchImpl at call time — falling back to globalThis.fetch so
   // tests can override it with globalThis.fetch = stub.
@@ -43,15 +50,21 @@ async function requestWithRetry(url, options = {}) {
 
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    let fatal = false;
     try {
       const response = await attemptOnce(doFetch, url, buildInit(), timeoutMs);
       if (!response || !response.ok) {
-        throw new Error(`HTTP ${response && response.status} for ${url}`);
+        const status = response && response.status;
+        if (nonRetryableStatuses && status != null && nonRetryableStatuses.includes(status)) {
+          fatal = true; // deterministic answer: fail on the first attempt
+        }
+        throw new Error(`HTTP ${status == null ? 'undefined' : status} for ${url}`);
       }
       return await finalize(response);
     } catch (error) {
       lastError = error;
-      if (attempt < retries) await sleep(retryDelayMs * (attempt + 1));
+      if (fatal || attempt >= retries) break;
+      await sleep(retryDelayMs * (attempt + 1));
     }
   }
   if (lastError instanceof Error && lastError.message.startsWith('HTTP ')) {
@@ -63,11 +76,16 @@ async function requestWithRetry(url, options = {}) {
 
 // GET a page and return its text.  Used by the HTML providers (hurriyet,
 // mynet, beinsports, sporekrani) and the tivibu session GET.
+// 404/410 (page gone) and 403 (WAF-blocked datacenter IPs — digiturk.com.tr
+// answers 403 on every path) are deterministic: fail on the first attempt.
+const GET_NON_RETRYABLE = [403, 404, 410];
+
 export async function fetchText(url, options = {}) {
   const { userAgent = DEFAULT_UA, headers = {}, fetchImpl, ...retryOptions } = options;
   return await requestWithRetry(url, {
     ...retryOptions,
     fetchImpl,
+    nonRetryableStatuses: GET_NON_RETRYABLE,
     describe: () => `GET ${url}`,
     buildInit: () => ({
       headers: {
@@ -99,6 +117,10 @@ export async function fetchResponseWithRetry(url, options = {}) {
     retries: 1,
     ...retryOptions,
     fetchImpl,
+    // 404/410 on an API endpoint are deterministic (dead path); 403 stays
+    // retryable — TV+/Tivibu use it to signal an expired session that the
+    // provider's re-auth failsafe repairs.
+    nonRetryableStatuses: [404, 410],
     finalize: (response) => response,
     describe: () => `${method} ${url}`,
     buildInit: () => ({

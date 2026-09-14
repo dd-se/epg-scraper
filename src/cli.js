@@ -4,7 +4,7 @@
 import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { loadProviders } from './providers/index.js';
-import { getProvider, buildDateRange } from './registry.js';
+import { getProvider, listProviders, buildDateRange } from './registry.js';
 import { writeXmltv, readXmltvFile } from './xmltv.js';
 import {
   compareResults,
@@ -23,15 +23,16 @@ const HELP_TEXT = `Usage: epg-scraper [options]
                        or epg_merged_TR.xml[.gz] with --merge)
   --gzip / --no-gzip   write .xml.gz (default) or plain .xml
   --date YYYY-MM-DD    anchor date for the scrape window (default: today)
-  --days-back N        days before the anchor to include (default: 0)
-  --days-forward N     days after the anchor to include (default: 6)
+  --days-back N        days before the anchor to include (default: 0, max 60)
+  --days-forward N     days after the anchor to include (default: 6, max 60)
   --delay-ms N         ms to wait between page fetches (default: provider
                        default — hurriyet 250, mynet 500; mynet fetches
                        ~90 channel pages per day, so keep this polite)
   --retries N          transport retries per request after the first attempt
                        (default: 2 for GET pages, 1 for API POSTs; a 5xx/
-                       429 or network error is retried, other statuses are
-                       not)
+                       429 or network error is retried, a deterministic 404/
+                       410 — and 403 on GET pages — is not; POST 403 stays
+                       retryable: TV+/Tivibu signal session expiry with it)
   --timeout-ms N       per-request hard timeout in ms (default: 20000)
   --retry-delay-ms N   base ms between retry attempts, scaled linearly per
                        attempt (default: 400)
@@ -161,13 +162,18 @@ export async function runCli({
 
   const daysForward = Number(values['days-forward']);
   const daysBack = Number(values['days-back']);
+  // A hostile or typo'd window (1e9, 1e21) must be rejected before
+  // buildDateRange() materializes it as a date array (hang/OOM), not after.
+  const MAX_WINDOW_DAYS = 60;
   if (
     !Number.isInteger(daysForward) ||
     daysForward < 0 ||
+    daysForward > MAX_WINDOW_DAYS ||
     !Number.isInteger(daysBack) ||
-    daysBack < 0
+    daysBack < 0 ||
+    daysBack > MAX_WINDOW_DAYS
   ) {
-    fail('--days-forward/--days-back expect non-negative integers');
+    fail(`--days-forward/--days-back expect integers between 0 and ${MAX_WINDOW_DAYS}`);
     return 1;
   }
 
@@ -242,6 +248,23 @@ export async function runCli({
     } catch (error) {
       fail(error && error.message ? error.message : String(error));
       return 1;
+    }
+  }
+
+  // Resolve provider ids before any mode work so an unknown id fails with the
+  // same clean "error: ..." + exit 1 as the other bad flags — not as a raw
+  // registry exception from whichever mode hit the registry first.  Runs
+  // after the alias-map load to keep the established precedence (a bad
+  // alias-map wins over a bad provider id), and --merge --from is exempt by
+  // design: it never touches the registry (the --provider value is ignored,
+  // no live scrape happens), which tests rely on.
+  if (!(values.merge && fromFiles.length > 0)) {
+    for (const id of providerIds) {
+      if (!listProviders().some((provider) => provider.id === id)) {
+        const registered = listProviders().map((provider) => provider.id).join(', ') || '(none)';
+        fail(`Unknown provider "${id}". Registered: ${registered}`);
+        return 1;
+      }
     }
   }
 

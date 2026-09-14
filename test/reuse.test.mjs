@@ -125,6 +125,21 @@ describe('parseXmltv', () => {
     expect(parseXmltv('')).toEqual({ channels: [], programmes: [] });
     expect(parseXmltv('<tv></tv>')).toEqual({ channels: [], programmes: [] });
   });
+
+  it('does not let a foreign attribute whose name ends with the real one hijack the value', () => {
+    // Regression: attrValue built new RegExp(`${name}\s*=\s*"([^"]*)"`)
+    // with no left anchor, so /id\s*=/ matched inside `data-id="EVIL.tr"`
+    // and renamed the channel — silently dropping every programme that
+    // references it as dangling on --merge --from.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<tv generator-info-name="test" generator-info-url="none">
+  <channel data-id="EVIL.tr" id="GOOD.tr"><display-name lang="tr">Good</display-name></channel>
+  <programme xstart="20260101000000 +0300" start="20260907060000 +0300" stop="20260907070000 +0300" channel="GOOD.tr"><title lang="tr">Slot</title></programme>
+</tv>`;
+    const parsed = parseXmltv(xml);
+    expect(parsed.channels.map((c) => c.id)).toEqual(['GOOD.tr']);
+    expect(parsed.programmes.map((p) => p.title)).toEqual(['Slot']);
+  });
 });
 
 describe('readXmltvFile', () => {

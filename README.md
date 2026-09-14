@@ -26,7 +26,7 @@ npm test
 ```
 
 Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
-`--days-back N`, `--days-forward N`, `--delay-ms N`, `--retries N`,
+`--days-back N`, `--days-forward N` (both 0–60), `--delay-ms N`, `--retries N`,
 `--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
 `--merge`, `--from <files>`, `--alias-map <path>`, `--quiet`, `--list-providers`.
 
@@ -40,8 +40,12 @@ request after the first (defaults: 2 for plain-HTTP page GETs, 1 for the
 JSON/form API POSTs), `--timeout-ms N` the per-request hard timeout
 (default 20000), and `--retry-delay-ms N` the base backoff between
 attempts (default 400, scaled linearly per attempt).  Transient failures
-(HTTP 5xx/429, network errors, timeouts) are retried; other statuses fail
-immediately.  Raise `--retries` for unreliable links, lower `--timeout-ms`
+(HTTP 5xx/429, network errors, timeouts) are retried; deterministic
+statuses fail on the first attempt — 404/410 (and 403 on page GETs, e.g.
+WAF-blocked hosts) are never retried, while 403 on the API POSTs stays
+retryable because TV+/Tivibu use it to signal an expired session that the
+provider's re-auth failsafe repairs.  Raise `--retries` for unreliable
+links, lower `--timeout-ms`
  to fail fast on dead hosts.
 
 Sports channels are covered by the `tvplus`, `beinsports`, `digiturkburada`,

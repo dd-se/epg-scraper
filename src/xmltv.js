@@ -214,7 +214,10 @@ export async function writeXmltv({ channels, programmes, outputPath, gzip = true
 // never a throw — the writer remains the final validator.
 
 function attrValue(attrs, name) {
-  const match = new RegExp(`${name}\\s*=\\s*"([^"]*)"`).exec(attrs || '');
+  // (^|\s) anchors the attribute name so a foreign attribute whose name merely
+  // *ends* with ours (e.g. <channel data-id="EVIL">) cannot hijack the match:
+  // without the anchor, /id\s*=/ happily matches inside "data-id=".
+  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`).exec(attrs || '');
   return match ? decodeEntities(match[1]) : undefined;
 }
 

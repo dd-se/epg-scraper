@@ -1153,6 +1153,36 @@ describe('adversarial: fetchText', () => {
     ).rejects.toThrow(/HTTP 429/);
   });
 
+  it('does not retry deterministic GET statuses (404/410/403)', async () => {
+    let calls = 0;
+    await expect(
+      fetchText('https://x/gone', {
+        fetchImpl: async () => {
+          calls++;
+          return { ok: false, status: 404, text: async () => '' };
+        },
+        retries: 2,
+        retryDelayMs: 0,
+      })
+    ).rejects.toThrow(/HTTP 404/);
+    expect(calls).toBe(1); // deterministic answer: no second attempt
+  });
+
+  it('still retries transient GET statuses (5xx/429)', async () => {
+    let calls = 0;
+    const response = await fetchText('https://x/flaky', {
+      fetchImpl: async () => {
+        calls++;
+        if (calls === 1) return { ok: false, status: 503, text: async () => '' };
+        return { ok: true, status: 200, text: async () => 'recovered' };
+      },
+      retries: 2,
+      retryDelayMs: 0,
+    });
+    expect(calls).toBe(2);
+    expect(response).toBe('recovered');
+  });
+
   it('propagates a response.text() failure', async () => {
     await expect(
       fetchText('https://x/', {
@@ -1339,10 +1369,27 @@ describe('adversarial: CLI flags', () => {
   it('rejects negative or non-numeric day windows', async () => {
     const neg = await run(['--days-forward=-1']);
     expect(neg.exit).toBe(1);
-    expect(neg.text).toMatch(/non-negative integers/);
+    expect(neg.text).toMatch(/expect integers between 0 and 60/);
     const bad = await run(['--days-back', 'abc']);
     expect(bad.exit).toBe(1);
-    expect(bad.text).toMatch(/non-negative integers/);
+    expect(bad.text).toMatch(/expect integers between 0 and 60/);
+  });
+
+  it('rejects absurd day windows before buildDateRange materializes them (hang/OOM)', async () => {
+    // Number('1e9') and Number('1e21') both pass the old integer/non-negative
+    // check and would loop a billion (or 1e21) times in buildDateRange.
+    for (const n of ['1e9', '1e21', '99999999999']) {
+      const huge = await run([`--days-forward=${n}`]);
+      expect(huge.exit).toBe(1);
+      expect(huge.text).toMatch(/between 0 and 60/);
+      const hugeBack = await run([`--days-back=${n}`]);
+      expect(hugeBack.exit).toBe(1);
+      expect(hugeBack.text).toMatch(/between 0 and 60/);
+    }
+    // A sane boundary value still passes validation (the run proceeds far
+    // enough to fail later on the unknown provider, not on the window).
+    const ok = await run(['--days-forward=60', '--provider', 'no-such-provider']);
+    expect(ok.text).not.toMatch(/days-forward/);
   });
 
   it('rejects an empty provider list', async () => {
@@ -1351,6 +1398,22 @@ describe('adversarial: CLI flags', () => {
       expect(exit).toBe(1);
       expect(text).toMatch(/--provider expects at least one provider id/);
     }
+  });
+
+  it('fails an unknown provider id with a clean error, never a raw registry throw', async () => {
+    // Regression: getProvider() used to run inside the mode functions, so an
+    // unknown id escaped runCli as an unhandled exception (raw stack trace,
+    // no "error:" line) instead of a clean CLI failure.
+    for (const extra of [[], ['--merge'], ['--compare']]) {
+      const { exit, text } = await run(['--provider', 'no-such-provider', ...extra]);
+      expect(exit).toBe(1);
+      expect(text).toMatch(/Unknown provider "no-such-provider"\. Registered:/);
+      expect(text).toMatch(/^error: /); // clean stderr line, not a stack trace
+    }
+    // The same check fires before any per-mode work in multi-provider modes.
+    const mixed = await run(['--provider', 'hurriyet,no-such-provider', '--merge']);
+    expect(mixed.exit).toBe(1);
+    expect(mixed.text).toMatch(/Unknown provider "no-such-provider"/);
   });
 
   it('returns exit 1 with a clean message for unknown or malformed flags', async () => {

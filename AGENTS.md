@@ -256,6 +256,11 @@ the JSON/form POST providers.  Every request carries a hard timeout, is
 retried on transport errors AND transient non-2xx responses (5xx/429) with
 linear backoff, and a request that still fails degrades to a per-page
 warning — a provider run fails only when it cannot produce any data at all.
+Deterministic statuses (404/410 always; 403 on GET pages, e.g. WAF-blocked
+hosts) are never retried — except 403 on API POSTs, where TV+/Tivibu signal
+session expiry and the providers' re-auth failsafe depends on the retry.
+CLI `--days-back`/`--days-forward` are capped at 60 so a hostile window
+cannot hang `buildDateRange()`.
 
 When `requiresBrowser` is true (or `--browser` is passed), `fetchImpl` is
 a Playwright-backed function that opens each URL in a headless Chromium tab,

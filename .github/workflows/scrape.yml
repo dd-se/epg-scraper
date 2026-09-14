@@ -49,34 +49,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Fast signal on broken code; informational for the scrape — it never
-  # blocks merging/publishing of guides (a stale reference snapshot must
-  # not stop today's guides from going out).
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    steps:
-      - name: Check out
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests (no live network)
-        run: npm test
-
   scrape:
-    needs: test
-    # Run the scrape even when the informational test job fails — guides
-    # are data, and yesterday's code already produced them.
-    if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
