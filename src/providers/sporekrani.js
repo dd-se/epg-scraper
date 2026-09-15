@@ -114,19 +114,31 @@ export function extractInitialState(html) {
 }
 
 // Parse one channel page into the events that air on `channelName`:
-// [{ date: "YYYY-MM-DD", startMin, title, category }].  Events are kept only
-// when the page's own channel appears in the event's channels[] — the same
-// match often airs on other channels too.  A missing or malformed page
-// degrades to an empty result, never a crash.
+// [{ date: "YYYY-MM-DD", startMin, title, category }] plus the page's own
+// channel icon.  Events are kept only when the page's own channel appears
+// in the event's channels[] — the same match often airs on other channels
+// too.  Every matching event's channels[] entry carries the page channel's
+// logo (`img.sporekrani.com/channels/…`); the first one found is returned
+// as `channelIcon`.  A missing or malformed page degrades to an empty
+// result, never a crash.
 export function parseChannelPage(html, channelName) {
   const state = extractInitialState(html);
   const events = Array.isArray(state?.common?.events) ? state.common.events : [];
   const key = normalizeChannelKey(channelName);
   const out = [];
+  let channelIcon;
   for (const event of events) {
     if (!Array.isArray(event?.channels)) continue;
-    const onChannel = event.channels.some((c) => normalizeChannelKey(c?.name) === key);
-    if (!onChannel) continue;
+    const own = event.channels.find((c) => normalizeChannelKey(c?.name) === key);
+    if (!own) continue;
+    if (
+      channelIcon == null &&
+      typeof own.icon === 'string' &&
+      /^https?:\/\//i.test(own.icon) &&
+      !own.icon.includes('|')
+    ) {
+      channelIcon = own.icon;
+    }
     const title = typeof event.name === 'string' ? event.name.replace(/\s+/g, ' ').trim() : '';
     const dt = typeof event.date_time === 'string' ? event.date_time.trim() : '';
     const timeMatch = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::\d{2})?$/.exec(dt);
@@ -150,7 +162,14 @@ export function parseChannelPage(html, channelName) {
       category,
     });
   }
-  return { events: out };
+  return { events: out, channelIcon };
+}
+
+// The page's own channel logo — the first channels[].icon matching the
+// page channel (see parseChannelPage).  Pure convenience wrapper so the
+// scrape does not have to reach into the parse result's shape.
+export function parseChannelIcon(html, channelName) {
+  return parseChannelPage(html, channelName).channelIcon;
 }
 
 // ---- scrape ----
@@ -173,6 +192,7 @@ export async function scrape({
 
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];
+  const channelIcons = new Map(); // channel id -> logo from the page's own channels[] entry
   let failures = 0;
 
   for (const channel of channels) {
@@ -186,7 +206,8 @@ export async function scrape({
       continue;
     }
 
-    const { events } = parseChannelPage(html, channel.name);
+    const { events, channelIcon } = parseChannelPage(html, channel.name);
+    if (channelIcon) channelIcons.set(channel.id, channelIcon);
     // Events are already sorted by the site, but sort defensively so stops
     // chain from the chronologically next event across day boundaries.
     events.sort((a, b) => a.date.localeCompare(b.date) || a.startMin - b.startMin);
@@ -219,7 +240,10 @@ export async function scrape({
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
   return finishResult({
-    channels: channels.map((c) => ({ id: c.id, name: c.name })),
+    channels: channels.map((c) => {
+      const icon = channelIcons.get(c.id);
+      return icon ? { id: c.id, name: c.name, icon } : { id: c.id, name: c.name };
+    }),
     programmes,
     days: activeDates.length,
     failures,

@@ -112,6 +112,22 @@ export function parseDayTitle(label) {
   };
 }
 
+// One IDMAN TV brand logo for the whole site (single-channel provider).
+const BRAND_LOGO_RE =
+  /<a[^>]*class="[^"]*\bw-nav-brand\b[^"]*"[^>]*>\s*<img[^>]*\ssrc="([^"]+)"[^>]*>/i;
+
+// Extract the site header's brand logo (the navbar `w-nav-brand` image,
+// served from admin.aztv.az).  Degrades to undefined when absent — the
+// channel simply stays logoless.
+export function parseBrandLogo(html) {
+  const source = html == null ? '' : String(html);
+  const match = BRAND_LOGO_RE.exec(source);
+  if (!match) return undefined;
+  const src = decodeEntities(match[1]).trim();
+  if (!/^https?:\/\//i.test(src) || src.includes('|')) return undefined;
+  return src;
+}
+
 // Parse the weekly program page into { weekStart, weekEnd, days } where
 // each day is { dayName, date: "YYYY-MM-DD", slots: [{ startMin, title }] }.
 // Missing/malformed markup, out-of-clock wall times and impossible dates
@@ -233,8 +249,9 @@ export async function scrape({
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
+  const icon = parseBrandLogo(html);
   return finishResult({
-    channels: channels.map((c) => ({ id: c.id, name: c.name })),
+    channels: channels.map((c) => (icon ? { ...c, icon } : c)),
     programmes,
     days: activeDates.length,
     failures,

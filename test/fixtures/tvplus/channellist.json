@@ -1,0 +1,27 @@
+{
+  "counttotal": "2",
+  "channellist": [
+    {
+      "id": "144",
+      "name": "TRT1 HD",
+      "picture": {
+        "icon": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/49/0915123245565eb88428_op.png",
+        "ad": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/57/0915123245585eb88428_op.png",
+        "channelpic": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp",
+        "poster": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/65/0915123245545eb88428_op.png",
+        "still": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202509/20250906/22/0637539918805eb7f426_op.jpg"
+      }
+    },
+    {
+      "id": "4399",
+      "name": "tabii spor",
+      "picture": {
+        "icon": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202409/20240917/29/1154465602745eb8f42a_op.png",
+        "ad": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202409/20240913/4/1036095069015eb88428_op.png",
+        "channelpic": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202506/20250623/24/1010072941195eb7f426_op.webp",
+        "poster": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202409/20240913/76/1036095069025eb88428_op.png",
+        "still": "https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202505/20250516/49/1046323115605eb9542c_op.jpg"
+      }
+    }
+  ]
+}

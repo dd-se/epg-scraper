@@ -162,6 +162,60 @@ export function parsePlaybill(text) {
   return slots;
 }
 
+// Choose the best channel-logo URL from one ChannelList record's picture
+// map.  The picture.* fields were pixel-measured across all 16 curated
+// channels (2026-09-15, see /tmp/logocheck samples):
+//
+//   channelpic — 270x270 square channel wordmark, always under the CMS path
+//                /CPS/images/universal/film/logo/…_op.webp; exactly the
+//                asset the tvplus.com.tr guide renders as the channel logo
+//                (.epg-card__channel-logo).
+//   poster     — 170x45 wordmark banner (clean, landscape).
+//   icon       — 100x67 landscape logo on most channels, but a 1000x1480
+//                PORTRAIT show poster on others (ATV, TV8, TRT Spor,
+//                TRT Spor Yıldız, tabii spor, …).
+//   ad / still — 495x280 / large programme stills, never a logo.
+//
+// Dimensions are not recoverable from the URLs (no encoded sizes), so field
+// priority — not shape sniffing — picks the logo: channelpic, then poster,
+// then icon.  `ad`/`still` are never considered.  Values are comma-joined
+// variant lists ("url1,url2" or even "0,0"); the first http(s) part wins
+// and pipe-joined garbage is rejected (same rule as beinsports).  Returns
+// undefined when nothing usable remains.
+export function pickLogoUrl(picture) {
+  if (!picture || typeof picture !== 'object') return undefined;
+  for (const field of ['channelpic', 'poster', 'icon']) {
+    const raw = picture[field];
+    if (typeof raw !== 'string') continue;
+    for (const part of raw.split(',')) {
+      const url = part.trim();
+      if (/^https?:\/\//i.test(url) && !url.includes('|')) return url;
+    }
+  }
+  return undefined;
+}
+
+// Parse the EPG ChannelList response into tvId -> logo URL — pure and
+// fixture-testable.  Missing/malformed input degrades to {}.
+export function parseChannelListLogos(text) {
+  if (text == null) return {};
+  let data;
+  try {
+    data = JSON.parse(String(text));
+  } catch {
+    return {};
+  }
+  const list = Array.isArray(data?.channellist) ? data.channellist : [];
+  const out = {};
+  for (const item of list) {
+    const tvId = item?.id != null ? String(item.id) : undefined;
+    if (!tvId || out[tvId]) continue;
+    const logo = pickLogoUrl(item?.picture);
+    if (logo) out[tvId] = logo;
+  }
+  return out;
+}
+
 // Extract session cookies (XSESSIONID/JSESSIONID) from a fetch Response so
 // PlayBillList calls carry the session.  Works on real undici Headers
 // (getSetCookie, Node >= 18.14) and degrades to get('set-cookie').
@@ -280,6 +334,23 @@ export async function scrape({
   // No dates supplied: cover today in Istanbul (UTC+3 year-round).
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
+  // Channel logos: the ChannelList call (same session handshake as
+  // PlayBillList) carries a picture.{channelpic,poster,icon} per channel —
+  // one extra call covers all 16 channels, no per-day cost.  A failed
+  // lookup degrades to logoless channels, never a failed run.
+  let logos = {};
+  try {
+    const response = await jsonPost(`${session.apiBase}/EPG/JSON/ChannelList`, { fromIndex: '0', toIndex: '200' }, {
+      fetchImpl,
+      ...fetchOptions,
+      headers: session.sessionCookie ? { cookie: session.sessionCookie } : {},
+    });
+    logos = parseChannelListLogos(await response.text());
+    log(`ok:   channel logos for ${Object.keys(logos).length} channels`);
+  } catch (error) {
+    log(`warn: channel logo lookup failed (${error.message}) — continuing without logos`);
+  }
+
   let failuresCount = 0;
 
   for (const channel of channels) {
@@ -334,7 +405,7 @@ export async function scrape({
   }
 
   const result = finishResult({
-    channels: channels.map((c) => ({ id: c.id, name: c.name })),
+    channels: channels.map((c) => ({ id: c.id, name: c.name, ...(logos[c.tvId] ? { icon: logos[c.tvId] } : {}) })),
     programmes,
     days: activeDates.length,
     failures: failuresCount,

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   parseWeeklyPage,
   parseDayTitle,
+  parseBrandLogo,
   mapChannelId,
   normalizeChannelKey,
   scrape,
@@ -91,6 +92,15 @@ describe('idmantv pure parsers', () => {
     expect(parseDayTitle(undefined)).toBeUndefined();
   });
 
+  it('extracts the navbar brand logo', () => {
+    expect(parseBrandLogo(program)).toBe('https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png');
+    expect(parseBrandLogo('<html><body>no nav here</body></html>')).toBeUndefined();
+    expect(parseBrandLogo(undefined)).toBeUndefined();
+    // Relative sources and pipe-joined garbage are rejected, not emitted.
+    expect(parseBrandLogo('<a class="w-nav-brand"><img src="/x.png"></a>')).toBeUndefined();
+    expect(parseBrandLogo('<a class="w-nav-brand"><img src="a|b.png"></a>')).toBeUndefined();
+  });
+
   it('degrades gracefully on malformed markup', () => {
     expect(parseWeeklyPage(undefined)).toEqual({
       weekStart: undefined,
@@ -155,6 +165,8 @@ describe('idmantv scrape (stubbed fetch)', () => {
     });
     expect(result.programmes).toHaveLength(20); // Şənbə
     expect(result.programmes.every((p) => p.channel === 'IDMAN.TV.tr')).toBe(true);
+    // The channel carries the site's brand logo.
+    expect(result.channels[0].icon).toBe('https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png');
     expect(result.programmes[0]).toEqual({
       channel: 'IDMAN.TV.tr',
       start: '2026-09-12T01:00:00+03:00',
@@ -275,6 +287,7 @@ describe('idmantv cli integration (stubbed fetch, temp output)', () => {
       const xml = gunzipSync(fs.readFileSync(out)).toString('utf8');
       expect(xml).toContain('IDMAN.TV.tr');
       expect(xml).toContain('<display-name lang="tr">İdman TV</display-name>');
+      expect(xml).toContain('<icon src="https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png" />');
       expect(xml).toContain('Basketbol.Avroliqa'); // a 2026-09-08 fixture programme
     } finally {
       globalThis.fetch = originalFetch;

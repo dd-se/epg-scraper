@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync, mkdirSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -7,6 +8,8 @@ import {
   parseApiInstant,
   parsePlaybill,
   extractSessionCookie,
+  parseChannelListLogos,
+  pickLogoUrl,
   mapChannelId,
   normalizeChannelKey,
   scrape,
@@ -19,6 +22,7 @@ const fixture = (name) =>
 
 const platformInfo = fixture('platform-info.json');
 const playbill4399 = fixture('playbill-4399-2026-09-09.json');
+const channellist = fixture('channellist.json');
 
 // Response-like object with optional headers (getSetCookie) — mirrors the
 // convention that fetchImpl stubs return { ok, status, text }.
@@ -161,6 +165,51 @@ describe('tvplus pure parsers', () => {
       expect(channel.tvId).toMatch(/^\d+$/);
     }
   });
+
+  it('pickLogoUrl prefers channelpic, then poster, then icon; never ad/still', () => {
+    // Pixel-measured field meanings (2026-09-15): channelpic = 270x270
+    // wordmark (exactly what the tvplus guide renders as the channel logo),
+    // poster = 170x45 wordmark banner, icon = landscape logo on most
+    // channels but a 1000x1480 PORTRAIT poster on ATV/TV8/TRT Spor & co,
+    // ad/still = show stills, never logos.  Dimensions are not encoded in
+    // the URLs, so field priority — not shape sniffing — must decide.
+    const channelpic = 'https://x.tvplus.com.tr/CPS/images/universal/film/logo/a_op.webp';
+    const poster = 'https://x.tvplus.com.tr/CPS/images/universal/film/logo/b_op.png';
+    const portraitIcon = 'https://x.tvplus.com.tr/CPS/images/universal/film/logo/c_op.png';
+    const still = 'https://x.tvplus.com.tr/CPS/images/universal/film/logo/d_op.jpg';
+    expect(pickLogoUrl({ channelpic, poster, icon: portraitIcon, ad: still })).toBe(channelpic);
+    expect(pickLogoUrl({ poster, icon: portraitIcon, ad: still })).toBe(poster);
+    // icon is the last resort regardless of its (unknowable) shape.
+    expect(pickLogoUrl({ icon: portraitIcon, ad: still })).toBe(portraitIcon);
+    expect(pickLogoUrl({ ad: still, still })).toBeUndefined();
+    expect(pickLogoUrl({})).toBeUndefined();
+    expect(pickLogoUrl(undefined)).toBeUndefined();
+  });
+
+  it('pickLogoUrl takes the first http(s) part of comma lists and rejects pipe garbage', () => {
+    const second = 'https://x.tvplus.com.tr/CPS/images/universal/film/logo/second_op.webp';
+    expect(pickLogoUrl({ channelpic: `0,0,${second},0` })).toBe(second);
+    // The ChannelList API also emits useless "0,0" placeholders.
+    expect(pickLogoUrl({ channelpic: '0,0', poster: 'not-a-url' })).toBeUndefined();
+    expect(pickLogoUrl({ channelpic: 'a|b|c' })).toBeUndefined();
+    expect(pickLogoUrl({ channelpic: 42, poster: null })).toBeUndefined();
+  });
+
+  it('parseChannelListLogos maps string ids to logo urls and degrades to {}', () => {
+    const logos = parseChannelListLogos(channellist);
+    expect(Object.keys(logos).sort()).toEqual(['144', '4399']);
+    // channelpic (the asset the live guide renders as the channel logo)
+    // wins even though icon also carries a URL.
+    expect(logos['4399']).toBe(
+      'https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202506/20250623/24/1010072941195eb7f426_op.webp'
+    );
+    expect(parseChannelListLogos('not json')).toEqual({});
+    expect(parseChannelListLogos(undefined)).toEqual({});
+    expect(parseChannelListLogos('{"channellist": null}')).toEqual({});
+    expect(parseChannelListLogos('{"channellist": [{"id": null, "picture": {}}]}')).toEqual({});
+    // A channel without usable picture fields is simply absent.
+    expect(parseChannelListLogos('{"channellist": [{"id": "99", "picture": {"ad": "https://x/ad.png"}}]}')).toEqual({});
+  });
 });
 
 describe('tvplus scrape (stubbed json api)', () => {
@@ -170,6 +219,11 @@ describe('tvplus scrape (stubbed json api)', () => {
       expect(options.method).toBe('POST');
       if (url.includes('/get-platform-info')) return jsonResponse(platformInfo);
       if (url.endsWith('/EPG/JSON/Authenticate')) return jsonResponse('{}', SESSION_HEADERS);
+      if (url.endsWith('/EPG/JSON/ChannelList')) {
+        // The logo lookup must reuse the authenticated session.
+        expect(options.headers.cookie).toContain('XSESSIONID=TEST123');
+        return jsonResponse(channellist);
+      }
       if (url.endsWith('/EPG/JSON/PlayBillList')) {
         const body = JSON.parse(options.body);
         // maxChannels 1 -> the first configured channel (TRT 1, tvId 144).
@@ -195,6 +249,10 @@ describe('tvplus scrape (stubbed json api)', () => {
     expect(result.failures).toBe(0);
     expect(result.channels).toHaveLength(1);
     expect(result.channels[0].id).toBe('TRT.1.tr');
+    // TRT 1's channelpic wordmark lands on the channel as its icon.
+    expect(result.channels[0].icon).toBe(
+      'https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp'
+    );
     expect(result.programmes.length).toBe(12);
     expect(result.programmes.every((p) => p.channel === 'TRT.1.tr')).toBe(true);
     // The session cookie captured at Authenticate must be sent with PlayBillList.
@@ -256,6 +314,7 @@ describe('tvplus cli integration (stubbed fetch, temp output)', () => {
     globalThis.fetch = async (url, options) => {
       if (url.includes('/get-platform-info')) return jsonResponse(platformInfo);
       if (url.endsWith('/EPG/JSON/Authenticate')) return jsonResponse('{}', SESSION_HEADERS);
+      if (url.endsWith('/EPG/JSON/ChannelList')) return jsonResponse(channellist);
       if (url.endsWith('/EPG/JSON/PlayBillList')) return jsonResponse(playbill4399);
       throw new Error(`unexpected url ${url}`);
     };
@@ -279,6 +338,11 @@ describe('tvplus cli integration (stubbed fetch, temp output)', () => {
       expect(exit).toBe(0);
       expect(fs.existsSync(out)).toBe(true);
       expect(fs.statSync(out).size).toBeGreaterThan(500);
+      // The scraped icon survives the whole pipeline into the XMLTV <icon>.
+      const xml = gunzipSync(fs.readFileSync(out)).toString('utf8');
+      expect(xml).toContain(
+        '<icon src="https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp" />'
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }

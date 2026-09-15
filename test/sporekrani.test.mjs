@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync, mkdirSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
   parseChannelPage,
+  parseChannelIcon,
   extractInitialState,
   mapChannelId,
   normalizeChannelKey,
@@ -106,6 +108,33 @@ describe('sporekrani pure parsers', () => {
     expect(parseChannelPage(tabii4, 'tabii Spor 4')).toEqual({ events: [] });
   });
 
+  it('returns the page channel logo from the first matching event', () => {
+    // Every event's channels[] carries the page channel's own icon.
+    const { channelIcon } = parseChannelPage(tabii1, 'tabii Spor 1');
+    expect(channelIcon).toBe('https://img.sporekrani.com/channels/72276f1d-f504-4c98-9ce7-410e047cb7ee.png');
+    expect(parseChannelIcon(sSportPlus, 'S Sport Plus')).toBe(
+      'https://img.sporekrani.com/channels/VmyIJfY9ujeeFQv90fWj3b5tqulXoou0Q3BSJ1pF.png'
+    );
+    // Each channel resolves to its OWN icon: CBC Sport also appears in the
+    // tabii-spor-1 events, and parsing for it yields CBC's logo — never
+    // tabii spor 1's.
+    expect(parseChannelIcon(tabii1, 'CBC Sport')).toBe(
+      'https://img.sporekrani.com/channels/gziDiP6VoXPeKxqjvRBslJLxvEgIyziuaIISjnYY.png'
+    );
+    // Empty page -> no events, no icon.
+    expect(parseChannelIcon(tabii4, 'tabii Spor 4')).toBeUndefined();
+    // Non-http or pipe-joined garbage is rejected.  Only the FIRST matching
+    // channels[] entry is considered (first-found wins, like beinsports):
+    // here the first carries "not-a-url", so the valid second one never
+    // promotes — deterministic, no later-entry resurrection.
+    expect(
+      parseChannelIcon(
+        '<script>window.__INITIAL_STATE__={"common":{"events":[{"name":"M","date_time":"2026-09-08 20:00:00","channels":[{"name":"tabii Spor 1","icon":"not-a-url"},{"name":"tabii Spor 1","icon":"https://ok/icon.png"}]}]}}</script>',
+        'tabii Spor 1'
+      )
+    ).toBeUndefined();
+  });
+
   it('parses the S Sport Plus page (120 events, programmes included)', () => {
     const { events } = parseChannelPage(sSportPlus, 'S Sport Plus');
     expect(events.length).toBeGreaterThan(100);
@@ -180,6 +209,16 @@ describe('sporekrani scrape (stubbed fetch)', () => {
     expect(t2).toHaveLength(3);
     const t4 = result.programmes.filter((p) => p.channel === 'TABII.SPOR.4.tr');
     expect(t4).toHaveLength(0);
+
+    // Logos ride on each page's own channels[] entry: scraped channels carry
+    // their icon, the empty tabii spor 4 page stays logoless.
+    expect(result.channels.find((c) => c.id === 'TABII.SPOR.1.tr').icon).toBe(
+      'https://img.sporekrani.com/channels/72276f1d-f504-4c98-9ce7-410e047cb7ee.png'
+    );
+    expect(result.channels.find((c) => c.id === 'S.SPORT.PLUS.tr').icon).toBe(
+      'https://img.sporekrani.com/channels/VmyIJfY9ujeeFQv90fWj3b5tqulXoou0Q3BSJ1pF.png'
+    );
+    expect(result.channels.find((c) => c.id === 'TABII.SPOR.4.tr').icon).toBeUndefined();
 
     const ssp = result.programmes.filter((p) => p.channel === 'S.SPORT.PLUS.tr');
     expect(ssp.length).toBeGreaterThan(0);
@@ -291,6 +330,11 @@ describe('sporekrani cli integration (stubbed fetch, temp output)', () => {
       expect(exit).toBe(0);
       expect(fs.existsSync(out)).toBe(true);
       expect(fs.statSync(out).size).toBeGreaterThan(500);
+      // The scraped icon survives the whole pipeline into the XMLTV <icon>.
+      const xml = gunzipSync(fs.readFileSync(out)).toString('utf8');
+      expect(xml).toContain(
+        '<icon src="https://img.sporekrani.com/channels/72276f1d-f504-4c98-9ce7-410e047cb7ee.png" />'
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -100,11 +100,17 @@ CLI tool and library.
       provider (16 channels incl. TRT Spor/Yıldız, A Spor, HT Spor, FB TV,
       tabii spor, S Sport 1/2, Eurosport 1/2, Sports TV, TRT 1, ATV, TV8,
       TV8,5, A2).  Flow: `POST /get-platform-info` → rotating API base,
-      `POST {base}/EPG/JSON/Authenticate` → session cookie, then
+      `POST {base}/EPG/JSON/Authenticate` → session cookie, one
+      `POST {base}/EPG/JSON/ChannelList` for all channel logos, then
       `POST {base}/EPG/JSON/PlayBillList` per channel+day (explicit
       start/stop, pre-stamped `UTC+03:00`).  `parsePlaybill()` /
-      `parsePlatformInfo()` / `parseApiInstant()` / `extractSessionCookie()`
-      are the pure parsers.  **Failsafe:** if a PlayBillList call exhausts
+      `parsePlatformInfo()` / `parseApiInstant()` / `extractSessionCookie()` /
+      `parseChannelListLogos()` / `pickLogoUrl()` are the pure parsers.
+      Channel logos come from the ChannelList `picture` map with fixed field
+      priority `channelpic` → `poster` → `icon` (`icon` is a portrait show
+      poster on several channels, `ad`/`still` are programme stills; sizes
+      are not encoded in the URLs, so shape sniffing is impossible).
+      **Failsafe:** if a PlayBillList call exhausts
       its transport retries, the session (rotating host + auth cookie) is
       re-established once and the channel-day retried before it counts as a
       failure.  **Not browser-compatible** (POSTs JSON; do not pass
@@ -135,10 +141,13 @@ CLI tool and library.
       {slug}` pages.  Quasar SSR with the schedule in a `window.__INITIAL_
       STATE__` JSON script tag; each page carries a rolling ~30-day event
       list (one fetch per channel).  `extractInitialState()` /
-      `parseChannelPage()` are the pure parsers.  Events are filtered to
+      `parseChannelPage()` / `parseChannelIcon()` are the pure parsers.
+      Events are filtered to
       the page's own channel (`channels[].name`), and because the source
       publishes **start times only**, stops derive from the next event on
-      the page (24:00 for the last), like beinsports.
+      the page (24:00 for the last), like beinsports.  Channel logos come
+      from the page channel's own `channels[].icon` (first matching event
+      wins; pipe-joined garbage rejected).
     - `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor 1-4 via
       `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
       and its plain-HTTP JSON API.  One session GET per channel captures the
@@ -157,7 +166,9 @@ CLI tool and library.
       page (no JS/API/login) that publishes exactly one Mon–Sun week of
       HH:MM slots in Azerbaijani.  `parseWeeklyPage()` / `parseDayTitle()`
       are the pure parsers; one fetch covers all seven requested days and
-      dates outside the published week are skipped with a warning.  Stops
+      dates outside the published week are skipped with a warning.  The
+      single channel carries the site's navbar brand logo
+      (`parseBrandLogo()`, from the `w-nav-brand` header image).  Stops
       derive from the next slot (24:00 for the last), matching beinsports.
       Titles are emitted verbatim (the page sometimes appends a stray
       cross-channel note to the last Sunday slots).  Baku wall times are
