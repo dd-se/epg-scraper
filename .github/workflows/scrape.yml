@@ -82,8 +82,8 @@ jobs:
             # provider's default 400 ms delay is polite enough.
             args: ''
           - provider: tvnu
-            # 54 channels x (3 requested days + 1 small-hours lookback) =
-            # 216 requests before retries; a 7-day window needs 432.
+            # 69 channels x (3 requested days + 1 small-hours lookback) =
+            # 276 requests before retries; a 7-day window needs 552.
             # Keep an explicit polite delay for scheduled runs.
             args: '--days-forward 2 --delay-ms 400'
           - provider: idmantv

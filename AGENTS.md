@@ -193,9 +193,12 @@ Development tooling includes a static file server in
       OFFSET`), keeping emitted instants equal to the source's. The XMLTV
       writer/reader compare start/stop as instants, so a merged guide carrying
       both `+03:00` and `+04:00` timestamps stays correct.
-    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 54 Swedish national + Nordic
+    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 69 Swedish national + Nordic
       pay-TV channels, including TV4 Fotboll/Hockey/Motor/Sportkanalen/Tennis
-      and Sport Live 1–4, via `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`. Each
+      and Sport Live 1–4, the Viaplay/V Sport block (V Sport
+      1/Extra/Premium/Golf/Motor/Vinter, Fight Sports, V Sport Live 1–5,
+      Viaplay Sport) and Eurosport 1–2, via
+      `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`. Each
       day page ships the schedule as a JSON string assignment
       (`__INITIAL_STATE__ = "…"`); `extractInitialState()` /
       `parseChannelPage()` / `parseBroadcast()` are the pure parsers

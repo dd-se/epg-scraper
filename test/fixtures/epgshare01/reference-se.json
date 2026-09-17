@@ -9,7 +9,13 @@
     "BBC.EARTH.se": "tvnu provider channel BBC Earth; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
     "MTV.HITS.se": "tvnu provider channel MTV Hits; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
     "TRACE.URBAN.HD.se": "tvnu provider channel Trace Urban HD; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
-    "PARAMOUNT.NETWORK.se": "tvnu provider channel Paramount Network; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept."
+    "PARAMOUNT.NETWORK.se": "tvnu provider channel Paramount Network; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "V.SPORT.LIVE.1.se": "tvnu provider channel V Sport Live 1; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "V.SPORT.LIVE.2.se": "tvnu provider channel V Sport Live 2; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "V.SPORT.LIVE.3.se": "tvnu provider channel V Sport Live 3; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "V.SPORT.LIVE.4.se": "tvnu provider channel V Sport Live 4; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "V.SPORT.LIVE.5.se": "tvnu provider channel V Sport Live 5; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "VIAPLAY.SPORT.se": "tvnu provider channel Viaplay Sport (the combined post-2024 Viaplay/V Sport feed); the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept."
   },
   "channels": [
     {

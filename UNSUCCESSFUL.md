@@ -185,9 +185,17 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   `/kanal/dagens-industri`), Barnmusik, Disney Junior
   (`/kanal/disney-junior`), Discovery World (`/kanal/discovery-world`),
   Food Network (`/kanal/food-network`) and BBC First (`/kanal/bbc-first`).
-  The `tvnu` provider covers 54 Swedish/Nordic channels, including nine TV4
-  sports feeds; those seven need another source
+  The `tvnu` provider covers 69 Swedish/Nordic channels, including the TV4
+  and Viaplay/V Sport sports blocks; those seven need another source
   (or do not exist as linear tv.nu feeds) before they can be scraped.
+  Additionally, V Sport Fotboll (`[VIAFOHD].V.Sport.Fotboll.HD.se` upstream)
+  has no tv.nu channel page — 7 spellings probed 2026-09-17 (`v-fotboll`,
+  `v-sport-fotboll`, `v-sport-fotboll-hd`, `viasat-fotboll`,
+  `viasat-fotboll-hd`, `viasat-sport-fotboll`, `viaplay-fotboll`), all
+  HTTP 404 — and the user-listed "V Ultra" and "Viaplay Sport 1 / Extra /
+  Premium / Football / Golf / Motor / Vinter" numbered variants do not exist
+  on tv.nu (tv.nu carries the combined `viaplay-sport` feed; football,
+  golf and motor ride V Sport Fotboll/Golf/Motor).
 - All uncovered channels keep their epgshare01-style ids unmapped; when a
   source lands, add the id to `CHANNEL_ID_MAP` and (if missing upstream)
   to `knownGaps` in the matching per-country snapshot

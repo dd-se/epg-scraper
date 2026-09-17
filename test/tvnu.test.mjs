@@ -31,6 +31,17 @@ const svt1Day = fixture('svt1-2026-09-17.html');
 // Live snapshot of https://www.tv.nu/kanal/tv4-fotboll?datum=2026-09-17
 // (fetched 2026-09-17): 7 sport broadcasts incl. BK Häcken–Mjällby 11:00.
 const fotbollDay = fixture('tv4-fotboll-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/fight-sports?datum=2026-09-17:
+// 22 event rows (boxing/kickboxing/Muay Thai listings).
+const fightSportsDay = fixture('fight-sports-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/v-sport-1?datum=2026-09-17:
+// 12 broadcasts (Allsvenskan, Serie A ...).
+const vSport1Day = fixture('v-sport-1-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/v-sport-live-1?datum=2026-09-17:
+// one rolling "next live event" placeholder day.
+const vSportLive1Day = fixture('v-sport-live-1-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/eurosport-1?datum=2026-09-17.
+const eurosport1Day = fixture('eurosport-1-2026-09-17.html');
 // Live snapshot of https://www.tv.nu/kanal/tv4-sportkanalen?datum=2026-09-17:
 // 21 broadcasts (Fiskedestination, Stjärnkusken, Wikegård vs, ...).
 const sportkanalenDay = fixture('tv4-sportkanalen-2026-09-17.html');
@@ -223,7 +234,7 @@ it('rejects hostile broadcast payloads one by one', () => {
       expect(channel.id.endsWith('.se')).toBe(true);
       expect(channel.name.length).toBeGreaterThan(0);
     }
-    expect(CHANNELS).toHaveLength(54);
+    expect(CHANNELS).toHaveLength(69);
     // Ids are the Swedish epgshare01 ones where upstream carries them.
     expect(CHANNEL_ID_MAP['SVT 1']).toBe('[SVT1HD].SVT1.HD.se');
     expect(CHANNEL_ID_MAP['KANAL 5']).toBe('[KANL5HD].KANAL.5.HD.se');
@@ -401,7 +412,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     expect(mapChannelId('TV4 Sport Live 2')).toBe('[TV4SPL2].TV4.Sport.Live.2.se');
     expect(mapChannelId('TV4 Sport Live 3')).toBe('[TV4SPL3].TV4.Sport.Live.3.se');
     expect(mapChannelId('TV4 Sport Live 4')).toBe('[TV4SPL4].TV4.Sport.Live.4.se');
-    expect(CHANNELS).toHaveLength(54);
+    expect(CHANNELS).toHaveLength(69);
     expect(CHANNEL_ID_MAP['TV4 FOTBOLL']).toBe('[TV4FOSV].TV4.Fotboll.se');
   });
 
@@ -483,7 +494,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
       }),
       politenessDelayMs: 0,
     });
-    expect(result.channels).toHaveLength(54);
+    expect(result.channels).toHaveLength(69);
     expect(result.programmes).toHaveLength(19);
     expect(result.programmes.every((p) => p.channel === '[SPORTK].TV4.Sportkanalen.se')).toBe(true);
     expect(result.programmes.every((p) => p.start.startsWith('2026-09-17'))).toBe(true);
@@ -491,6 +502,73 @@ describe('tvnu scrape (stubbed fetch)', () => {
       id: '[TV4SPL1].TV4.Sport.Live.1.se',
       name: 'TV4 Sport Live 1',
       icon: 'https://new.static.tv.nu/227356274',
+    });
+    expect(result.failures).toBe(0);
+  });
+
+  it('maps the Viaplay/V Sport and Eurosport channels onto the reference ids', () => {
+    expect(mapChannelId('V Sport 1')).toBe('[VIASPHD].V.Sport.1.HD.se');
+    expect(mapChannelId('V Sport Extra')).toBe('[VSSPXHD].V.Sport.Extra.HD.se');
+    expect(mapChannelId('V Sport Premium')).toBe('[VIASPOH].V.Sport.Premium.HD.se');
+    expect(mapChannelId('V Sport Golf')).toBe('[VGOLFHD].V.Sport.Golf.HD.se');
+    expect(mapChannelId('V Sport Motor')).toBe('[VIASMHD].V.Sport.Motor.HD.se');
+    expect(mapChannelId('V Sport Vinter')).toBe('[VSPOVIS].V.Sport.Vinter.se');
+    expect(mapChannelId('Fight Sports')).toBe('[FIGSAHD].Fight.Sports.HD.se');
+    expect(mapChannelId('V Sport Live 1')).toBe('V.SPORT.LIVE.1.se');
+    expect(mapChannelId('V Sport Live 5')).toBe('V.SPORT.LIVE.5.se');
+    expect(mapChannelId('Viaplay Sport')).toBe('VIAPLAY.SPORT.se');
+    expect(mapChannelId('Eurosport 1')).toBe('[EUROSHD].Eurosport.1.HD.se');
+    expect(mapChannelId('Eurosport 2')).toBe('[EURSP2H].Eurosport.2.HD.se');
+    // "V Sport Fotboll" exists in the reference but has no tv.nu page, so the
+    // id is deliberately unmapped (no invented slugs).
+    expect(mapChannelId('V Sport Fotboll')).toBeUndefined();
+    expect(CHANNELS).toHaveLength(69);
+  });
+
+  it('parses the Viaplay/V Sport and Eurosport pages', () => {
+    // V Sport 1: real sport schedule (Allsvenskan etc.), explicit start+stop.
+    const vs1 = parseChannelPage(vSport1Day);
+    expect(vs1.ok).toBe(true);
+    expect(vs1.name).toBe('V Sport 1');
+    expect(vs1.logo).toBe('https://new.static.tv.nu/68084424');
+    expect(vs1.slots).toHaveLength(12);
+    expect(vs1.slots[0].category).toBe('Fotboll');
+
+    // Fight Sports: tagged reference id, generic event list.
+    const fight = parseChannelPage(fightSportsDay);
+    expect(fight.name).toBe('Fight Sports');
+    expect(fight.slots).toHaveLength(22);
+
+    // Eurosport 1: cycling etc.
+    const euro = parseChannelPage(eurosport1Day);
+    expect(euro.name).toBe('Eurosport 1');
+    expect(euro.slots).toHaveLength(13);
+    expect(euro.slots[0].category).toBe('Cykel');
+
+    // V Sport Live feeds: single rolling "next live event" placeholder day.
+    const live1 = parseChannelPage(vSportLive1Day);
+    expect(live1.name).toBe('V Sport Live 1');
+    expect(live1.slots).toHaveLength(1);
+    expect(live1.slots[0].start.startsWith('2026-09-17')).toBe(true);
+  });
+
+  it('scrapes a Viaplay/V Sport channel end to end (stubbed fetch)', async () => {
+    // CHANNELS indices: 0-9 base, 10-18 TV4 sports, 19-34 the Viaplay/V
+    // Sport block — so maxChannels 20 reaches exactly V Sport 1 (index 19).
+    expect(CHANNELS[19]).toMatchObject({ slug: 'v-sport-1', id: '[VIASPHD].V.Sport.1.HD.se' });
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({ 'kanal/v-sport-1': vSport1Day, 'datum=': emptyDay }),
+      politenessDelayMs: 0,
+      maxChannels: 20,
+    });
+    const vs1 = result.programmes.filter((p) => p.channel === '[VIASPHD].V.Sport.1.HD.se');
+    expect(vs1.length).toBeGreaterThan(0);
+    expect(vs1.every((p) => p.start.startsWith('2026-09-17'))).toBe(true);
+    expect(result.channels[19]).toEqual({
+      id: '[VIASPHD].V.Sport.1.HD.se',
+      name: 'V Sport 1',
+      icon: 'https://new.static.tv.nu/68084424',
     });
     expect(result.failures).toBe(0);
   });

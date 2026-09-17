@@ -1,6 +1,8 @@
 // TV.nu (Schibsted) provider — the Swedish national channels plus the
 // Nordic pay-TV feeds: SVT 1/2/SVT 24/SVT Barn/Kunskapskanalen, TV3, TV4
 // (+ Film/Guld/Fakta/Fotboll/Hockey/Motor/Sportkanalen/Tennis/Sport Live 1-4),
+// the Viaplay/V Sport block (V Sport 1/Extra/Premium/Golf/Motor/Vinter,
+// Fight Sports, V Sport Live 1-5, Viaplay Sport), Eurosport 1-2,
 // Kanal 5/9/10/11, TV6, Sjuan, TV8, TV10, TV12,
 // SkyShowtime 1-2, SF Kanalen, Cartoon Network, Cartoonito, Disney Channel,
 // Nickelodeon, Nick Jr., Nicktoons, Animal Planet, BBC Nordic, BBC Earth,
@@ -82,6 +84,29 @@ export const CHANNELS = [
   { slug: 'tv4-sport-live-2', name: 'TV4 Sport Live 2', id: '[TV4SPL2].TV4.Sport.Live.2.se' },
   { slug: 'tv4-sport-live-3', name: 'TV4 Sport Live 3', id: '[TV4SPL3].TV4.Sport.Live.3.se' },
   { slug: 'tv4-sport-live-4', name: 'TV4 Sport Live 4', id: '[TV4SPL4].TV4.Sport.Live.4.se' },
+  // Viaplay/V Sport + Eurosport.  Ids follow the epgshare01 SE snapshot:
+  // HD-only ids where the reference carries no SD variant (V Sport 1 =
+  // [VIASPHD].V.Sport.1.HD.se, ...), the tagged Fight Sports id verbatim.
+  // "Viaplay Sport" (the combined 2024+ feed) has no reference entry yet, so
+  // it keeps a generic .se slug (acknowledged in reference-se.json
+  // knownGaps).  "V Sport Fotboll" ([VIAFOHD].V.Sport.Fotboll.HD.se
+  // upstream) has no tv.nu channel page as of 2026-09-17, so the id is NOT
+  // mapped to a page — documented in UNSUCCESSFUL.md.
+  { slug: 'v-sport-1', name: 'V Sport 1', id: '[VIASPHD].V.Sport.1.HD.se' },
+  { slug: 'v-sport-extra', name: 'V Sport Extra', id: '[VSSPXHD].V.Sport.Extra.HD.se' },
+  { slug: 'v-sport-premium', name: 'V Sport Premium', id: '[VIASPOH].V.Sport.Premium.HD.se' },
+  { slug: 'v-sport-golf', name: 'V Sport Golf', id: '[VGOLFHD].V.Sport.Golf.HD.se' },
+  { slug: 'v-sport-motor', name: 'V Sport Motor', id: '[VIASMHD].V.Sport.Motor.HD.se' },
+  { slug: 'v-sport-vinter', name: 'V Sport Vinter', id: '[VSPOVIS].V.Sport.Vinter.se' },
+  { slug: 'fight-sports', name: 'Fight Sports', id: '[FIGSAHD].Fight.Sports.HD.se' },
+  { slug: 'v-sport-live-1', name: 'V Sport Live 1', id: 'V.SPORT.LIVE.1.se' },
+  { slug: 'v-sport-live-2', name: 'V Sport Live 2', id: 'V.SPORT.LIVE.2.se' },
+  { slug: 'v-sport-live-3', name: 'V Sport Live 3', id: 'V.SPORT.LIVE.3.se' },
+  { slug: 'v-sport-live-4', name: 'V Sport Live 4', id: 'V.SPORT.LIVE.4.se' },
+  { slug: 'v-sport-live-5', name: 'V Sport Live 5', id: 'V.SPORT.LIVE.5.se' },
+  { slug: 'viaplay-sport', name: 'Viaplay Sport', id: 'VIAPLAY.SPORT.se' },
+  { slug: 'eurosport-1', name: 'Eurosport 1', id: '[EUROSHD].Eurosport.1.HD.se' },
+  { slug: 'eurosport-2', name: 'Eurosport 2', id: '[EURSP2H].Eurosport.2.HD.se' },
   { slug: 'kanal-5', name: 'Kanal 5', id: '[KANL5HD].KANAL.5.HD.se' },
   { slug: 'tv6', name: 'TV6', id: '[TV6HD].TV6.HD.se' },
   { slug: 'sjuan', name: 'Sjuan', id: '[SJUHD].Sjuan.HD.se' },
