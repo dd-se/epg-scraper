@@ -10,6 +10,7 @@ import * as digiturkburada from './digiturkburada.js';
 import * as sporekrani from './sporekrani.js';
 import * as tivibu from './tivibu.js';
 import * as idmantv from './idmantv.js';
+import * as tvnu from './tvnu.js';
 
 let loaded = false;
 
@@ -66,6 +67,17 @@ export function loadProviders() {
       name: 'iDMAN TV (İdman Televiziyası) Həftəlik Proqram',
       baseUrl: idmantv.BASE_URL,
       scrape: idmantv.scrape,
+    });
+    registerProvider({
+      id: 'tvnu',
+      name: 'TV.nu Yayın Akışı (İsveç ulusal + Nordic kanalları)',
+      baseUrl: tvnu.BASE_URL,
+      // The guide is Swedish: _SE output filename, lang="sv" titles, and a
+      // Stockholm-anchored default window (Sweden observes DST).
+      country: 'SE',
+      language: 'sv',
+      timeZone: 'Europe/Stockholm',
+      scrape: tvnu.scrape,
     });
     loaded = true;
   }

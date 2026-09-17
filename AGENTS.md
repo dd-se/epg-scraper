@@ -39,13 +39,23 @@ CLI tool and library.
 - **Fixed-offset timestamps.** Programme `start`/`stop` are ISO 8601
   strings with one fixed UTC offset (Turkey: `+03:00` year-round).
   Providers must never emit fractional seconds or bare UTC offsets.
+  A provider whose country observes DST (`tvnu` — Sweden) instead stamps
+  each timestamp with the offset in force at that instant (`+01:00` winter,
+  `+02:00` summer), because a pinned offset would shift every summer
+  programme by an hour; the instants stay absolute either way.  Guides may
+  therefore legitimately carry two offsets across a DST switch, which is why
+  the writer and the reader compare `start`/`stop` as **instants**
+  (`isoToEpochMs()`) rather than as ISO strings.  (Merge/compare only key
+  slots on the literal strings — they never order by time.)
 - **Hostile-input hardening.** Every parser must apply the same guards as
   the existing providers: reject out-of-clock wall times (hours > 24,
   minutes > 59) and impossible calendar dates (month 13, Feb 30, day 32)
   before converting with `wallToIso()` — `Date.UTC` normalizes overflow, so
   validate with a round-trip comparison like `toXmltvTimestamp()` does
   (a bare month/day range check misses Feb 30); drop reversed/zero-length
-  slots (`stop <= start`, compared on the ISO strings after conversion);
+  slots (`stop <= start` — compared as instants when the provider stamps
+  more than one offset, i.e. in a DST zone; compare on the ISO strings when
+  the provider pins a single offset);
   skip null/hostile channel and programme entries; degrade non-string /
   non-array fields to empty.  Providers must never push a corrupt slot
   into the merge/compare pipeline — the writer (`generateXmltv`) is the
@@ -71,7 +81,8 @@ CLI tool and library.
    scrolling to load lazy content, small mouse movements) before snapshotting
    the DOM.
 3. `src/entities.js` — HTML entity/numeric-reference decoder.
-4. `src/slug.js` — Generic channel-id slug (uppercase, non-alphanum → `.`, `.tr` suffix).
+4. `src/slug.js` — Generic channel-id slug (uppercase, non-alphanum → `.`,
+   country suffix — `.tr` default, `.se` for the Swedish provider).
 5. `src/model.js` — `createChannel()` / `createProgramme()` validation helpers.
 6. `src/registry.js` — Provider registry (`registerProvider`/`getProvider`/`listProviders`)
    and `buildDateRange()` date helper.
@@ -175,11 +186,32 @@ CLI tool and library.
       stamped with the repo's fixed `+03:00` like every provider — Baku is
       UTC+4/+5, so idmantv instants can sit an hour behind the Turkish
       channels while Azerbaijan observes summer time.
+    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 45 Swedish national + Nordic
+      pay-TV channels via `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`.  Each
+      day page ships the schedule as a JSON string assignment
+      (`__INITIAL_STATE__ = "…"`); `extractInitialState()` /
+      `parseChannelPage()` / `parseBroadcast()` are the pure parsers
+      (logos from the page channel's own `themedLogo`).  Source timestamps
+      are **absolute epoch ms** (explicit start+stop — never derived), one
+      fetch per channel+day, and pages run 06:00 → 06:00 local, so the day
+      before the window is fetched too and slots are bucketed by the
+      Stockholm date they start on.  This is the one provider in a DST zone:
+      it stamps `epochToIso()` with the Europe/Stockholm offset in force at
+      each instant (`+01:00` winter / `+02:00` summer); the CLI registration
+      declares `country: 'SE'` (`_SE` filenames), `language: 'sv'`
+      (`lang="sv"` titles) and `timeZone: 'Europe/Stockholm'` (Stockholm
+      "today"), and ids normalize to the Swedish `epg_ripper_SE1.xml.gz`
+      snapshot (`reference-se.json`).
    - `index.js` — `loadProviders()` registry loader.
 9. `src/cli.js` — CLI argument parsing, orchestration, output writing.
    Exports `runCli({ argv, stdout, stderr, cwd })` for testability.
    Manages browser lifecycle when `--browser` or `requiresBrowser`.
-   Dispatches between the modes described under "CLI modes".
+   Dispatches between the modes described under "CLI modes".  Providers may
+   declare `country` (output filename suffix, default `TR`), `language`
+   (`lang` attribute, default `tr`) and `timeZone` (default window anchor,
+   default `Europe/Istanbul`) — tvnu declares `SE` / `sv` /
+   `Europe/Stockholm`.  Compare/merge filenames and merge language follow
+   the same declarations; offline `--merge --from` keeps the TR/tr defaults.
 10. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
     provider, plain HTTP vs headless browser) and `compareProviderResults()`
     (two providers, channel by channel) share one `compareSides()` core;
@@ -283,19 +315,34 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
 1. Create `src/providers/<id>.js` with:
    - Pure parser function(s) — no I/O, fully fixture-testable.  Apply the
      hostile-input hardening rules from the constraints above: validate
-     wall-clock times AND calendar dates before `wallToIso()` (a `Date.UTC`
-     round-trip catches month 13 / Feb 30 / day 32), drop reversed /
+     wall-clock times AND calendar dates before converting (a `Date.UTC`
+     round-trip catches month 13 / Feb 30 / day 32 — a DST-zone provider
+     like tvnu validates epoch ms through the same round-trip; see
+     `tvnu.js` `parseBroadcast()`), drop reversed /
      zero-length slots and null entries, and degrade malformed bodies to
      empty results — never emit a slot whose instant would silently roll
      into a different day/month.
    - `scrape()` — fetches pages, parses, merges, dedupes.
    - A curated channel-id map for channels that need case-sensitive or
      aliased ids (see `hurriyet.js` for the pattern).  Ids are normalized
-     to the epgshare01 reference (`epg_ripper_TR1.xml.gz`) as the source
+     to the epgshare01 reference for the provider's own country
+     (`epg_ripper_TR1.xml.gz` for the Turkish providers,
+     `epg_ripper_SE1.xml.gz` for tvnu) as the source
      of truth — diacritics kept, HD-only ids where the reference has no
-     SD variant, renamed/split feeds collapsed (NOW→FOX.tr, TV2→TEVE2.tr).
+     SD variant, renamed/split feeds collapsed (NOW→FOX.tr, TV2→TEVE2.tr;
+     tvnu collapses playlist quality variants FHD/HD/SD onto the one id
+     the Swedish reference carries per feed, e.g. `SVT.1.se` →
+     `[SVT1HD].SVT1.HD.se`).  A provider whose ids carry a source tag must
+     export `CHANNEL_ID_MAP` (name → id) for `test/reference.test.mjs` —
+     tvnu's is derived from the `CHANNELS` table.
    - If the source requires JS rendering, set `requiresBrowser: true` in
      the exported provider object.  The CLI will auto-launch Playwright.
+     Otherwise declare the guide's locale in `src/providers/index.js`:
+     `country` (filename suffix, default `TR`), `language` (`lang`
+     attribute, default `tr`) and `timeZone` (default-window anchor,
+     default `Europe/Istanbul`) — tvnu is the so-far only provider that
+     declares all three (`SE` / `sv` / `Europe/Stockholm`) because Sweden
+     observes DST.
 2. Register in `src/providers/index.js`:
    ```js
    import * as myProvider from './my-provider.js';
@@ -361,28 +408,37 @@ node bin/epg-scraper.js --list-providers
   `test/compare.test.mjs` — http-vs-browser + provider-vs-provider diff
   logic and CLI; `test/merge.test.mjs` — merge logic and CLI;
   `test/idmantv.test.mjs` — iDMAN TV weekly-page parser, scrape, CLI
-  integration; `test/reference.test.mjs` — provider id normalization against
-  the vendored epgshare01 snapshot (no network; see below).
+  integration; `test/tvnu.test.mjs` — TV.nu parser (DST offsets, 06:00 day
+  boundary), scrape, CLI integration (`_SE` filename, `lang="sv"`);
+  `test/reference.test.mjs` — provider id normalization against
+  the vendored per-country epgshare01 snapshots (TR + SE; no network — see
+  below).
 
-### Channel-id reference snapshot (keep ≤ 7 days fresh)
+### Channel-id reference snapshots (keep ≤ 7 days fresh)
 
-Provider channel ids are normalized to epgshare01's `epg_ripper_TR1.xml.gz`.
-The upstream id list is vendored at `test/fixtures/epgshare01/reference.json`
-(`{ source, updated: "YYYY-MM-DD", channelCount, knownGaps, channels }`)
+Provider channel ids are normalized to epgshare01's per-country guides: the
+Turkish providers to `epg_ripper_TR1.xml.gz`, the Swedish `tvnu` provider to
+`epg_ripper_SE1.xml.gz`.  The upstream id lists are vendored at
+`test/fixtures/epgshare01/reference.json` (TR) and
+`test/fixtures/epgshare01/reference-se.json` (SE)
+(`{ source, country, updated: "YYYY-MM-DD", channelCount, knownGaps, channels }`)
 and enforced by `test/reference.test.mjs`: every curated provider id must
-exist upstream (or sit in `knownGaps` with a reason), and the suite **fails
-when `updated` is older than 7 days**. Refresh weekly:
+exist upstream (or sit in that snapshot's `knownGaps` with a reason), and the
+suite **fails when a snapshot's `updated` is older than 7 days**.  tvnu's
+`CHANNEL_ID_MAP` is the `CHANNELS` table's id column — the per-slug map the
+test imports.  Refresh weekly:
 
 ```bash
 npm run update:reference   # re-downloads, re-extracts, stamps today's date
 npm test                    # must stay green
 ```
 
-`scripts/update-reference-ids.js` preserves `knownGaps` and reports ids
+`scripts/update-reference-ids.js` refreshes **both** snapshots (TR + SE),
+preserves each file's `knownGaps`, and reports ids
 added/removed upstream plus gaps that upstream now covers (drop those from
 `knownGaps`). If upstream renamed an id a provider uses, update the
 provider's `CHANNEL_ID_MAP` in the same change. Commit the refreshed
-`reference.json` together with any map updates.
+snapshots together with any map updates.
 
 ### Testing best practices
 
@@ -403,10 +459,14 @@ provider's `CHANNEL_ID_MAP` in the same change. Commit the refreshed
 ### When changing output shape
 
 The XMLTV output must match the epgshare01 reference format:
-- Channel id: uppercase, non-alphanum → `.`, `.tr` suffix, case-sensitive
-  exceptions mapped explicitly.
-- Programme: `start`/`stop` as `YYYYMMDDHHMMSS +0300`, `<title lang="tr">`,
-  optional `<category lang="tr">`.
+- Channel id: uppercase, non-alphanum → `.`, `.tr` suffix for the Turkish
+  guides (`.se` for the Swedish tvnu guide), case-sensitive
+  exceptions mapped explicitly.  A guide whose reference ids carry a source
+  tag (`[SVT1HD].SVT1.HD.se`) keeps the tag verbatim.
+- Programme: `start`/`stop` as `YYYYMMDDHHMMSS +0300` for the Turkish guides
+  (`+0100`/`+0200` for tvnu, following the Stockholm offset in force at each
+  instant), `<title lang="tr">` (`lang="sv"` for tvnu),
+  optional `<category lang="tr">` (same language as the title).
 - Gzip: `node:zlib` level 9, streamed via `pipeline()`.
 - Sorting: by channel (codepoint order) then start (ISO string order).
 - Deduplication: first occurrence per `(channel, start, stop)` wins.

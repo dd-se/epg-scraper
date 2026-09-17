@@ -1,0 +1,520 @@
+{
+  "source": "https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz",
+  "country": "SE",
+  "updated": "2026-09-17",
+  "channelCount": 126,
+  "knownGaps": {
+    "SVT.BARN.se": "tvnu provider channel SVT Barn; upstream publishes only the combined [COMSVHD].SVTB/SVT24.HD.se feed as of 2026-09-17.",
+    "DISNEY.CHANNEL.se": "tvnu provider channel Disney Channel; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "BBC.EARTH.se": "tvnu provider channel BBC Earth; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "MTV.HITS.se": "tvnu provider channel MTV Hits; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "TRACE.URBAN.HD.se": "tvnu provider channel Trace Urban HD; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept.",
+    "PARAMOUNT.NETWORK.se": "tvnu provider channel Paramount Network; the Swedish epgshare01 guide carries no matching id as of 2026-09-17. Generic .se slug kept."
+  },
+  "channels": [
+    {
+      "id": "Yle.TV2.HD.se",
+      "name": "Yle TV2 HD"
+    },
+    {
+      "id": "[3SATGEH].3sat.se",
+      "name": "[3SATGEH] 3sat"
+    },
+    {
+      "id": "[ALJAZEN].Al.Jazeera.English.se",
+      "name": "[ALJAZEN] Al Jazeera English"
+    },
+    {
+      "id": "[ALJZ].Al.Jazeera.(Arabic).se",
+      "name": "[ALJZ] Al Jazeera (Arabic)"
+    },
+    {
+      "id": "[ANIPLHD].Animal.Planet.HD.se",
+      "name": "[ANIPLHD] Animal Planet HD"
+    },
+    {
+      "id": "[ATGLIVE].ATG.Live.se",
+      "name": "[ATGLIVE] ATG Live"
+    },
+    {
+      "id": "[AXESSTV].Axess.TV.se",
+      "name": "[AXESSTV] Axess TV"
+    },
+    {
+      "id": "[BBCNEEU].BBC.News.se",
+      "name": "[BBCNEEU] BBC News"
+    },
+    {
+      "id": "[BBCNRDC].BBC.Nordic.se",
+      "name": "[BBCNRDC] BBC Nordic"
+    },
+    {
+      "id": "[CAN24H].Canal.24H.se",
+      "name": "[CAN24H] Canal 24H"
+    },
+    {
+      "id": "[CARTNET].Cartoon.Network.se",
+      "name": "[CARTNET] Cartoon Network"
+    },
+    {
+      "id": "[CARTOSV].Cartoonito.se",
+      "name": "[CARTOSV] Cartoonito"
+    },
+    {
+      "id": "[CESTREL].Canal.de.las.Estrellas.se",
+      "name": "[CESTREL] Canal de las Estrellas"
+    },
+    {
+      "id": "[CNBCEHD].CNBC.HD.se",
+      "name": "[CNBCEHD] CNBC HD"
+    },
+    {
+      "id": "[CNNEU].CNN.International.se",
+      "name": "[CNNEU] CNN International"
+    },
+    {
+      "id": "[COMSVHD].SVTB/SVT24.HD.se",
+      "name": "[COMSVHD] SVTB/SVT24 HD"
+    },
+    {
+      "id": "[DISCOHD].Discovery.Channel.HD.se",
+      "name": "[DISCOHD] Discovery Channel HD"
+    },
+    {
+      "id": "[DISCSCI].Discovery.Science.se",
+      "name": "[DISCSCI] Discovery Science"
+    },
+    {
+      "id": "[DPLEXT1].Discovery+.Extra.1.se",
+      "name": "[DPLEXT1] Discovery+ Extra 1"
+    },
+    {
+      "id": "[DPLEXT2].Discovery+.Extra.2.se",
+      "name": "[DPLEXT2] Discovery+ Extra 2"
+    },
+    {
+      "id": "[DPLEXT3].Discovery+.Extra.3.se",
+      "name": "[DPLEXT3] Discovery+ Extra 3"
+    },
+    {
+      "id": "[DPLEXT4].Discovery+.Extra.4.se",
+      "name": "[DPLEXT4] Discovery+ Extra 4"
+    },
+    {
+      "id": "[DPLEXT5].Discovery+.Extra.5.se",
+      "name": "[DPLEXT5] Discovery+ Extra 5"
+    },
+    {
+      "id": "[DPLEXT6].Discovery+.Extra.6.se",
+      "name": "[DPLEXT6] Discovery+ Extra 6"
+    },
+    {
+      "id": "[DPLEXT7].Discovery+.Extra.7.se",
+      "name": "[DPLEXT7] Discovery+ Extra 7"
+    },
+    {
+      "id": "[DPLEXT8].Discovery+.Extra.8.se",
+      "name": "[DPLEXT8] Discovery+ Extra 8"
+    },
+    {
+      "id": "[DR1DK].DR1.se",
+      "name": "[DR1DK] DR1"
+    },
+    {
+      "id": "[DR2HD].DR2.HD.se",
+      "name": "[DR2HD] DR2 HD"
+    },
+    {
+      "id": "[DUNASWE].Duna.TV.(Sweden).se",
+      "name": "[DUNASWE] Duna TV (Sweden)"
+    },
+    {
+      "id": "[EUROSHD].Eurosport.1.HD.se",
+      "name": "[EUROSHD] Eurosport 1 HD"
+    },
+    {
+      "id": "[EURSP2H].Eurosport.2.HD.se",
+      "name": "[EURSP2H] Eurosport 2 HD"
+    },
+    {
+      "id": "[EXTRSP].Extreme.Sports.Channel.se",
+      "name": "[EXTRSP] Extreme Sports Channel"
+    },
+    {
+      "id": "[FASHTV].FTV.HD.se",
+      "name": "[FASHTV] FTV HD"
+    },
+    {
+      "id": "[FIGSAHD].Fight.Sports.HD.se",
+      "name": "[FIGSAHD] Fight Sports HD"
+    },
+    {
+      "id": "[FMACTHD].V.Film.Action.HD.se",
+      "name": "[FMACTHD] V Film Action HD"
+    },
+    {
+      "id": "[FR2].France.2.se",
+      "name": "[FR2] France 2"
+    },
+    {
+      "id": "[GINXTVC].GINX.eSports.TV.se",
+      "name": "[GINXTVC] GINX eSports TV"
+    },
+    {
+      "id": "[H2HDSWE].H2.HD.se",
+      "name": "[H2HDSWE] H2 HD"
+    },
+    {
+      "id": "[HAYAPBO].Hayat.Plus.se",
+      "name": "[HAYAPBO] Hayat Plus"
+    },
+    {
+      "id": "[HISTOSD].History.se",
+      "name": "[HISTOSD] History"
+    },
+    {
+      "id": "[HORSECT].Horse.&amp;.Country.TV.se",
+      "name": "[HORSECT] Horse & Country TV"
+    },
+    {
+      "id": "[HRT1].HRT1.se",
+      "name": "[HRT1] HRT1"
+    },
+    {
+      "id": "[IDSWE].ID.se",
+      "name": "[IDSWE] ID"
+    },
+    {
+      "id": "[KANAL10].Kanal.10.se",
+      "name": "[KANAL10] Kanal 10"
+    },
+    {
+      "id": "[KANAL9H].Kanal.9.HD.se",
+      "name": "[KANAL9H] Kanal 9 HD"
+    },
+    {
+      "id": "[KANL11H].Kanal.11.HD.se",
+      "name": "[KANL11H] Kanal 11 HD"
+    },
+    {
+      "id": "[KANL5HD].KANAL.5.HD.se",
+      "name": "[KANL5HD] KANAL 5 HD"
+    },
+    {
+      "id": "[KUNSKHD].Kunskapskanalen.HD.se",
+      "name": "[KUNSKHD] Kunskapskanalen HD"
+    },
+    {
+      "id": "[MATKANS].Godare.se",
+      "name": "[MATKANS] Godare"
+    },
+    {
+      "id": "[MEZZHD].Mezzo.Live.se",
+      "name": "[MEZZHD] Mezzo Live"
+    },
+    {
+      "id": "[MEZZO].Mezzo.se",
+      "name": "[MEZZO] Mezzo"
+    },
+    {
+      "id": "[MTV00EU].MTV.00s.Europe.se",
+      "name": "[MTV00EU] MTV 00s Europe"
+    },
+    {
+      "id": "[MTV90].MTV.90s.se",
+      "name": "[MTV90] MTV 90s"
+    },
+    {
+      "id": "[MTVLHDE].MTV.Live.HD.se",
+      "name": "[MTVLHDE] MTV Live HD"
+    },
+    {
+      "id": "[MTVSWHD].MTV.HD.se",
+      "name": "[MTVSWHD] MTV HD"
+    },
+    {
+      "id": "[NATGEHD].National.Geographic.HD.se",
+      "name": "[NATGEHD] National Geographic HD"
+    },
+    {
+      "id": "[NATGWHD].National.Geographic.Wild.HD.se",
+      "name": "[NATGWHD] National Geographic Wild HD"
+    },
+    {
+      "id": "[NAUTCH].Nautical.Channel.se",
+      "name": "[NAUTCH] Nautical Channel"
+    },
+    {
+      "id": "[NCKJRHD].Nick.Jr..HD.se",
+      "name": "[NCKJRHD] Nick Jr. HD"
+    },
+    {
+      "id": "[NICKEHD].Nickelodeon.HD.se",
+      "name": "[NICKEHD] Nickelodeon HD"
+    },
+    {
+      "id": "[NICKTSW].Nicktoons.se",
+      "name": "[NICKTSW] Nicktoons"
+    },
+    {
+      "id": "[NRK1HD].NRK1.HD.se",
+      "name": "[NRK1HD] NRK1 HD"
+    },
+    {
+      "id": "[NRK2HD].NRK2.HD.se",
+      "name": "[NRK2HD] NRK2 HD"
+    },
+    {
+      "id": "[NRK3SU].NRK.Super./.NRK3.HD.se",
+      "name": "[NRK3SU] NRK Super / NRK3 HD"
+    },
+    {
+      "id": "[OUTSWED].OUTtv.se",
+      "name": "[OUTSWED] OUTtv"
+    },
+    {
+      "id": "[PNKPLUS].Pink.Plus.se",
+      "name": "[PNKPLUS] Pink Plus"
+    },
+    {
+      "id": "[PROTVIE].Pro.TV.int.se",
+      "name": "[PROTVIE] Pro TV int"
+    },
+    {
+      "id": "[RAIDUE].Rai.2.se",
+      "name": "[RAIDUE] Rai 2"
+    },
+    {
+      "id": "[RAIUNO].Rai.1.se",
+      "name": "[RAIUNO] Rai 1"
+    },
+    {
+      "id": "[RTK].RTK.1.se",
+      "name": "[RTK] RTK 1"
+    },
+    {
+      "id": "[RTSSATE].RTS.Sat.se",
+      "name": "[RTSSATE] RTS Sat"
+    },
+    {
+      "id": "[SFKANAL].SF.Kanalen.se",
+      "name": "[SFKANAL] SF Kanalen"
+    },
+    {
+      "id": "[SJUHD].Sjuan.HD.se",
+      "name": "[SJUHD] Sjuan HD"
+    },
+    {
+      "id": "[SKYS1SV].SkyShowtime.1.se",
+      "name": "[SKYS1SV] SkyShowtime 1"
+    },
+    {
+      "id": "[SKYS2SV].SkyShowtime.2.se",
+      "name": "[SKYS2SV] SkyShowtime 2"
+    },
+    {
+      "id": "[SPEXTV].Sport.Expressen.TV.se",
+      "name": "[SPEXTV] Sport Expressen TV"
+    },
+    {
+      "id": "[SPORTK].TV4.Sportkanalen.se",
+      "name": "[SPORTK] TV4 Sportkanalen"
+    },
+    {
+      "id": "[SURYSAT].Suryoyo.Sat.se",
+      "name": "[SURYSAT] Suryoyo Sat"
+    },
+    {
+      "id": "[SVT1HD].SVT1.HD.se",
+      "name": "[SVT1HD] SVT1 HD"
+    },
+    {
+      "id": "[SVT2HD].SVT2.HD.se",
+      "name": "[SVT2HD] SVT2 HD"
+    },
+    {
+      "id": "[TLCSWHD].TLC.HD.se",
+      "name": "[TLCSWHD] TLC HD"
+    },
+    {
+      "id": "[TRT1].TRT.1.se",
+      "name": "[TRT1] TRT 1"
+    },
+    {
+      "id": "[TRVLHDE].Travel.Channel.HD.se",
+      "name": "[TRVLHDE] Travel Channel HD"
+    },
+    {
+      "id": "[TV10HD].TV10.HD.se",
+      "name": "[TV10HD] TV10 HD"
+    },
+    {
+      "id": "[TV12HD].TV12.HD.se",
+      "name": "[TV12HD] TV12 HD"
+    },
+    {
+      "id": "[TV2DEN].TV2.se",
+      "name": "[TV2DEN] TV2"
+    },
+    {
+      "id": "[TV2NRHD].TV.2.Direkte.HD.se",
+      "name": "[TV2NRHD] TV 2 Direkte HD"
+    },
+    {
+      "id": "[TV3HD].TV3.HD.se",
+      "name": "[TV3HD] TV3 HD"
+    },
+    {
+      "id": "[TV4FAKT].TV4.Fakta.se",
+      "name": "[TV4FAKT] TV4 Fakta"
+    },
+    {
+      "id": "[TV4FILM].TV4.Film.se",
+      "name": "[TV4FILM] TV4 Film"
+    },
+    {
+      "id": "[TV4FOSV].TV4.Fotboll.se",
+      "name": "[TV4FOSV] TV4 Fotboll"
+    },
+    {
+      "id": "[TV4GULD].TV4.Guld.se",
+      "name": "[TV4GULD] TV4 Guld"
+    },
+    {
+      "id": "[TV4HD].TV4.HD.se",
+      "name": "[TV4HD] TV4 HD"
+    },
+    {
+      "id": "[TV4HISV].TV4.Hits.se",
+      "name": "[TV4HISV] TV4 Hits"
+    },
+    {
+      "id": "[TV4HOSV].TV4.Hockey.se",
+      "name": "[TV4HOSV] TV4 Hockey"
+    },
+    {
+      "id": "[TV4MOSV].TV4.Motor.se",
+      "name": "[TV4MOSV] TV4 Motor"
+    },
+    {
+      "id": "[TV4SPL1].TV4.Sport.Live.1.se",
+      "name": "[TV4SPL1] TV4 Sport Live 1"
+    },
+    {
+      "id": "[TV4SPL2].TV4.Sport.Live.2.se",
+      "name": "[TV4SPL2] TV4 Sport Live 2"
+    },
+    {
+      "id": "[TV4SPL3].TV4.Sport.Live.3.se",
+      "name": "[TV4SPL3] TV4 Sport Live 3"
+    },
+    {
+      "id": "[TV4SPL4].TV4.Sport.Live.4.se",
+      "name": "[TV4SPL4] TV4 Sport Live 4"
+    },
+    {
+      "id": "[TV4STSV].TV4.Stars.se",
+      "name": "[TV4STSV] TV4 Stars"
+    },
+    {
+      "id": "[TV4TESV].TV4.Tennis.se",
+      "name": "[TV4TESV] TV4 Tennis"
+    },
+    {
+      "id": "[TV5MON].TV5.Monde.Europe.se",
+      "name": "[TV5MON] TV5 Monde Europe"
+    },
+    {
+      "id": "[TV6HD].TV6.HD.se",
+      "name": "[TV6HD] TV6 HD"
+    },
+    {
+      "id": "[TV8HD].TV8.HD.se",
+      "name": "[TV8HD] TV8 HD"
+    },
+    {
+      "id": "[TVEINTS].TVE.Internacional.se",
+      "name": "[TVEINTS] TVE Internacional"
+    },
+    {
+      "id": "[TVFINL].TV.Finland.se",
+      "name": "[TVFINL] TV Finland"
+    },
+    {
+      "id": "[TVMONTE].TV.Montenegro.RTCG.se",
+      "name": "[TVMONTE] TV Montenegro RTCG"
+    },
+    {
+      "id": "[TVPOL].TVP.Polonia.se",
+      "name": "[TVPOL] TVP Polonia"
+    },
+    {
+      "id": "[VGOLFHD].V.Sport.Golf.HD.se",
+      "name": "[VGOLFHD] V Sport Golf HD"
+    },
+    {
+      "id": "[VIAEXPL].Viasat.Explore.se",
+      "name": "[VIAEXPL] Viasat Explore"
+    },
+    {
+      "id": "[VIAFAMI].V.Film.Family.se",
+      "name": "[VIAFAMI] V Film Family"
+    },
+    {
+      "id": "[VIAFILHD].V.Film.Premiere.HD.se",
+      "name": "[VIAFILHD] V Film Premiere HD"
+    },
+    {
+      "id": "[VIAFOHD].V.Sport.Fotboll.HD.se",
+      "name": "[VIAFOHD] V Sport Fotboll HD"
+    },
+    {
+      "id": "[VIAHIST].Viasat.History.se",
+      "name": "[VIAHIST] Viasat History"
+    },
+    {
+      "id": "[VIAHTHD].V.Film.Hits.HD.se",
+      "name": "[VIAHTHD] V Film Hits HD"
+    },
+    {
+      "id": "[VIANAT].Viasat.Nature.se",
+      "name": "[VIANAT] Viasat Nature"
+    },
+    {
+      "id": "[VIASEHD].V.Series.HD.se",
+      "name": "[VIASEHD] V Series HD"
+    },
+    {
+      "id": "[VIASMHD].V.Sport.Motor.HD.se",
+      "name": "[VIASMHD] V Sport Motor HD"
+    },
+    {
+      "id": "[VIASPHD].V.Sport.1.HD.se",
+      "name": "[VIASPHD] V Sport 1 HD"
+    },
+    {
+      "id": "[VIASPOH].V.Sport.Premium.HD.se",
+      "name": "[VIASPOH] V Sport Premium HD"
+    },
+    {
+      "id": "[VSPOVIS].V.Sport.Vinter.se",
+      "name": "[VSPOVIS] V Sport Vinter"
+    },
+    {
+      "id": "[VSSPXHD].V.Sport.Extra.HD.se",
+      "name": "[VSSPXHD] V Sport Extra HD"
+    },
+    {
+      "id": "[YLE1].Yle.TV1.se",
+      "name": "[YLE1] Yle TV1"
+    },
+    {
+      "id": "[YLE2].Yle.TV2.se",
+      "name": "[YLE2] Yle TV2"
+    },
+    {
+      "id": "[ZDFG].ZDF.se",
+      "name": "[ZDFG] ZDF"
+    }
+  ]
+}

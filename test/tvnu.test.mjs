@@ -1,0 +1,527 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import {
+  extractInitialState,
+  epochToIso,
+  stockholmDate,
+  stockholmWallClock,
+  parseBroadcast,
+  parseChannelPage,
+  parseChannelLogo,
+  previousDate,
+  dayPageUrl,
+  mapChannelId,
+  normalizeChannelKey,
+  scrape,
+  CHANNELS,
+  CHANNEL_ID_MAP,
+  BASE_URL,
+} from '../src/providers/tvnu.js';
+import { runCli } from '../src/cli.js';
+
+const fixture = (name) =>
+  readFileSync(fileURLToPath(new URL(`./fixtures/tvnu/${name}`, import.meta.url)), 'utf8');
+
+// Live snapshot of https://www.tv.nu/kanal/svt1?datum=2026-09-17 (fetched
+// 2026-09-17) reduced to its first four broadcasts; SVT1's 11:20–15:00 block.
+const svt1Day = fixture('svt1-2026-09-17.html');
+// Hand-built page-pair covering the 06:00 → 06:00 day boundary.
+const windowPrev = fixture('window-prev-2026-09-16.html');
+const windowDay = fixture('window-day-2026-09-17.html');
+const emptyDay = fixture('empty-day.html');
+const hostile = fixture('hostile.html');
+const hostileSlots = fixture('hostile-slots.html');
+const noState = fixture('no-state.html');
+const badJson = fixture('bad-json.html');
+
+const response = (html) => ({ ok: true, status: 200, text: async () => html });
+
+// Route a stubbed fetch by URL parts, like the live site (slug + datum).
+const stubFetch = (routes) => async (url) => {
+  const target = String(url);
+  for (const [needle, html] of Object.entries(routes)) {
+    if (needle.split('&').every((part) => target.includes(part))) return response(html);
+  }
+  return { ok: false, status: 404, text: async () => 'not found' };
+};
+
+describe('tvnu pure parsers', () => {
+  it('unwraps the __INITIAL_STATE__ JSON string assignment', () => {
+    const state = extractInitialState(svt1Day);
+    expect(state.schedule.name).toBe('SVT1');
+    expect(Array.isArray(state.schedule.broadcasts)).toBe(true);
+    expect(Object.keys(state)).toContain('channelList');
+  });
+
+  it('degrades to undefined when the page carries no usable state', () => {
+    expect(extractInitialState(noState)).toBeUndefined();
+    expect(extractInitialState(badJson)).toBeUndefined();
+    expect(extractInitialState('')).toBeUndefined();
+    expect(extractInitialState(null)).toBeUndefined();
+    expect(extractInitialState(undefined)).toBeUndefined();
+    // An object literal (never the site's shape) must not be eval'd either.
+    expect(extractInitialState('<script>__INITIAL_STATE__ = {a:1}</script>')).toBeUndefined();
+  });
+
+  it('stamps each instant with the Stockholm offset in force (DST aware)', () => {
+    // Summer: CEST (+02:00); winter: CET (+01:00).
+    expect(epochToIso(Date.UTC(2026, 8, 17, 9, 20))).toBe('2026-09-17T11:20:00+02:00');
+    expect(epochToIso(Date.UTC(2026, 0, 5, 12, 0))).toBe('2026-01-05T13:00:00+01:00');
+    // Spring forward: 01:59+01:00 is followed by 03:00+02:00.
+    expect(epochToIso(Date.UTC(2026, 2, 29, 0, 59))).toBe('2026-03-29T01:59:00+01:00');
+    expect(epochToIso(Date.UTC(2026, 2, 29, 1, 0))).toBe('2026-03-29T03:00:00+02:00');
+    // Autumn back: the 02:00–03:00 wall hour happens twice.
+    expect(epochToIso(Date.UTC(2026, 9, 25, 0, 30))).toBe('2026-10-25T02:30:00+02:00');
+    expect(epochToIso(Date.UTC(2026, 9, 25, 1, 0))).toBe('2026-10-25T02:00:00+01:00');
+    // Never fractional seconds, never a bare UTC marker.
+    expect(epochToIso(Date.UTC(2026, 8, 17, 9, 20) + 1500)).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/
+    );
+    expect(epochToIso(NaN)).toBeUndefined();
+    expect(epochToIso(Infinity)).toBeUndefined();
+  });
+
+  it('reports the Stockholm wall clock and calendar date', () => {
+    expect(stockholmWallClock(Date.UTC(2026, 8, 17, 9, 20))).toEqual({
+      year: 2026,
+      month: 9,
+      day: 17,
+      hour: 11,
+      minute: 20,
+      second: 0,
+      offset: '+02:00',
+    });
+    // 22:15 UTC is already the next Stockholm date in summer.
+    expect(stockholmDate(Date.UTC(2026, 8, 16, 22, 15))).toBe('2026-09-17');
+    expect(stockholmDate(Date.UTC(2026, 8, 17, 21, 59))).toBe('2026-09-17');
+    expect(stockholmDate(NaN)).toBeUndefined();
+  });
+
+  it('parses one broadcasts[] entry into an internal slot', () => {
+    const state = extractInitialState(svt1Day);
+    const entry = state.schedule.broadcasts[0];
+    expect(parseBroadcast(entry)).toEqual({
+      startMs: entry.broadcast.startTime,
+      stopMs: entry.broadcast.endTime,
+      start: '2026-09-17T11:20:00+02:00',
+      stop: '2026-09-17T12:20:00+02:00',
+      date: '2026-09-17',
+      title: 'Husdrömmar',
+      desc: expect.stringContaining('Tiny House'),
+      category: 'Dokumentär',
+      subTitle: 'Säsong 8, Avsnitt 8',
+    });
+  });
+
+  it('drops null, untitled, reversed, zero-length and impossible slots', () => {
+    const { slots } = parseChannelPage(hostileSlots);
+    expect(slots.map((s) => s.title)).toEqual(['Good slot', 'Genres']);
+    expect(slots[0]).toEqual({
+      startMs: Date.UTC(2026, 8, 17, 8, 0),
+      stopMs: Date.UTC(2026, 8, 17, 9, 30),
+      start: '2026-09-17T10:00:00+02:00',
+      stop: '2026-09-17T11:30:00+02:00',
+      date: '2026-09-17',
+      title: 'Good slot',
+      desc: undefined,
+      category: undefined,
+      subTitle: 'Avsnitt 3', // seasonNumber "x" is not an integer -> dropped
+    });
+    // Hostile genre entries are skipped until a usable name turns up.
+    expect(slots[1].category).toBe('Drama');
+  });
+it('rejects hostile broadcast payloads one by one', () => {
+    expect(parseBroadcast(null)).toBeUndefined();
+    expect(parseBroadcast(undefined)).toBeUndefined();
+    expect(parseBroadcast('nope')).toBeUndefined();
+    expect(parseBroadcast({})).toBeUndefined();
+    expect(parseBroadcast({ title: 'x' })).toBeUndefined();
+    expect(parseBroadcast({ title: 'x', broadcast: 'nope' })).toBeUndefined();
+    // zero length / reversed
+    expect(parseBroadcast({ title: 'x', broadcast: { startTime: 0, endTime: 0 } })).toBeUndefined();
+    expect(parseBroadcast({ title: 'x', broadcast: { startTime: 2, endTime: 1 } })).toBeUndefined();
+    // outside the guard window, on both ends
+    expect(parseBroadcast({ title: 'x', broadcast: { startTime: -1, endTime: 10 } })).toBeUndefined();
+    expect(
+      parseBroadcast({ title: 'x', broadcast: { startTime: 1e15, endTime: 1e15 + 1 } })
+    ).toBeUndefined();
+    // non-finite and non-string titles
+    expect(
+      parseBroadcast({ title: 'x', broadcast: { startTime: Infinity, endTime: Infinity } })
+    ).toBeUndefined();
+    expect(parseBroadcast({ title: 5, broadcast: { startTime: 1, endTime: 2 } })).toBeUndefined();
+    expect(parseBroadcast({ title: '   ', broadcast: { startTime: 1, endTime: 2 } })).toBeUndefined();
+    // Numeric strings are accepted (the page sometimes serializes them).
+    expect(
+      parseBroadcast({
+        title: 'ok',
+        broadcast: { startTime: '1789640400000', endTime: '1789644000000' },
+      })
+    ).toMatchObject({ start: '2026-09-17T12:20:00+02:00', stop: '2026-09-17T13:20:00+02:00' });
+  });
+
+  it('parses a channel-day page and its logo', () => {
+    const parsed = parseChannelPage(svt1Day);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.name).toBe('SVT1');
+    expect(parsed.slug).toBe('svt1');
+    expect(parsed.logo).toBe('https://new.static.tv.nu/47578019');
+    expect(parsed.slots.map((s) => s.start)).toEqual([
+      '2026-09-17T11:20:00+02:00',
+      '2026-09-17T12:20:00+02:00',
+      '2026-09-17T13:20:00+02:00',
+      '2026-09-17T13:25:00+02:00',
+    ]);
+    expect(parseChannelLogo(svt1Day)).toBe('https://new.static.tv.nu/47578019');
+  });
+
+  it('distinguishes a missing state from a legitimately empty day', () => {
+    const empty = parseChannelPage(emptyDay);
+    expect(empty.ok).toBe(true); // MTV Hits simply has nothing scheduled
+    expect(empty.slots).toEqual([]);
+    expect(empty.logo).toBe('https://new.static.tv.nu/372093914');
+
+    expect(parseChannelPage(noState).ok).toBe(false);
+    expect(parseChannelPage(badJson).ok).toBe(false);
+  });
+
+  it('degrades malformed channel fields instead of throwing', () => {
+    const parsed = parseChannelPage(hostile);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.name).toBeUndefined(); // numeric name
+    expect(parsed.slug).toBeUndefined(); // null slug
+    expect(parsed.logo).toBeUndefined(); // pipe-joined + non-http variants
+    expect(parsed.slots).toEqual([]); // non-array broadcasts
+  });
+
+  it('builds day URLs and walks back one day', () => {
+    expect(dayPageUrl('svt1', '2026-09-17')).toBe(`${BASE_URL}/kanal/svt1?datum=2026-09-17`);
+    expect(previousDate('2026-09-17')).toBe('2026-09-16');
+    expect(previousDate('2026-03-01')).toBe('2026-02-28');
+    expect(previousDate('2026-01-01')).toBe('2025-12-31');
+    expect(previousDate('nope')).toBeUndefined();
+  });
+
+  it('keeps the curated channel table consistent and normalized', () => {
+    const slugs = CHANNELS.map((c) => c.slug);
+    const ids = CHANNELS.map((c) => c.id);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const channel of CHANNELS) {
+      expect(channel.id.endsWith('.se')).toBe(true);
+      expect(channel.name.length).toBeGreaterThan(0);
+    }
+    expect(CHANNELS).toHaveLength(45);
+    // Ids are the Swedish epgshare01 ones where upstream carries them.
+    expect(CHANNEL_ID_MAP['SVT 1']).toBe('[SVT1HD].SVT1.HD.se');
+    expect(CHANNEL_ID_MAP['KANAL 5']).toBe('[KANL5HD].KANAL.5.HD.se');
+    expect(mapChannelId('nat geo wild')).toBe('[NATGWHD].National.Geographic.Wild.HD.se');
+    // Channels the reference does not carry keep a generic .se slug.
+    expect(mapChannelId('SVT Barn')).toBe('SVT.BARN.se');
+    expect(mapChannelId('Paramount Network')).toBe('PARAMOUNT.NETWORK.se');
+    expect(mapChannelId('No Such Channel')).toBeUndefined();
+    expect(normalizeChannelKey('  nat   geo wild ')).toBe('NAT GEO WILD');
+  });
+});
+describe('tvnu scrape (stubbed fetch)', () => {
+  // svt1 has the 06:00 → 06:00 day boundary fixtures; every other channel in
+  // the curated table gets the empty-day fixture so only one channel carries
+  // slots and the assertions stay readable.
+  const routes = (extra = {}) => ({
+    'kanal/svt1?datum=2026-09-16': windowPrev,
+    'kanal/svt1?datum=2026-09-17': windowDay,
+    'datum=': emptyDay,
+    ...extra,
+  });
+
+  it('fetches the day before the window and buckets slots by start date', async () => {
+    const seen = [];
+    const fetchImpl = async (url) => {
+      seen.push(String(url));
+      return stubFetch(routes())(url);
+    };
+
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl,
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+
+    // Both pages of the requested day were requested: the 16th (whose tail
+    // carries 00:00–06:00 of the 17th) and the 17th itself.
+    expect(seen).toEqual([
+      `${BASE_URL}/kanal/svt1?datum=2026-09-16`,
+      `${BASE_URL}/kanal/svt1?datum=2026-09-17`,
+    ]);
+
+    // In window: both small-hours slots from the previous page plus the day's
+    // own 06:00/12:00/23:00 slots.  The 16th's 07:00 and 23:30 slots and the
+    // 18th's 00:30 slot start outside the window and are dropped.
+    expect(result.programmes.map((p) => [p.title, p.start, p.stop])).toEqual([
+      ['Midnatt 17', '2026-09-17T00:15:00+02:00', '2026-09-17T01:00:00+02:00'],
+      ['Morgon 17', '2026-09-17T05:30:00+02:00', '2026-09-17T06:00:00+02:00'],
+      ['Morgon 17', '2026-09-17T06:00:00+02:00', '2026-09-17T07:00:00+02:00'],
+      ['Lunch 17', '2026-09-17T12:00:00+02:00', '2026-09-17T13:00:00+02:00'],
+      ['Kväll 17', '2026-09-17T23:00:00+02:00', '2026-09-18T00:05:00+02:00'],
+    ]);
+    expect(result.programmes.every((p) => p.channel === '[SVT1HD].SVT1.HD.se')).toBe(true);
+    expect(result.channels).toHaveLength(1);
+    expect(result.channels[0]).toEqual({
+      id: '[SVT1HD].SVT1.HD.se',
+      name: 'SVT 1',
+      icon: 'https://new.static.tv.nu/47578019',
+    });
+    expect(result.failures).toBe(0);
+    expect(result.days).toBe(1);
+  });
+
+  it('covers several requested dates and fetches the preceding day only once', async () => {
+    const seen = [];
+    const fetchImpl = async (url) => {
+      seen.push(String(url));
+      return stubFetch(routes())(url);
+    };
+    const result = await scrape({
+      dates: ['2026-09-17', '2026-09-18'],
+      fetchImpl,
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(seen).toEqual([
+      `${BASE_URL}/kanal/svt1?datum=2026-09-16`,
+      `${BASE_URL}/kanal/svt1?datum=2026-09-17`,
+      `${BASE_URL}/kanal/svt1?datum=2026-09-18`,
+    ]);
+    // 5 from the 17th (see above) + the 18th's 00:30 slot; nothing else.
+    expect(result.programmes.map((p) => p.start)).toEqual([
+      '2026-09-17T00:15:00+02:00',
+      '2026-09-17T05:30:00+02:00',
+      '2026-09-17T06:00:00+02:00',
+      '2026-09-17T12:00:00+02:00',
+      '2026-09-17T23:00:00+02:00',
+      '2026-09-18T00:30:00+02:00',
+    ]);
+    expect(result.days).toBe(2);
+    // Requests stay ordered and polite (one page per channel-day).
+    expect(seen).toHaveLength(3);
+  });
+
+  it('dedupes a slot that both day pages carry', async () => {
+    // Serving the same page for both dates makes the in-window slots appear
+    // twice; dedupe keeps one copy of each.
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({ 'kanal/svt1': windowDay, 'datum=': emptyDay }),
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.programmes.map((p) => p.start)).toEqual([
+      '2026-09-17T06:00:00+02:00',
+      '2026-09-17T12:00:00+02:00',
+      '2026-09-17T23:00:00+02:00',
+    ]);
+  });
+
+  it('treats a channel with an empty day as empty, not as a failure', async () => {
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({ 'datum=': emptyDay }),
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.programmes).toEqual([]);
+    expect(result.failures).toBe(0);
+    expect(result.channels[0].icon).toBe('https://new.static.tv.nu/372093914');
+  });
+
+  it('counts a page without schedule state as a failure but keeps going', async () => {
+    const logs = [];
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({ 'kanal/svt1?datum=2026-09-17': noState, 'datum=': emptyDay }),
+      log: (line) => logs.push(line),
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.programmes).toEqual([]);
+    expect(result.failures).toBe(1);
+    expect(logs.some((l) => l.includes('carried no schedule state'))).toBe(true);
+  });
+
+  it('degrades to an empty result when every request fails', async () => {
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: async () => {
+        throw new Error('HTTP 503');
+      },
+      politenessDelayMs: 0,
+      maxChannels: 2,
+      fetchOptions: { retries: 0 },
+    });
+    expect(result.programmes).toEqual([]);
+    expect(result.channels).toHaveLength(2); // channels are still declared
+    // Two page fetches per channel (16th + 17th) and none of them worked.
+    expect(result.failures).toBe(4);
+  });
+
+  it('honours maxChannels', async () => {
+    const seen = [];
+    await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: async (url) => {
+        seen.push(String(url));
+        return stubFetch({ 'datum=': emptyDay })(url);
+      },
+      politenessDelayMs: 0,
+      maxChannels: 3,
+    });
+    expect(new Set(seen.map((u) => u.split('/kanal/')[1].split('?')[0])).size).toBe(3);
+  });
+
+  it('falls back to a single-day window when no dates are given', async () => {
+    const result = await scrape({
+      fetchImpl: stubFetch({ 'datum=': emptyDay }),
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.days).toBe(1);
+    expect(result.programmes).toEqual([]);
+    expect(result.failures).toBe(0);
+  });
+});
+describe('tvnu cli integration (stubbed fetch, temp output)', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = path.join(
+      process.env.TMPDIR || '/tmp',
+      `epg-scraper-tvnu-${process.pid}-${Math.random().toString(36).slice(2)}`
+    );
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  const routes = {
+    'kanal/svt1?datum=2026-09-16': windowPrev,
+    'kanal/svt1?datum=2026-09-17': windowDay,
+    'datum=': emptyDay,
+  };
+
+  const runWith = async (argv) => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => stubFetch(routes)(url);
+    try {
+      return await runCli({
+        argv,
+        stdout: { write: () => {} },
+        stderr: { write: () => {} },
+        cwd: tmpDir,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  };
+
+  it('writes a Swedish guide to epg_tvnu_SE.xml.gz with lang="sv"', async () => {
+    // The 17th is served from the real SVT1 snapshot (rich fields: genres,
+    // season/episode, logo); the 16th supplies the small-hours slots.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) =>
+      stubFetch({ ...routes, 'kanal/svt1?datum=2026-09-17': svt1Day })(url);
+    let exit;
+    try {
+      exit = await runCli({
+        argv: [
+          '--provider', 'tvnu',
+          '--date', '2026-09-17',
+          '--days-forward', '0',
+          '--max-channels', '1',
+          '--delay-ms', '0',
+          '--quiet',
+        ],
+        stdout: { write: () => {} },
+        stderr: { write: () => {} },
+        cwd: tmpDir,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    expect(exit).toBe(0);
+
+    // The provider's own country decides the default filename suffix (SE).
+    const out = path.join(tmpDir, 'epg_tvnu_SE.xml.gz');
+    expect(existsSync(out)).toBe(true);
+    expect(statSync(out).size).toBeGreaterThan(300);
+
+    const xml = gunzipSync(readFileSync(out)).toString('utf8');
+    // Swedish titles are labelled Swedish, not Turkish.
+    expect(xml).toContain('<display-name lang="sv">SVT 1</display-name>');
+    expect(xml).toContain('<title lang="sv">Husdrömmar</title>');
+    expect(xml).toContain('<category lang="sv">Konst</category>');
+    expect(xml).toContain('<sub-title lang="sv">Säsong 8, Avsnitt 8</sub-title>');
+    // The channel logo from the page's own themedLogo.
+    expect(xml).toContain('<icon src="https://new.static.tv.nu/47578019" />');
+    // Instants keep the Stockholm offset, rendered as XMLTV "+0200".
+    expect(xml).toContain('<programme start="20260917001500 +0200"');
+    expect(xml).toContain('channel="[SVT1HD].SVT1.HD.se"');
+    expect(xml).not.toContain('+0300'); // never the Turkish offset
+    expect(xml).not.toContain('lang="tr"');
+  });
+
+  it('honours --no-gzip and --out', async () => {
+    const out = path.join(tmpDir, 'sweden.xml');
+    const exit = await runWith([
+      '--provider', 'tvnu',
+      '--out', out,
+      '--no-gzip',
+      '--date', '2026-09-17',
+      '--days-forward', '0',
+      '--max-channels', '1',
+      '--delay-ms', '0',
+      '--quiet',
+    ]);
+    expect(exit).toBe(0);
+    const xml = readFileSync(out, 'utf8');
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml).toContain('channel="[SVT1HD].SVT1.HD.se"');
+  });
+
+  it('refuses to write an empty guide when every page lacks schedule state', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url) => stubFetch({ 'datum=': noState })(url);
+    try {
+      const exit = await runCli({
+        argv: [
+          '--provider', 'tvnu',
+          '--date', '2026-09-17',
+          '--days-forward', '0',
+          '--max-channels', '2',
+          '--delay-ms', '0',
+          '--quiet',
+        ],
+        stdout: { write: () => {} },
+        stderr: { write: () => {} },
+        cwd: tmpDir,
+      });
+      expect(exit).toBe(1);
+      expect(existsSync(path.join(tmpDir, 'epg_tvnu_SE.xml.gz'))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects an invalid --max-channels before scraping', async () => {
+    const exit = await runWith([
+      '--provider', 'tvnu',
+      '--date', '2026-09-17',
+      '--days-forward', '0',
+      '--max-channels', '0',
+      '--delay-ms', '0',
+      '--quiet',
+    ]);
+    expect(exit).toBe(1);
+  });
+});

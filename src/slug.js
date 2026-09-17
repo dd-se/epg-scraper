@@ -6,11 +6,12 @@
 // rule (case-sensitive ids like "beIN.SPORTS.1.tr", aliases like "EUROSPORT
 // 2 INT" -> "EUROSPORT.2.TR.HD.tr"); this slug is only the fallback.
 
-export function channelIdFromName(name) {
+export function channelIdFromName(name, country = 'tr') {
   const upper = String(name == null ? '' : name).trim().toUpperCase();
   const slug = upper
     .replace(/[^A-Z0-9]+/g, '.')
     .replace(/^\.+/, '')
     .replace(/\.+$/, '');
-  return (slug || 'UNKNOWN') + '.tr';
+  const suffix = String(country == null ? 'tr' : country).trim().toLowerCase() || 'tr';
+  return (slug || 'UNKNOWN') + '.' + suffix;
 }

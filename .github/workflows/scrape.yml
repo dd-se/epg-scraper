@@ -9,6 +9,7 @@
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sporekrani_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tivibu_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_idmantv_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvnu_SE.xml.gz  (Swedish guide: lang="sv", +01:00/+02:00 Stockholm offsets)
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sports_merged_TR.xml.gz  (sports merge: tvplus + digiturkburada + sporekrani + tivibu + idmantv)
 #
 # (Replace OWNER/REPO with this repository's path. The repo must be public —
@@ -80,6 +81,11 @@ jobs:
             # One session GET + one POST per channel-day (4 channels) — the
             # provider's default 400 ms delay is polite enough.
             args: ''
+          - provider: tvnu
+            # One page per channel AND day (46 pages per window day incl. the
+            # small-hours lookback) — a full 7-day run is ~320 fetches, so an
+            # explicit polite delay like mynet's keeps scheduled runs gentle.
+            args: '--days-forward 2 --delay-ms 400'
           - provider: idmantv
             # One static weekly page covers the whole Mon–Sun week for the
             # single İdman TV channel; a fresh fixture is captured whenever

@@ -27,12 +27,16 @@ const guidesDir = values.guides || 'guide';
 const guideDate = values.date || new Date().toISOString().slice(0, 10);
 
 function providerIdFor(basename) {
-  const m = /^epg_(.+)_(?:TR|BROWSER)([.]xml(?:[.]gz)?)?$/i.exec(basename);
+  // Provider guides are epg_<id>_<COUNTRY>.xml[.gz] (TR unless the provider
+  // declares otherwise — tvnu writes _SE).  Compare-mode files insert an
+  // extra .http/.browser segment before the extension; merged guides are
+  // handled by isMergedGuide() below, not here.
+  const m = /^epg_(.+)_([A-Za-z]{2})([.]http|[.]browser)?([.]xml(?:[.]gz)?)?$/i.exec(basename);
   return m ? m[1] : undefined;
 }
 
 function isMergedGuide(basename) {
-  return /^epg_(sports_)?merged_TR[.]xml/i.test(basename);
+  return /^epg_(sports_)?merged_[A-Za-z]{2}[.]xml/i.test(basename);
 }
 
 let files = [];
@@ -45,7 +49,7 @@ try {
 }
 
 const lines = [
-  `Daily XMLTV guides for Türkiye, scraped ${guideDate} (00:30 UTC). Point your IPTV app's XMLTV/EPG source at the .xml.gz files below.`,
+  `Daily XMLTV guides (Türkiye + Sweden), scraped ${guideDate} (00:30 UTC). Point your IPTV app's XMLTV/EPG source at the .xml.gz files below.`,
   '',
   'Which provider scraped which channels:',
   '',
@@ -93,7 +97,7 @@ for (const { file, provider, channels } of providerSections) {
 if (mergedInfo) {
   const sources = providerSections.map((s) => `\`${s.file}\``).join(' + ') || 'the provider guides above';
   const count = mergedInfo.count != null ? `${mergedInfo.count} channels` : 'channel count unknown';
-  lines.push(`<details><summary><b>\`${mergedInfo.file}\`</b> — merged sports guide, ${count}</summary>`);
+  lines.push(`<details><summary><b>\`${mergedInfo.file}\`</b> — merged guide, ${count}</summary>`);
   lines.push('');
   lines.push(`Union of ${sources} (first file wins conflicting slots; channel lists per source above).`);
   lines.push('');

@@ -19,15 +19,21 @@ const HELP_TEXT = `Usage: epg-scraper [options]
 
   --provider <id>      provider adapter(s); comma-separated for --merge
                        (default: hurriyet)
-  --out <path>         output file (default: epg_<provider>_TR.xml[.gz],
-                       or epg_merged_TR.xml[.gz] with --merge)
+  --out <path>         output file (default: epg_<provider>_<COUNTRY>.xml[.gz],
+                       or epg_merged_<COUNTRY>.xml[.gz] with --merge;
+                       COUNTRY is the provider's own — TR unless it
+                       declares otherwise, e.g. tvnu writes _SE)
   --gzip / --no-gzip   write .xml.gz (default) or plain .xml
   --date YYYY-MM-DD    anchor date for the scrape window (default: today)
   --days-back N        days before the anchor to include (default: 0, max 60)
   --days-forward N     days after the anchor to include (default: 6, max 60)
   --delay-ms N         ms to wait between page fetches (default: provider
-                       default — hurriyet 250, mynet 500; mynet fetches
-                       ~90 channel pages per day, so keep this polite)
+                       default — hurriyet 250, mynet 500, tvplus 400,
+                       beinsports 300, digiturkburada 400, sporekrani 500,
+                       tivibu 400, idmantv 250, tvnu 400; mynet fetches
+                       ~90 channel pages per day and tvnu one page per
+                       channel and day (~46 per window day incl. the
+                       small-hours lookback), so keep this polite)
   --retries N          transport retries per request after the first attempt
                        (default: 2 for GET pages, 1 for API POSTs; a 5xx/
                        429 or network error is retried, a deterministic 404/
@@ -73,7 +79,8 @@ Compare mode:
 
 Merge mode:
   --provider hurriyet,mynet --merge scrapes every listed provider and writes
-  one guide (epg_merged_TR.xml[.gz]) with the union of channels and
+  one guide (epg_merged_<COUNTRY>.xml[.gz] — <COUNTRY> follows the first
+  provider, e.g. tvnu-led merges write _SE) with the union of channels and
   programmes.  Conflicting slots (same channel + time) keep the first
   provider's version, so list the most authoritative source first.  With
   --from, no server is hit at all: already-scraped guides are merged
@@ -268,7 +275,20 @@ export async function runCli({
     }
   }
 
-  const dates = buildDateRange({ referenceDate, daysBack, daysForward });
+  // The default window is anchored on the provider's own time zone, so
+  // "today" means today where the guide is watched (Stockholm for tvnu,
+  // Istanbul for the Turkish providers); `--date` overrides the anchor.
+  // `--merge --from` never touches the registry, so it keeps the default.
+  const windowProvider =
+    !(values.merge && fromFiles.length > 0) && providerIds.length > 0
+      ? getProvider(providerIds[0])
+      : undefined;
+  const dates = buildDateRange({
+    referenceDate,
+    daysBack,
+    daysForward,
+    timeZone: windowProvider ? providerTimeZone(windowProvider) : undefined,
+  });
 
   if (values.compare) {
     const compareProviders = providerIds.map((id) => getProvider(id));
@@ -346,7 +366,7 @@ export async function runCli({
   const outputPath =
     values.out != null
       ? path.resolve(cwd, values.out)
-      : path.join(cwd, `epg_${provider.id}_TR${extension}`);
+      : path.join(cwd, `epg_${provider.id}_${providerCountry(provider)}${extension}`);
 
   log(`provider: ${provider.id} (${provider.name})`);
   log(`window:   ${dates[0]} .. ${dates[dates.length - 1]} (${dates.length} day(s))`);
@@ -377,6 +397,7 @@ export async function runCli({
       outputPath,
       gzip: values.gzip,
       generatorInfoName: `epg-scraper (${provider.id})`,
+      lang: providerLanguage(provider),
     });
     log(`written:  ${outputPath} (${bytes} bytes uncompressed XML)`);
     return 0;
@@ -460,8 +481,44 @@ function parseMaxChannels(values, fail) {
 
 // Write one guide file.  Small shared helper so single/merge/compare don't
 // each re-implement the writeXmltv call.
-async function writeGuideFile({ channels, programmes, outputPath, gzip, generatorInfoName }) {
-  return writeXmltv({ channels, programmes, outputPath, gzip, generatorInfoName });
+async function writeGuideFile({ channels, programmes, outputPath, gzip, generatorInfoName, lang }) {
+  return writeXmltv({ channels, programmes, outputPath, gzip, generatorInfoName, lang });
+}
+
+// ---- Provider-declared locale defaults ----
+//
+// A provider may declare where its guide belongs:
+//   country   — output filename suffix (`epg_<id>_<COUNTRY>.xml`), default TR
+//   language  — the `lang` attribute on titles/display names, default tr
+//   timeZone  — the zone that decides what "today" means for the default
+//               date window, default Europe/Istanbul
+// Each value is validated and falls back to the Turkish default, so a
+// malformed declaration can never produce a broken filename or attribute.
+
+function providerCountry(provider) {
+  const value = provider && provider.country;
+  return typeof value === 'string' && /^[A-Za-z]{2}$/.test(value.trim())
+    ? value.trim().toUpperCase()
+    : 'TR';
+}
+
+function providerLanguage(provider) {
+  const value = provider && provider.language;
+  return typeof value === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(value.trim())
+    ? value.trim()
+    : 'tr';
+}
+
+function providerTimeZone(provider) {
+  const value = provider && provider.timeZone;
+  if (typeof value !== 'string' || value.trim() === '') return 'Europe/Istanbul';
+  try {
+    // Throws for an unknown zone; a bad declaration degrades to the default.
+    new Intl.DateTimeFormat('en-CA', { timeZone: value.trim() });
+    return value.trim();
+  } catch {
+    return 'Europe/Istanbul';
+  }
 }
 
 // --compare: scrape the provider twice (plain HTTP, then headless browser),
@@ -483,7 +540,7 @@ async function runCompare({ provider, dates, values, delayMs, transportOptions =
     const base =
       values.out != null
         ? path.resolve(cwd, stripXmltvExtension(values.out))
-        : path.join(cwd, `epg_${provider.id}_TR`);
+        : path.join(cwd, `epg_${provider.id}_${providerCountry(provider)}`);
     const httpOutput = `${base}.http${extension}`;
     const browserOutput = `${base}.browser${extension}`;
 
@@ -523,6 +580,7 @@ async function runCompare({ provider, dates, values, delayMs, transportOptions =
         outputPath,
         gzip: values.gzip,
         generatorInfoName: `epg-scraper (${provider.id})`,
+        lang: providerLanguage(provider),
       });
       write(stdout, `written: ${outputPath} (${bytes} bytes uncompressed XML) [${label}]`);
       wroteAny = true;
@@ -618,8 +676,14 @@ async function runMerge({ providers, fromFiles = [], dates, values, delayMs, tra
     }
 
     const extension = values.gzip ? '.xml.gz' : '.xml';
+    // Country and language follow the first provider — the one whose channel
+    // names and conflict precedence win.  `--merge --from` has no providers,
+    // so it keeps the Turkish defaults.
+    const leadProvider = offline ? undefined : providers[0];
     const outputPath =
-      values.out != null ? path.resolve(cwd, values.out) : path.join(cwd, `epg_merged_TR${extension}`);
+      values.out != null
+        ? path.resolve(cwd, values.out)
+        : path.join(cwd, `epg_merged_${providerCountry(leadProvider)}${extension}`);
     const generatorInfoName = offline
       ? `epg-scraper (merged files: ${fromFiles.map((f) => path.basename(f)).join('+')})`
       : `epg-scraper (merged: ${providers.map((p) => p.id).join('+')})`;
@@ -629,6 +693,7 @@ async function runMerge({ providers, fromFiles = [], dates, values, delayMs, tra
       outputPath,
       gzip: values.gzip,
       generatorInfoName,
+      lang: providerLanguage(leadProvider),
     });
     log(`written: ${outputPath} (${bytes} bytes uncompressed XML)`);
     return 0;

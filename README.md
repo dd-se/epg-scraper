@@ -3,11 +3,12 @@
 Universal EPG (electronic programme guide) scraper. Provider adapters scrape
 different TV-guide sources; the pipeline normalizes them into one internal
 model and writes **XMLTV** files matching the shape of epgshare01's
-`epg_ripper_TR1.xml.gz` reference, optionally gzipped.
+reference guides (`epg_ripper_TR1.xml.gz` for the Turkish providers,
+`epg_ripper_SE1.xml.gz` for the Swedish `tvnu` provider), optionally gzipped.
 
 ```
-source site ──> provider adapter ──> internal model ──> XMLTV writer ──> epg_<provider>_TR.xml.gz
-                (src/providers/)     (src/model.js)      (src/xmltv.js)
+source site ──> provider adapter ──> internal model ──> XMLTV writer ──> epg_<provider>_<COUNTRY>.xml.gz
+                (src/providers/)     (src/model.js)      (src/xmltv.js)   (TR unless the provider declares otherwise — tvnu writes _SE)
 ```
 
 Zero runtime dependencies (Node built-ins only); vitest is a dev dependency.
@@ -26,14 +27,24 @@ npm test
 ```
 
 Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
-`--days-back N`, `--days-forward N` (both 0–60), `--delay-ms N`, `--retries N`,
+`--days-back N`, `--days-forward N` (both 0–60), `--delay-ms N`,
+`--max-channels N`, `--retries N`,
 `--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
 `--merge`, `--from <files>`, `--alias-map <path>`, `--quiet`, `--list-providers`.
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
-digiturkburada 400, sporekrani 500, tivibu 400 —
-mynet fetches ~90 channel pages per day, so keep this polite).
+digiturkburada 400, sporekrani 500, tivibu 400, tvnu 400 —
+mynet fetches ~90 channel pages per day and tvnu one page per channel **and
+day**, so keep this polite).
+
+The default output name carries the provider's own country: `_TR` for the
+Turkish providers (the default) and `_SE` for `tvnu`, e.g.
+`epg_tvnu_SE.xml.gz`.  A provider may also declare the language of its guide
+(`tvnu` writes `lang="sv"` instead of `lang="tr"`) and the time zone that
+decides what "today" means for the default window (`tvnu` anchors on
+Stockholm, so a late-evening run in another zone still means today in
+Sweden).
 
 Transport failsafes are tunable: `--retries N` sets the retry attempts per
 request after the first (defaults: 2 for plain-HTTP page GETs, 1 for the
@@ -145,7 +156,9 @@ title/category (`[changed]`), or programmes/channels present on only one side
 (`[only http]` / `[only browser]`).  Differences do **not** fail the run —
 the mode is diagnostic.
 - Two guides are written so you can diff them:
-  `epg_<provider>_TR.http.xml[.gz]` and `epg_<provider>_TR.browser.xml[.gz]`
+  `epg_<provider>_<COUNTRY>.http.xml[.gz]` and `epg_<provider>_<COUNTRY>.browser.xml[.gz]`
+  (`<COUNTRY>` is the provider's own — `TR` unless it declares otherwise,
+  e.g. tvnu writes `epg_tvnu_SE.http.xml.gz`)
   (or derived from `--out`, e.g. `--out guide.xml` → `guide.http.xml` +
   `guide.browser.xml`).
 - Requires Playwright + Chromium (see Browser mode setup); `--compare`
@@ -196,7 +209,10 @@ node bin/epg-scraper.js --provider hurriyet,mynet --merge
   providers fill the gaps.
 - Each provider runs with its own `requiresBrowser` / `--browser` handling,
   sharing a single headless Chromium when any of them needs it.
-- One file is written: `epg_merged_TR.xml[.gz]` (or `--out path`).
+- One file is written: `epg_merged_<COUNTRY>.xml[.gz]` (or `--out path`),
+  where `<COUNTRY>` follows the first (lead) provider — `TR` unless it
+  declares otherwise, e.g. a tvnu-led merge writes `epg_merged_SE.xml.gz`.
+  Offline `--merge --from` has no providers, so it keeps `epg_merged_TR`.
   `--compare` and `--merge` cannot be combined; `--compare` supports at most
   two providers.
 
@@ -332,11 +348,18 @@ Conventions every provider must follow:
   malformed or missing page must degrade to an empty/warned result, not a crash.
 - **Fixed offset instants.** Programme `start`/`stop` are ISO 8601 strings with
   one fixed UTC offset (Turkey: `+03:00` year-round). Wall-clock slot times from
-  the page are converted with that offset.
+  the page are converted with that offset.  The one exception is a provider
+  whose country observes DST (`tvnu` — Sweden): it stamps each timestamp with
+  the Stockholm offset in force at that instant (`+01:00` winter, `+02:00`
+  summer), because a pinned offset would shift every summer programme by an
+  hour; the instants stay absolute either way.
 - **Curated channel-id map.** XMLTV channel ids follow the epgshare01
-  convention (name uppercased, non-alphanumeric runs → `.`, `.tr` suffix;
+  convention (name uppercased, non-alphanumeric runs → `.`, `.tr` suffix for
+  the Turkish guides — `.se` for the Swedish tvnu guide;
   case-sensitive exceptions like `beIN.SPORTS.1.tr` are mapped explicitly).
-  Ids are normalized to `epg_ripper_TR1.xml.gz` as the source of truth:
+  Ids are normalized to the epgshare01 guide for the provider's own country
+  (`epg_ripper_TR1.xml.gz` for the Turkish providers,
+  `epg_ripper_SE1.xml.gz` for tvnu) as the source of truth:
   diacritics are kept (`CNN.TÜRK.tr`, `TRT.ÇOCUK.tr`), stations the
   reference lists HD-only use the HD id (`A.NEWS.HD.tr`), and renamed/split
   feeds collapse onto one id (`NOW` → `FOX.tr`, `TV2` → `TEVE2.tr`,
@@ -354,6 +377,9 @@ Conventions every provider must follow:
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
+  country?: string,        // output filename suffix (default: 'TR' — tvnu: 'SE')
+  language?: string,       // `lang` attribute on titles/names (default: 'tr' — tvnu: 'sv')
+  timeZone?: string,       // default-window "today" anchor (default: 'Europe/Istanbul' — tvnu: 'Europe/Stockholm')
   scrape({                 // async
     dates,                 // YYYY-MM-DD[] — the week window
     fetchImpl,             // injected: HTTP fetch or browser fetcher
@@ -576,8 +602,79 @@ node bin/epg-scraper.js --provider mynet --date 2026-09-08 --days-forward 2 --ma
 node bin/epg-scraper.js --provider mynet --delay-ms 1000
 ```
 
-### Sports guide from the sports providers
+## Provider: tvnu (Sweden)
 
+- Source: `https://www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD` — tv.nu (Schibsted)
+  is Sweden's biggest TV guide.  Every channel page ships the whole day's
+  schedule inside the HTML as a JSON string assignment
+  (`__INITIAL_STATE__ = "…"`), so no browser/JS rendering is needed.
+- Coverage: **45 channels** — the Swedish nationals (SVT 1/2, SVT 24,
+  SVT Barn, Kunskapskanalen, TV3, TV4 + Film/Guld/Fakta, Kanal 5/9/10/11,
+  TV6, Sjuan, TV8, TV10, TV12), the Nordic pay-TV feeds (SkyShowtime 1-2,
+  SF Kanalen, TLC, BBC Nordic, BBC Earth, Discovery Channel/Science,
+  Investigation Discovery, H2, History, National Geographic, Nat Geo Wild,
+  Paramount Network, Trace Urban) and the kids/music channels (Cartoon
+  Network, Cartoonito, Disney Channel, Nickelodeon, Nick Jr., Nicktoons,
+  MTV, MTV Live, MTV 00s, MTV Hits).
+- Both `startTime` and `endTime` are published as **absolute epoch
+  milliseconds**, so stops are never guessed from the next slot.
+- Day pages run **06:00 → 06:00 local**, so the provider fetches the day
+  before the window too and buckets every slot by the date it starts on —
+  a requested day is complete from 00:00.  tv.nu also prunes already-aired
+  slots from the current day, so today's guide fills in as the day goes on.
+- Timestamps carry the **Stockholm offset in force at that instant**
+  (`+01:00` winter, `+02:00` summer) because Sweden observes DST; the
+  instants are absolute either way.  Swedish titles are emitted as
+  `<title lang="sv">`, with the first genre as `<category lang="sv">` and
+  the description as `<desc lang="sv">`.
+- Channel logos are each page's own `themedLogo` image.
+- Channel ids are normalized to epgshare01's Swedish guide
+  (`epg_ripper_SE1.xml.gz`), e.g. `[SVT1HD].SVT1.HD.se`; the few channels it
+  does not carry yet use a generic `.se` slug (e.g. `SVT.BARN.se`) and are
+  acknowledged in `test/fixtures/epgshare01/reference-se.json` `knownGaps`.
+- The provider supports `maxChannels` in `scrape()` options.
+
+```bash
+# Today's Swedish guide (default window: today, Stockholm time)
+node bin/epg-scraper.js --provider tvnu
+
+# A week, output epg_tvnu_SE.xml.gz
+node bin/epg-scraper.js --provider tvnu --days-forward 6
+
+# Quick smoke run: 3 channels for one day
+node bin/epg-scraper.js --provider tvnu --days-forward 0 --max-channels 3
+```
+
+Because one request is made per channel **and day** (plus one extra day for
+the small hours), a 7-day run of all 45 channels is ~360 fetches — raise
+`--delay-ms` if you run it often.
+
+Not available from tv.nu (verified 2026-09-17 — no such channel page,
+HTTP 404): TV4 Nyheterna, Dagens Industri TV, Barnmusik, Disney Junior,
+Discovery World, Food Network and BBC First (see `UNSUCCESSFUL.md`).
+
+### Matching tvnu's ids to your playlist
+
+A playlist usually carries several quality variants per channel (FHD/HD/SD)
+and its own `tvg-id` values.  The guide collapses those variants onto one
+canonical id per feed; where your `tvg-id`s differ, remap them with an alias
+map — the key is the id the scraper emits, the value the id your player
+expects:
+
+```json
+{
+  "[SVT1HD].SVT1.HD.se": "SVT1.se",
+  "[TV3HD].TV3.HD.se": "TV3.se"
+}
+```
+
+```bash
+# A merge run applies the alias map (and keeps the _SE country/language)
+node bin/epg-scraper.js --provider tvnu --alias-map aliases.tvnu.json --merge --out epg_tvnu_SE.xml.gz
+```
+
+
+### Sports guide from the sports providers
 ```bash
 # One guide with all 38 scrapeable sports channels
 node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu,idmantv --merge --out epg_sports_merged_TR.xml.gz
@@ -595,7 +692,9 @@ adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 `.github/workflows/scrape.yml` scrapes every provider daily at 00:30 UTC
 (03:30 TRT) and publishes the XMLTV guides as assets on a rolling `latest`
 GitHub Release. Mynet runs with an explicit `--delay-ms 500` because a
-full run is ~260 page fetches. Each provider is scraped **exactly once**:
+full run is ~260 page fetches; tvnu runs with `--delay-ms 400` because it
+fetches one page per channel **and** day (~46 pages per window day). Each
+provider is scraped **exactly once**:
 the sports-merge job downloads the per-provider artifacts and merges them
 offline (`--merge --from`), so the sports sources are never hit twice.
 Outputs are gitignored, so nothing is
@@ -619,6 +718,7 @@ after the first successful workflow run, which you can trigger manually via
 ```
 https://github.com/OWNER/REPO/releases/latest/download/epg_hurriyet_TR.xml.gz
 https://github.com/OWNER/REPO/releases/latest/download/epg_mynet_TR.xml.gz
+https://github.com/OWNER/REPO/releases/latest/download/epg_tvnu_SE.xml.gz
 ```
 
 The repository must be **public** — release assets on private repos require
@@ -647,7 +747,9 @@ Matches the epgshare01 reference exactly:
 
 Programmes are sorted by channel then start time; duplicates on
 `(channel, start, stop, title)` are removed; timestamps carry a single
-`+0300` offset like the reference file.
+`+0300` offset like the Turkish reference file — except the Swedish tvnu
+guide, whose timestamps carry the Stockholm offset in force at each instant
+(`+0100` winter / `+0200` summer) and whose titles carry `lang="sv"`.
 
 ## Tests
 
@@ -659,11 +761,14 @@ manual step (`npm run scrape`).
 Browser tests mock `playwright` via `vi.mock()` — no real browser is
 launched during `npm test`.
 
-Channel ids are normalized to epgshare01's `epg_ripper_TR1.xml.gz`. Its id
-list is vendored at `test/fixtures/epgshare01/reference.json` and enforced
-by `test/reference.test.mjs`, which fails if the snapshot is older than 7
-days — refresh it weekly with `npm run update:reference` (re-downloads the
-upstream file, preserves `knownGaps`, reports added/removed ids).
+Channel ids are normalized to epgshare01's guides.  The upstream id lists are
+vendored as `test/fixtures/epgshare01/reference.json`
+(`epg_ripper_TR1.xml.gz`, the Turkish providers) and
+`test/fixtures/epgshare01/reference-se.json` (`epg_ripper_SE1.xml.gz`, the
+Swedish `tvnu` provider), and enforced by `test/reference.test.mjs`, which
+fails if a snapshot is older than 7 days — refresh both weekly with
+`npm run update:reference` (re-downloads the upstream files, preserves each
+snapshot's `knownGaps`, reports added/removed ids).
 
 ## Layout
 
@@ -675,13 +780,14 @@ src/merge.js            multi-provider merge for --merge
 src/aliases.js          optional channel-id alias map (--alias-map)
 src/http.js             fetch helper (UA, timeout, retries)
 src/entities.js         HTML entity decoder
-src/slug.js             generic channel-id slug
+src/slug.js             generic channel-id slug (country suffix, default .tr)
 src/model.js            channel/programme model + validation
 src/registry.js         provider registry + date-range helper
 src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
-src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, …)
+src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
+scripts/update-reference-ids.js  refresh the vendored epgshare01 TR + SE id snapshots
 scripts/scraper-server.js  static file server for EPG output
 test/                   vitest suites + fixtures
 ```

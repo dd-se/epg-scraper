@@ -6,7 +6,8 @@ failed.  Each entry is a fix-me note: the channel either needs a different
 source, login/auth flow, or a bespoke scraper to be built later.
 Statements about live sites below were re-verified on 2026-09-09 unless a
 fixture/test is cited instead; the `idmantv.az` weekly page was re-fetched
-live on 2026-09-12 when the `idmantv` provider landed.
+live on 2026-09-12 when the `idmantv` provider landed, and the Swedish
+`tv.nu` channel pages on 2026-09-17 when the `tvnu` provider landed.
 
 Covered today (38 channels):
 
@@ -179,6 +180,16 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   `test/fixtures/epgshare01/reference.json` (the upstream snapshot carries
   no iDMAN TV entry); `src/providers/idmantv.js` `CHANNEL_ID_MAP` maps both
   "İdman TV" and the site's "İDMAN TELEVİZİYASI" heading onto it.
+- **Swedish channels outside tv.nu** (probed 2026-09-17 when the `tvnu`
+  provider landed — no such channel page, HTTP 404): TV4 Nyheterna
+  (`/kanal/tv4-nyheterna`), Dagens Industri TV (`/kanal/di-tv`,
+  `/kanal/dagens-industri`), Barnmusik, Disney Junior
+  (`/kanal/disney-junior`), Discovery World (`/kanal/discovery-world`),
+  Food Network (`/kanal/food-network`) and BBC First (`/kanal/bbc-first`).
+  tv.nu covers 45 Swedish/Nordic channels; those seven need another source
+  (or do not exist as linear tv.nu feeds) before they can be scraped.
 - All uncovered channels keep their epgshare01-style ids unmapped; when a
   source lands, add the id to `CHANNEL_ID_MAP` and (if missing upstream)
-  to `knownGaps` in `test/fixtures/epgshare01/reference.json`.
+  to `knownGaps` in the matching per-country snapshot
+  (`test/fixtures/epgshare01/reference.json` for TR,
+  `reference-se.json` for SE).
