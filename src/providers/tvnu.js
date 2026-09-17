@@ -1,6 +1,7 @@
 // TV.nu (Schibsted) provider — the Swedish national channels plus the
 // Nordic pay-TV feeds: SVT 1/2/SVT 24/SVT Barn/Kunskapskanalen, TV3, TV4
-// (+ Film/Guld/Fakta), Kanal 5/9/10/11, TV6, Sjuan, TV8, TV10, TV12,
+// (+ Film/Guld/Fakta/Fotboll/Hockey/Motor/Sportkanalen/Tennis/Sport Live 1-4),
+// Kanal 5/9/10/11, TV6, Sjuan, TV8, TV10, TV12,
 // SkyShowtime 1-2, SF Kanalen, Cartoon Network, Cartoonito, Disney Channel,
 // Nickelodeon, Nick Jr., Nicktoons, Animal Planet, BBC Nordic, BBC Earth,
 // Discovery Channel/Science, Investigation Discovery, H2, History, National
@@ -72,6 +73,15 @@ export const CHANNELS = [
   { slug: 'tv4-film', name: 'TV4 Film', id: '[TV4FILM].TV4.Film.se' },
   { slug: 'tv4-guld', name: 'TV4 Guld', id: '[TV4GULD].TV4.Guld.se' },
   { slug: 'tv4-fakta', name: 'TV4 Fakta', id: '[TV4FAKT].TV4.Fakta.se' },
+  { slug: 'tv4-fotboll', name: 'TV4 Fotboll', id: '[TV4FOSV].TV4.Fotboll.se' },
+  { slug: 'tv4-hockey', name: 'TV4 Hockey', id: '[TV4HOSV].TV4.Hockey.se' },
+  { slug: 'tv4-motor', name: 'TV4 Motor', id: '[TV4MOSV].TV4.Motor.se' },
+  { slug: 'tv4-sportkanalen', name: 'TV4 Sportkanalen', id: '[SPORTK].TV4.Sportkanalen.se' },
+  { slug: 'tv4-tennis', name: 'TV4 Tennis', id: '[TV4TESV].TV4.Tennis.se' },
+  { slug: 'tv4-sport-live-1', name: 'TV4 Sport Live 1', id: '[TV4SPL1].TV4.Sport.Live.1.se' },
+  { slug: 'tv4-sport-live-2', name: 'TV4 Sport Live 2', id: '[TV4SPL2].TV4.Sport.Live.2.se' },
+  { slug: 'tv4-sport-live-3', name: 'TV4 Sport Live 3', id: '[TV4SPL3].TV4.Sport.Live.3.se' },
+  { slug: 'tv4-sport-live-4', name: 'TV4 Sport Live 4', id: '[TV4SPL4].TV4.Sport.Live.4.se' },
   { slug: 'kanal-5', name: 'Kanal 5', id: '[KANL5HD].KANAL.5.HD.se' },
   { slug: 'tv6', name: 'TV6', id: '[TV6HD].TV6.HD.se' },
   { slug: 'sjuan', name: 'Sjuan', id: '[SJUHD].Sjuan.HD.se' },

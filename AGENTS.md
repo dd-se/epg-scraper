@@ -186,8 +186,9 @@ CLI tool and library.
       stamped with the repo's fixed `+03:00` like every provider — Baku is
       UTC+4/+5, so idmantv instants can sit an hour behind the Turkish
       channels while Azerbaijan observes summer time.
-    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 45 Swedish national + Nordic
-      pay-TV channels via `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`.  Each
+    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 54 Swedish national + Nordic
+      pay-TV channels, including TV4 Fotboll/Hockey/Motor/Sportkanalen/Tennis
+      and Sport Live 1–4, via `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`. Each
       day page ships the schedule as a JSON string assignment
       (`__INITIAL_STATE__ = "…"`); `extractInitialState()` /
       `parseChannelPage()` / `parseBroadcast()` are the pure parsers

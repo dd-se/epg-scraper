@@ -28,6 +28,15 @@ const fixture = (name) =>
 // Live snapshot of https://www.tv.nu/kanal/svt1?datum=2026-09-17 (fetched
 // 2026-09-17) reduced to its first four broadcasts; SVT1's 11:20–15:00 block.
 const svt1Day = fixture('svt1-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/tv4-fotboll?datum=2026-09-17
+// (fetched 2026-09-17): 7 sport broadcasts incl. BK Häcken–Mjällby 11:00.
+const fotbollDay = fixture('tv4-fotboll-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/tv4-sportkanalen?datum=2026-09-17:
+// 21 broadcasts (Fiskedestination, Stjärnkusken, Wikegård vs, ...).
+const sportkanalenDay = fixture('tv4-sportkanalen-2026-09-17.html');
+// Live snapshot of https://www.tv.nu/kanal/tv4-sport-live-1?datum=2026-09-17:
+// one item starting the following day, outside a September 17-only window.
+const sportLiveDay = fixture('tv4-sport-live-1-2026-09-17.html');
 // Hand-built page-pair covering the 06:00 → 06:00 day boundary.
 const windowPrev = fixture('window-prev-2026-09-16.html');
 const windowDay = fixture('window-day-2026-09-17.html');
@@ -214,7 +223,7 @@ it('rejects hostile broadcast payloads one by one', () => {
       expect(channel.id.endsWith('.se')).toBe(true);
       expect(channel.name.length).toBeGreaterThan(0);
     }
-    expect(CHANNELS).toHaveLength(45);
+    expect(CHANNELS).toHaveLength(54);
     // Ids are the Swedish epgshare01 ones where upstream carries them.
     expect(CHANNEL_ID_MAP['SVT 1']).toBe('[SVT1HD].SVT1.HD.se');
     expect(CHANNEL_ID_MAP['KANAL 5']).toBe('[KANL5HD].KANAL.5.HD.se');
@@ -380,6 +389,110 @@ describe('tvnu scrape (stubbed fetch)', () => {
       maxChannels: 3,
     });
     expect(new Set(seen.map((u) => u.split('/kanal/')[1].split('?')[0])).size).toBe(3);
+  });
+
+  it('maps the tv4 sports channels onto the reference ids', () => {
+    expect(mapChannelId('TV4 Fotboll')).toBe('[TV4FOSV].TV4.Fotboll.se');
+    expect(mapChannelId('TV4 Hockey')).toBe('[TV4HOSV].TV4.Hockey.se');
+    expect(mapChannelId('TV4 Motor')).toBe('[TV4MOSV].TV4.Motor.se');
+    expect(mapChannelId('TV4 Sportkanalen')).toBe('[SPORTK].TV4.Sportkanalen.se');
+    expect(mapChannelId('TV4 Tennis')).toBe('[TV4TESV].TV4.Tennis.se');
+    expect(mapChannelId('TV4 Sport Live 1')).toBe('[TV4SPL1].TV4.Sport.Live.1.se');
+    expect(mapChannelId('TV4 Sport Live 2')).toBe('[TV4SPL2].TV4.Sport.Live.2.se');
+    expect(mapChannelId('TV4 Sport Live 3')).toBe('[TV4SPL3].TV4.Sport.Live.3.se');
+    expect(mapChannelId('TV4 Sport Live 4')).toBe('[TV4SPL4].TV4.Sport.Live.4.se');
+    expect(CHANNELS).toHaveLength(54);
+    expect(CHANNEL_ID_MAP['TV4 FOTBOLL']).toBe('[TV4FOSV].TV4.Fotboll.se');
+  });
+
+  it('parses TV4 sports pages without filtering their next-day slots', () => {
+    // Parsing preserves all seven broadcasts; scrape() applies the window.
+    const fotboll = parseChannelPage(fotbollDay);
+    expect(fotboll.ok).toBe(true);
+    expect(fotboll.name).toBe('TV4 Fotboll');
+    expect(fotboll.logo).toBe('https://new.static.tv.nu/227354796');
+    expect(fotboll.slots.map((s) => [s.start, s.title])).toEqual([
+      ['2026-09-17T11:00:00+02:00', 'BK Häcken - Mjällby AIF'],
+      ['2026-09-17T14:00:00+02:00', 'Venezia FC - ACF Fiorentina'],
+      ['2026-09-17T16:30:00+02:00', 'AIK - Västerås SK'],
+      ['2026-09-17T19:30:00+02:00', 'Genoa CFC - Frosinone Calcio'],
+      ['2026-09-17T22:00:00+02:00', 'IFK Göteborg - Halmstad'],
+      ['2026-09-18T01:00:00+02:00', 'Serie A, Lazio - Milan'],
+      ['2026-09-18T05:00:00+02:00', 'Höjdpunkter'],
+    ]);
+    expect(fotboll.slots[0]).toMatchObject({
+      stop: '2026-09-17T14:00:00+02:00',
+      category: 'Fotboll',
+    });
+    expect(fotboll.slots[4].stop).toBe('2026-09-18T01:00:00+02:00');
+
+    const sportkanalen = parseChannelPage(sportkanalenDay);
+    expect(sportkanalen.ok).toBe(true);
+    expect(sportkanalen.slots).toHaveLength(21);
+    expect(sportkanalen.slots.filter((s) => s.date === '2026-09-17')).toHaveLength(19);
+    expect(sportkanalen.slots[0].title).toBe('Fiskedestination');
+    expect(sportkanalen.logo).toBe('https://new.static.tv.nu/227353196');
+
+    // This snapshot has one valid broadcast, starting outside the window.
+    const live = parseChannelPage(sportLiveDay);
+    expect(live.ok).toBe(true);
+    expect(live.name).toBe('TV4 Sport Live 1');
+    expect(live.slots).toHaveLength(1);
+    expect(live.slots[0]).toMatchObject({
+      title: 'Höjdpunkter',
+      start: '2026-09-18T05:00:00+02:00',
+      stop: '2026-09-18T18:55:00+02:00',
+    });
+  });
+
+  it('scrapes a tv4 sports channel end to end (stubbed fetch)', async () => {
+    // CHANNELS order: the 10 base channels (svt1..tv4-fakta), then the 9 TV4
+    // sports entries (indices 10-18), so maxChannels 11 reaches exactly
+    // TV4 Fotboll (index 10).
+    expect(CHANNELS[10]).toMatchObject({ slug: 'tv4-fotboll', id: '[TV4FOSV].TV4.Fotboll.se' });
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({ 'kanal/tv4-fotboll': fotbollDay, 'datum=': emptyDay }),
+      politenessDelayMs: 0,
+      maxChannels: 11,
+    });
+    const fotboll = result.programmes.filter((p) => p.channel === '[TV4FOSV].TV4.Fotboll.se');
+    expect(fotboll.map((p) => [p.title, p.start])).toEqual([
+      ['BK Häcken - Mjällby AIF', '2026-09-17T11:00:00+02:00'],
+      ['Venezia FC - ACF Fiorentina', '2026-09-17T14:00:00+02:00'],
+      ['AIK - Västerås SK', '2026-09-17T16:30:00+02:00'],
+      ['Genoa CFC - Frosinone Calcio', '2026-09-17T19:30:00+02:00'],
+      ['IFK Göteborg - Halmstad', '2026-09-17T22:00:00+02:00'],
+    ]);
+    expect(result.channels).toHaveLength(11);
+    expect(result.channels[10]).toEqual({
+      id: '[TV4FOSV].TV4.Fotboll.se',
+      name: 'TV4 Fotboll',
+      icon: 'https://new.static.tv.nu/227354796',
+    });
+    expect(result.failures).toBe(0);
+  });
+
+  it('excludes out-of-window TV4 sports slots without counting a failure', async () => {
+    const result = await scrape({
+      dates: ['2026-09-17'],
+      fetchImpl: stubFetch({
+        'kanal/tv4-sportkanalen': sportkanalenDay,
+        'kanal/tv4-sport-live-1': sportLiveDay,
+        'datum=': emptyDay,
+      }),
+      politenessDelayMs: 0,
+    });
+    expect(result.channels).toHaveLength(54);
+    expect(result.programmes).toHaveLength(19);
+    expect(result.programmes.every((p) => p.channel === '[SPORTK].TV4.Sportkanalen.se')).toBe(true);
+    expect(result.programmes.every((p) => p.start.startsWith('2026-09-17'))).toBe(true);
+    expect(result.channels.find((c) => c.id === '[TV4SPL1].TV4.Sport.Live.1.se')).toEqual({
+      id: '[TV4SPL1].TV4.Sport.Live.1.se',
+      name: 'TV4 Sport Live 1',
+      icon: 'https://new.static.tv.nu/227356274',
+    });
+    expect(result.failures).toBe(0);
   });
 
   it('falls back to a single-day window when no dates are given', async () => {

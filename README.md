@@ -608,9 +608,10 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
   is Sweden's biggest TV guide.  Every channel page ships the whole day's
   schedule inside the HTML as a JSON string assignment
   (`__INITIAL_STATE__ = "…"`), so no browser/JS rendering is needed.
-- Coverage: **45 channels** — the Swedish nationals (SVT 1/2, SVT 24,
+- Coverage: **54 channels** — the Swedish nationals (SVT 1/2, SVT 24,
   SVT Barn, Kunskapskanalen, TV3, TV4 + Film/Guld/Fakta, Kanal 5/9/10/11,
-  TV6, Sjuan, TV8, TV10, TV12), the Nordic pay-TV feeds (SkyShowtime 1-2,
+  TV6, Sjuan, TV8, TV10, TV12), nine TV4 sports feeds (Fotboll, Hockey,
+  Motor, Sportkanalen, Tennis, Sport Live 1–4), the Nordic pay-TV feeds (SkyShowtime 1-2,
   SF Kanalen, TLC, BBC Nordic, BBC Earth, Discovery Channel/Science,
   Investigation Discovery, H2, History, National Geographic, Nat Geo Wild,
   Paramount Network, Trace Urban) and the kids/music channels (Cartoon
@@ -646,7 +647,7 @@ node bin/epg-scraper.js --provider tvnu --days-forward 0 --max-channels 3
 ```
 
 Because one request is made per channel **and day** (plus one extra day for
-the small hours), a 7-day run of all 45 channels is ~360 fetches — raise
+the small hours), a 7-day run of all 54 channels is 432 fetches — raise
 `--delay-ms` if you run it often.
 
 Not available from tv.nu (verified 2026-09-17 — no such channel page,

@@ -186,7 +186,8 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   `/kanal/dagens-industri`), Barnmusik, Disney Junior
   (`/kanal/disney-junior`), Discovery World (`/kanal/discovery-world`),
   Food Network (`/kanal/food-network`) and BBC First (`/kanal/bbc-first`).
-  tv.nu covers 45 Swedish/Nordic channels; those seven need another source
+  The `tvnu` provider covers 54 Swedish/Nordic channels, including nine TV4
+  sports feeds; those seven need another source
   (or do not exist as linear tv.nu feeds) before they can be scraped.
 - All uncovered channels keep their epgshare01-style ids unmapped; when a
   source lands, add the id to `CHANNEL_ID_MAP` and (if missing upstream)
