@@ -11,13 +11,15 @@ source site ──> provider adapter ──> internal model ──> XMLTV writer
                 (src/providers/)     (src/model.js)      (src/xmltv.js)   (TR unless the provider declares otherwise — tvnu writes _SE)
 ```
 
-Zero runtime dependencies (Node built-ins only); vitest is a dev dependency.
-Playwright is an **optional** runtime dependency for JS-rendered providers.
+Plain-HTTP scraping and XMLTV processing use Node built-ins only. Browser
+mode is optional, but Playwright is currently a regular dependency in
+`package.json` and is installed by `npm install`. Vitest and saxes are dev
+dependencies; Chromium installation is a separate browser-mode setup step.
 
 ## Usage
 
 ```bash
-npm install                  # dev dependencies (vitest) only
+npm install                  # package dependencies, including Playwright and test tools
 npm run scrape               # hurriyet provider, epg_hurriyet_TR.xml.gz
 npm run scrape:gz            # same (gzip is the default)
 node bin/epg-scraper.js --list-providers
@@ -59,10 +61,10 @@ provider's re-auth failsafe repairs.  Raise `--retries` for unreliable
 links, lower `--timeout-ms`
  to fail fast on dead hosts.
 
-Sports channels are covered by the `tvplus`, `beinsports`, `digiturkburada`,
-`sporekrani`, `tivibu`, and `idmantv` providers (38 channels together); see
-the dedicated sections below and `UNSUCCESSFUL.md` for the channels that still
-have no public scrapeable source.
+The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
+`digiturkburada`, `sporekrani`, `tivibu`, and `idmantv` (38 channels together).
+Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
+sections below and `UNSUCCESSFUL.md` for channels still lacking a usable source.
 
 ## Browser mode
 
@@ -234,6 +236,12 @@ node bin/epg-scraper.js --merge --from guides/epg_a_TR.xml.gz,guides/epg_b_TR.xm
 - Accepts plain `.xml` and gzipped `.xml.gz` (detected by extension).
 - `--provider` is ignored when `--from` is given; `--alias-map` still
   applies, so aliased channel ids collapse across files.
+- **Language limitation:** offline merge defaults to `_TR` filenames and
+  `lang="tr"` for names, titles, descriptions and categories, even for Swedish
+  input files. Text and timestamp offsets are retained, but input language
+  metadata is not preserved. `--out ..._SE.xml.gz` changes only the filename;
+  there is currently no CLI language override. Keep the original Swedish
+  guide when preserving `lang="sv"` is required.
 - This is how CI avoids scraping twice: per-provider jobs upload their
   guides, the sports-merge job downloads them and merges offline.
 
@@ -385,7 +393,8 @@ Conventions every provider must follow:
     fetchImpl,             // injected: HTTP fetch or browser fetcher
     log,                   // (line) => void — progress output
     politenessDelayMs,     // ms between page fetches
-    fetchOptions,          // passed through to fetchText
+    fetchOptions,          // transport options for fetchText / fetchResponseWithRetry
+    maxChannels,           // optional channel cap where supported (including tvnu)
   }) => Promise<{ channels, programmes, days, failures }>
 }
 ```
@@ -539,10 +548,12 @@ node bin/epg-scraper.js --provider tivibu --date 2026-09-08
 - The page occasionally appends a stray cross-channel note to the last
   Sunday slots (e.g. "… (canlı) Mədəniyyət TV") — emitted verbatim, as
   published.
-- Offset caveat: the site's HH:MM are Baku wall times (UTC+4, UTC+5 during
-  Azerbaijan's late-March → late-October DST).  Timestamps are stamped with
-  the repo's fixed `+03:00` like every provider so the merged guide keeps a
-  single offset.
+- Offset caveat: the site's HH:MM are Baku wall times (UTC+4 year-round
+  in 2026 — Azerbaijan abolished DST in 2016). The provider stamps them with
+  the fixed `+04:00` offset, so emitted instants match the source times.
+  A merged guide legitimately carries both `+03:00` (Turkish channels) and
+  `+04:00` (İdman TV) stamps; consumers must compare instants, not strings —
+  which the scraper's writer and reader already do.
 
 ```bash
 # Any day inside the published week (fixture dates: 2026-09-07 .. 2026-09-13)
@@ -611,8 +622,9 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
 - Coverage: **54 channels** — the Swedish nationals (SVT 1/2, SVT 24,
   SVT Barn, Kunskapskanalen, TV3, TV4 + Film/Guld/Fakta, Kanal 5/9/10/11,
   TV6, Sjuan, TV8, TV10, TV12), nine TV4 sports feeds (Fotboll, Hockey,
-  Motor, Sportkanalen, Tennis, Sport Live 1–4), the Nordic pay-TV feeds (SkyShowtime 1-2,
-  SF Kanalen, TLC, BBC Nordic, BBC Earth, Discovery Channel/Science,
+  Motor, Sportkanalen, Tennis, Sport Live 1–4), the Nordic pay-TV feeds
+  (SkyShowtime 1-2, SF Kanalen, TLC, Animal Planet, BBC Nordic, BBC Earth,
+  Discovery Channel/Science,
   Investigation Discovery, H2, History, National Geographic, Nat Geo Wild,
   Paramount Network, Trace Urban) and the kids/music channels (Cartoon
   Network, Cartoonito, Disney Channel, Nickelodeon, Nick Jr., Nicktoons,
@@ -620,9 +632,11 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
 - Both `startTime` and `endTime` are published as **absolute epoch
   milliseconds**, so stops are never guessed from the next slot.
 - Day pages run **06:00 → 06:00 local**, so the provider fetches the day
-  before the window too and buckets every slot by the date it starts on —
-  a requested day is complete from 00:00.  tv.nu also prunes already-aired
-  slots from the current day, so today's guide fills in as the day goes on.
+  before the window too and buckets every slot by the date it starts on.
+  This includes available small-hours slots, but does not guarantee complete
+  coverage: tv.nu prunes already-aired slots from the current day, and the
+  lookback cannot recover data removed upstream. A later scrape may therefore
+  contain fewer of today's programmes, not a more complete day.
 - Timestamps carry the **Stockholm offset in force at that instant**
   (`+01:00` winter, `+02:00` summer) because Sweden observes DST; the
   instants are absolute either way.  Swedish titles are emitted as
@@ -690,14 +704,16 @@ adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 
 ## Scheduled scrapes (GitHub Actions)
 
-`.github/workflows/scrape.yml` scrapes every provider daily at 00:30 UTC
-(03:30 TRT) and publishes the XMLTV guides as assets on a rolling `latest`
-GitHub Release. Mynet runs with an explicit `--delay-ms 500` because a
-full run is ~260 page fetches; tvnu runs with `--delay-ms 400` because it
-fetches one page per channel **and** day (~46 pages per window day). Each
-provider is scraped **exactly once**:
-the sports-merge job downloads the per-provider artifacts and merges them
-offline (`--merge --from`), so the sports sources are never hit twice.
+`.github/workflows/scrape.yml` runs the configured providers daily at
+00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets on a rolling
+`latest` GitHub Release. The matrix excludes beinsports because
+DigiturkBurada already covers its beIN 1–4 feeds with full-day schedules.
+Mynet runs with an explicit `--delay-ms 500` because a full run is ~260
+page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 54 channels ×
+(3 requested days + 1 lookback day) = 216 requests before retries.
+The sports-merge job reuses per-provider artifacts via offline merge
+(`--merge --from`), rather than performing a second scrape for merging.
+Transport retries and whole-provider retry attempts can still repeat requests.
 Outputs are gitignored, so nothing is
 committed — and if a day's scrape fails, the previous release stays live.
 
@@ -746,11 +762,15 @@ Matches the epgshare01 reference exactly:
 </tv>
 ```
 
-Programmes are sorted by channel then start time; duplicates on
-`(channel, start, stop, title)` are removed; timestamps carry a single
-`+0300` offset like the Turkish reference file — except the Swedish tvnu
+Programmes are sorted by channel (codepoint order), then start instant;
+equal instants are ordered by their ISO strings for deterministic output.
+The writer keeps the first occurrence per `(channel, start, stop)`, even if
+titles differ. Turkish providers stamp one
+`+0300` offset like the Turkish reference file. Exceptions: the Swedish tvnu
 guide, whose timestamps carry the Stockholm offset in force at each instant
-(`+0100` winter / `+0200` summer) and whose titles carry `lang="sv"`.
+(`+0100` winter / `+0200` summer) and whose titles carry `lang="sv"`; and
+İdman TV, stamped `+0400` (Baku, no DST) — a merged guide may carry
+`+0300` and `+0400` side by side.
 
 ## Tests
 

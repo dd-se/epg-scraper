@@ -5,19 +5,21 @@ EPG scraper tool and the rules every patch must follow.
 
 ## Product
 
-This repository contains **epg-scraper**, a zero-dependency Node.js CLI
-tool that scrapes TV programme-guide sources through pluggable provider
-adapters and outputs **XMLTV** files (optionally gzipped) matching the
-shape of epgshare01's `epg_ripper_TR1.xml.gz` reference.
+This repository contains **epg-scraper**, a Node.js CLI tool whose
+plain-HTTP scraping and XMLTV processing use built-ins only. It scrapes
+TV programme-guide sources through pluggable provider adapters and outputs
+**XMLTV** files (optionally gzipped) matching epgshare01's per-country
+references (`epg_ripper_TR1.xml.gz` and `epg_ripper_SE1.xml.gz`).
 
-It does NOT ship a Tizen app, a web UI, or a server. It is a build-time
-CLI tool and library.
+The product is a build-time CLI tool and library, not a Tizen app or web UI.
+Development tooling includes a static file server in
+`scripts/scraper-server.js`; it is not required for scraping.
 
 ## Non-negotiable constraints
 
-- **Node ≥ 18.** The tool uses built-in `fetch`, `node:zlib`, `node:stream`,
-  and `node:util` — no runtime dependencies. Do not add runtime deps
-  except Playwright (optional, for browser mode).
+- **Node ≥ 18.** The plain-HTTP tool uses built-in `fetch`, `node:zlib`,
+  `node:stream`, and `node:util`. Do not add runtime dependencies beyond
+  Playwright, which is used only for browser functionality.
 - **ES modules only.** The project uses `"type": "module"`. All source files
   are `.js` with `import`/`export`. Test files are `.mjs`.
 - **No eval.** Provider adapters must parse scraped HTML with regexes or
@@ -27,17 +29,20 @@ CLI tool and library.
   `test/fixtures/` and stubbed `fetchImpl` — never against live sites.
   Browser tests mock `playwright` via `vi.mock()`. Live scraping is a
   manual step (`npm run scrape`).
-- **Runtime dependencies.** Zero by default. Playwright is an optional
-  runtime dependency loaded via dynamic `import()` only when `--browser`
-  is passed or a provider sets `requiresBrowser: true`.  A clear error
-  is thrown if it is not installed.
+- **Runtime dependencies.** Playwright is currently a regular dependency
+  in `package.json` (not an npm optional dependency). Browser functionality
+  is optional: Playwright is dynamically imported for browser mode,
+  browser-required providers, or HTTP-vs-browser comparison. Plain-HTTP
+  scraping does not need it. Missing Playwright produces a clear error
+  when browser functionality is requested.
 - **Politeness.** Provider adapters use sequential page fetches with a
   configurable delay, a browser-like User-Agent, and bounded retries.
   No telemetry, no hidden endpoints.
 - **Honest errors.** Malformed or unavailable remote data degrades to an
   empty/warned result — never a crash of the CLI.
 - **Fixed-offset timestamps.** Programme `start`/`stop` are ISO 8601
-  strings with one fixed UTC offset (Turkey: `+03:00` year-round).
+  strings with one fixed UTC offset (Turkey: `+03:00` year-round; İdman TV
+  — Baku — is `+04:00` year-round, since Azerbaijan abolished DST in 2016).
   Providers must never emit fractional seconds or bare UTC offsets.
   A provider whose country observes DST (`tvnu` — Sweden) instead stamps
   each timestamp with the offset in force at that instant (`+01:00` winter,
@@ -182,10 +187,12 @@ CLI tool and library.
       (`parseBrandLogo()`, from the `w-nav-brand` header image).  Stops
       derive from the next slot (24:00 for the last), matching beinsports.
       Titles are emitted verbatim (the page sometimes appends a stray
-      cross-channel note to the last Sunday slots).  Baku wall times are
-      stamped with the repo's fixed `+03:00` like every provider — Baku is
-      UTC+4/+5, so idmantv instants can sit an hour behind the Turkish
-      channels while Azerbaijan observes summer time.
+      cross-channel note to the last Sunday slots). Baku is UTC+4 year-round
+      in 2026 — Azerbaijan abolished DST in 2016 (tzdb `Asia/Baku`), so the
+      provider stamps Baku wall times with the fixed `+04:00` (`BAKU_ISO_
+      OFFSET`), keeping emitted instants equal to the source's. The XMLTV
+      writer/reader compare start/stop as instants, so a merged guide carrying
+      both `+03:00` and `+04:00` timestamps stays correct.
     - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 54 Swedish national + Nordic
       pay-TV channels, including TV4 Fotboll/Hockey/Motor/Sportkanalen/Tennis
       and Sport Live 1–4, via `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`. Each
@@ -247,20 +254,26 @@ the dependency chain flows upward: providers → registry/http/xmltv/model/slug 
 
 `--provider` accepts a comma-separated list; the mode is selected by flags:
 
-- **Single (default)** — one provider, one guide (`epg_<id>_TR.xml[.gz]`).
+- **Single (default)** — one provider, one guide
+  (`epg_<id>_<COUNTRY>.xml[.gz]`; `TR` by default, `SE` for tvnu).
   `--browser` forces browser rendering; `--stealth` adds anti-bot
   fingerprint masking + scroll/mouse simulation to browser mode.
-- **Compare (`--compare`)** — runs twice and diffs the results.  With one
-  provider: plain HTTP vs a headless browser.  With two (`--provider a,b`):
-  the two providers' guides channel by channel (e.g. is hurriyet's ATV
-  schedule the same as mynet's?).  Both sides are written as
-  `epg_compare.<id>.xml[.gz]`.  Requires Playwright + Chromium.
+- **Compare (`--compare`)** — with one provider, compares plain HTTP with
+  headless Chromium (requires Playwright + Chromium), writing
+  `epg_<id>_<COUNTRY>.http.xml[.gz]` and
+  `epg_<id>_<COUNTRY>.browser.xml[.gz]`. With two (`--provider a,b`), compares
+  the providers' guides channel by channel and writes
+  `epg_compare.<id>.xml[.gz]` for each. Two-provider comparison needs a
+  browser only with `--browser` or a browser-required provider. `--out`
+  overrides the base used to derive comparison filenames.
 - **Merge (`--merge`)** — scrapes every listed provider and writes ONE guide
-  (`epg_merged_TR.xml[.gz]`) with the union of channels and programmes; the
-  first provider wins conflicts, later ones fill the gaps.  With `--from
-  a.xml.gz,b.xml.gz` no server is hit: already-scraped guides are merged
-  offline (file order sets the precedence) — this is how CI scrapes each
-  provider exactly once and merges the artifacts.
+  (`epg_merged_<COUNTRY>.xml[.gz]`); country and language follow the first
+  provider. The first provider wins conflicts, later ones fill the gaps.
+  With `--from a.xml.gz,b.xml.gz`, no server is hit: already-scraped guides
+  are merged offline (file order sets precedence). Offline merge defaults
+  to `_TR` and `lang="tr"`, even for Swedish input; input language metadata
+  is not preserved, and changing `--out` cannot change that language.
+  CI uses offline merge to avoid scraping the sports providers twice.
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
   canonicalizes channel ids in compare and merge (e.g. mynet's `AHABER.tr`
   and hurriyet's `A.HABER.tr` collapse onto one channel).
@@ -270,7 +283,9 @@ most two providers; multiple providers without either flag is an error.
 
 ## Provider contract
 
-Every provider adapter must export:
+Every provider registration in `src/providers/index.js` must supply the
+following contract (adapter modules export the parsers, constants and
+`scrape()` used by that registration):
 
 ```js
 {
@@ -278,6 +293,9 @@ Every provider adapter must export:
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
+  country?: string,        // filename suffix; default TR, tvnu SE
+  language?: string,       // output lang attribute; default tr, tvnu sv
+  timeZone?: string,       // today anchor; default Europe/Istanbul, tvnu Europe/Stockholm
   scrape({                 // async, returns { channels, programmes, days, failures }
     dates,                 // YYYY-MM-DD[] — the week window to cover
     fetchImpl,             // injected: HTTP fetch or browser fetcher
@@ -289,7 +307,7 @@ Every provider adapter must export:
                              // timeoutMs, retryDelayMs, ... — set by the CLI
                              // flags --retries / --timeout-ms /
                              // --retry-delay-ms)
-    maxChannels,           // optional cap on the number of channels (mynet)
+    maxChannels,           // optional channel cap where supported (including tvnu)
   }) => Promise<{ channels, programmes, days, failures }>
 }
 ```
@@ -317,9 +335,10 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
    - Pure parser function(s) — no I/O, fully fixture-testable.  Apply the
      hostile-input hardening rules from the constraints above: validate
      wall-clock times AND calendar dates before converting (a `Date.UTC`
-     round-trip catches month 13 / Feb 30 / day 32 — a DST-zone provider
-     like tvnu validates epoch ms through the same round-trip; see
-     `tvnu.js` `parseBroadcast()`), drop reversed /
+     round-trip catches month 13 / Feb 30 / day 32). For absolute epoch-ms
+     sources such as tvnu, validate finite values within the supported
+     instant range and require stop > start; `parseBroadcast()` uses this
+     approach rather than a wall-calendar round-trip. Drop reversed /
      zero-length slots and null entries, and degrade malformed bodies to
      empty results — never emit a slot whose instant would silently roll
      into a different day/month.
@@ -337,8 +356,8 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
      export `CHANNEL_ID_MAP` (name → id) for `test/reference.test.mjs` —
      tvnu's is derived from the `CHANNELS` table.
    - If the source requires JS rendering, set `requiresBrowser: true` in
-     the exported provider object.  The CLI will auto-launch Playwright.
-     Otherwise declare the guide's locale in `src/providers/index.js`:
+     its registration. The CLI will auto-launch Playwright.
+     Independently, declare the guide's locale in `src/providers/index.js`:
      `country` (filename suffix, default `TR`), `language` (`lang`
      attribute, default `tr`) and `timeZone` (default-window anchor,
      default `Europe/Istanbul`) — tvnu is the so-far only provider that
@@ -466,17 +485,21 @@ The XMLTV output must match the epgshare01 reference format:
   tag (`[SVT1HD].SVT1.HD.se`) keeps the tag verbatim.
 - Programme: `start`/`stop` as `YYYYMMDDHHMMSS +0300` for the Turkish guides
   (`+0100`/`+0200` for tvnu, following the Stockholm offset in force at each
-  instant), `<title lang="tr">` (`lang="sv"` for tvnu),
-  optional `<category lang="tr">` (same language as the title).
+  instant; `+0400` for idmantv — Baku year-round), `<title lang="tr">`
+  (`lang="sv"` for tvnu), optional `<category lang="tr">` (same language as
+  the title).
 - Gzip: `node:zlib` level 9, streamed via `pipeline()`.
-- Sorting: by channel (codepoint order) then start (ISO string order).
+- Sorting: by channel (codepoint order), then start instant; ISO string
+  order breaks ties between equal instants for deterministic output.
 - Deduplication: first occurrence per `(channel, start, stop)` wins.
 
 ### Adding a new i18n category mapping
 
-If a provider introduces new `data-type` or genre values, add them to the
-provider's `CATEGORY_MAP` object. Categories are emitted as
-`<category lang="tr">Label</category>` — use Turkish labels.
+If a provider introduces new `data-type` or genre values that need mapping,
+add them to the provider's `CATEGORY_MAP` object. Use labels in the guide's
+language: Turkish providers emit `<category lang="tr">Label</category>`;
+tvnu preserves the source's Swedish genre names with `lang="sv"`. Do not
+translate Swedish categories into Turkish.
 
 ## Commit best practices
 

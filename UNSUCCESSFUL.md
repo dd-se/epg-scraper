@@ -171,11 +171,10 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   navigation).  Programme titles are Azerbaijani, and the site occasionally
   appends a stray cross-channel note (e.g. "Mədəniyyət TV", "AZTV") to the
   last Sunday slots — emitted verbatim.  **Baku offset caveat:** the site's
-  wall times are Baku time (UTC+4, UTC+5 during Azerbaijan's late-March →
-  late-October DST), but the provider stamps the repo's fixed `+03:00`
-  (like every other provider) so the merged guide keeps one offset —
-  iDMAN TV's slot instants can be an hour behind the guide's other Turkish
-  channels while Baku observes summer time.
+  wall times are Baku time (UTC+4 year-round in 2026 — Azerbaijan abolished
+  DST in 2016), and the provider stamps them with the fixed `+04:00`, so
+  emitted instants match the source times. A merged guide legitimately
+  carries both `+03:00` and `+04:00` stamps; compare instants, not strings.
 - **idmantv's channel id** `IDMAN.TV.tr` was added to `knownGaps` in
   `test/fixtures/epgshare01/reference.json` (the upstream snapshot carries
   no iDMAN TV entry); `src/providers/idmantv.js` `CHANNEL_ID_MAP` maps both
