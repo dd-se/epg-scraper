@@ -7,14 +7,17 @@
 
 // ---- Wall-clock <-> ISO conversion (fixed +03:00, Turkey) ----
 
-// Wall-clock date (Y/M/D in Istanbul) + minutes since day start -> ISO instant
-// stamped with the fixed +03:00 offset.  Minutes >= 1440 (slots crossing
-// midnight) roll into the next day via Date.UTC overflow; negative minutes
-// roll back into the previous day.  Callers MUST pre-validate the calendar
-// date (see isRealCalendarDate) — Date.UTC silently normalizes overflow.
-export function wallToIso(year, month, day, minutes) {
+// Wall-clock date (Y/M/D in the guide's time zone) + minutes since day start
+// -> ISO instant stamped with a fixed UTC offset.  Minutes >= 1440 (slots
+// crossing midnight) roll into the next day via Date.UTC overflow; negative
+// minutes roll back into the previous day.  Callers MUST pre-validate the
+// calendar date (see isRealCalendarDate) — Date.UTC silently normalizes
+// overflow.  `offset` defaults to the Turkish fixed +03:00; a provider whose
+// country does not share it (idmantv — Baku, UTC+4 year-round) passes its own
+// (see idmantv.js `BAKU_ISO_OFFSET`).
+export function wallToIso(year, month, day, minutes, offset = '+03:00') {
   const ms = Date.UTC(year, month - 1, day, 0, minutes);
-  return new Date(ms).toISOString().slice(0, 19) + '+03:00';
+  return new Date(ms).toISOString().slice(0, 19) + offset;
 }
 
 // True when (year, month, day) is a real calendar date.  Date.UTC silently

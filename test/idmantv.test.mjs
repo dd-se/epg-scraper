@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,8 @@ import {
   weekPageUrl,
 } from '../src/providers/idmantv.js';
 import { runCli } from '../src/cli.js';
+import { generateXmltv, parseXmltv } from '../src/xmltv.js';
+import { mergeResults } from '../src/merge.js';
 
 const fixture = (name) =>
   readFileSync(fileURLToPath(new URL(`./fixtures/idmantv/${name}`, import.meta.url)), 'utf8');
@@ -157,6 +159,72 @@ describe('idmantv pure parsers', () => {
   });
 });
 describe('idmantv scrape (stubbed fetch)', () => {
+  it('stamps Baku wall times with the correct +04:00 offset', async () => {
+    const result = await scrape({
+      dates: ['2026-09-12'],
+      fetchImpl: async () => response(program),
+      politenessDelayMs: 0,
+    });
+    // Baku is UTC+4 year-round since 2016; the page's 01:00 slot is the
+    // 2026-09-11T21:00Z instant, not the +03:00-mislabeled 22:00Z.
+    expect(result.programmes[0]).toEqual({
+      channel: 'IDMAN.TV.tr',
+      start: '2026-09-12T01:00:00+04:00',
+      stop: '2026-09-12T03:00:00+04:00',
+      title: 'Bədii film.”Şöhrət qanadlarında”',
+    });
+    expect(result.programmes[result.programmes.length - 1].stop).toBe(
+      '2026-09-13T00:00:00+04:00'
+    );
+  });
+
+  it('writes idmantv guide with +04:00 XMLTV timestamps and valid instants', async () => {
+    const result = await scrape({
+      dates: ['2026-09-12'],
+      fetchImpl: async () => response(program),
+      politenessDelayMs: 0,
+    });
+    expect(result.programmes.length).toBeGreaterThan(0);
+    const xml = generateXmltv({
+      channels: result.channels,
+      programmes: result.programmes,
+      lang: 'tr',
+    });
+    expect(xml).toContain('start="20260912010000 +0400"');
+    expect(xml).toContain('stop="20260912030000 +0400"');
+    // The parsed guide has consistent absolute instants (writer guards
+    // stop <= start; parseXmltv echoes the stamps).
+    const parsed = parseXmltv(xml);
+    expect(parsed.programmes[0].start).toBe('2026-09-12T01:00:00+04:00');
+    expect(parsed.programmes[0].stop).toBe('2026-09-12T03:00:00+04:00');
+  });
+
+  it('round-trips a merged idmantv+other guide without writer errors', async () => {
+    const idman = await scrape({
+      dates: ['2026-09-12'],
+      fetchImpl: async () => response(program),
+      politenessDelayMs: 0,
+    });
+    const other = {
+      providerId: 'other',
+      channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }],
+      programmes: [
+        { channel: 'KANAL.D.tr', start: '2026-09-12T13:00:00+03:00', stop: '2026-09-12T14:00:00+03:00', title: 'X' },
+      ],
+    };
+    // Must not throw "stop <= start": merge sees both offsets, the writer
+    // compares stop>start as instants and emits a guide with two offsets.
+    const merged = mergeResults([idman, other], (x) => x);
+    expect(merged.programmes.map((p) => p.channel)).toContain('IDMAN.TV.tr');
+    expect(merged.programmes.map((p) => p.channel)).toContain('KANAL.D.tr');
+    const idmanMerged = merged.programmes.filter((p) => p.channel === 'IDMAN.TV.tr');
+    expect(idmanMerged[0].start).toBe('2026-09-12T01:00:00+04:00');
+    expect(idmanMerged[0].stop).toBe('2026-09-12T03:00:00+04:00');
+    const otherMerged = merged.programmes.filter((p) => p.channel === 'KANAL.D.tr');
+    expect(otherMerged[0]).toMatchObject({ start: '2026-09-12T13:00:00+03:00' });
+    generateXmltv({ channels: merged.channels, programmes: merged.programmes, lang: 'tr' });
+  });
+
   it('serves only the requested dates from the published week', async () => {
     const result = await scrape({
       dates: ['2026-09-12'],
@@ -167,15 +235,17 @@ describe('idmantv scrape (stubbed fetch)', () => {
     expect(result.programmes.every((p) => p.channel === 'IDMAN.TV.tr')).toBe(true);
     // The channel carries the site's brand logo.
     expect(result.channels[0].icon).toBe('https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png');
+    // Baku is UTC+4 year-round, so the page's 01:00 wall time is the
+    // 2026-09-11T21:00Z instant — not the +03:00-mislabeled 22:00Z.
     expect(result.programmes[0]).toEqual({
       channel: 'IDMAN.TV.tr',
-      start: '2026-09-12T01:00:00+03:00',
-      stop: '2026-09-12T03:00:00+03:00',
+      start: '2026-09-12T01:00:00+04:00',
+      stop: '2026-09-12T03:00:00+04:00',
       title: 'Bədii film.”Şöhrət qanadlarında”',
     });
     // Last slot's stop derives from end of day (24:00).
     expect(result.programmes[result.programmes.length - 1].stop).toBe(
-      '2026-09-13T00:00:00+03:00'
+      '2026-09-13T00:00:00+04:00'
     );
   });
 
@@ -244,8 +314,8 @@ describe('idmantv scrape (stubbed fetch)', () => {
     expect(result.programmes).toHaveLength(1);
     expect(result.programmes[0]).toEqual({
       channel: 'IDMAN.TV.tr',
-      start: '2026-09-07T10:00:00+03:00',
-      stop: '2026-09-08T00:00:00+03:00',
+      start: '2026-09-07T10:00:00+04:00',
+      stop: '2026-09-08T00:00:00+04:00',
       title: 'Bar',
     });
   });

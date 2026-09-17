@@ -27,13 +27,13 @@
 // last slots of a day (e.g. "… (canlı) Mədəniyyət TV"), which is emitted
 // verbatim — it is what the page actually shows.
 //
-// Times are Baku wall time; Baku is UTC+4 except the month-long DST shift
-// (late March → late October) when it is UTC+5.  The repo standardizes on
-// the fixed +03:00 offset used across the Turkish guide (Turkey has no
-// DST), which for Baku is off by one hour while Azerbaijan observes summer
-// time.  wallToIso() stamps +03:00 like every other provider so the merged
-// guide keeps a single fixed offset; providers must never emit bare UTC
-// offsets or fractional seconds.
+// Times are Baku wall time.  Baku is UTC+4 year-round: Azerbaijan abolished
+// DST in 2016 (tzdb Asia/Baku: 4:00 Azer %z since 1997, RULES Azer 1997..2015
+// — no DST after the 2016 cancellation).  Stamping the page's HH:MM with the
+// Turkish +03:00 would mislabel every instant by one hour, so this provider
+// stamps +04:00.  Mixed offsets are safe end to end: the XMLTV writer and
+// reader compare start/stop as absolute instants, not as strings.  Providers
+// must never emit bare UTC offsets or fractional seconds.
 //
 // A programme's stop is derived from the next slot's start (24:00 for the
 // last slot), matching the mynet/beinsports/digiturkburada convention.
@@ -54,6 +54,11 @@ export { normalizeChannelKey };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://idmantv.az';
+
+// Baku's fixed offset for the page's wall times.  Azerbaijan abolished DST in
+// 2016 (tzdb Asia/Baku), so +04:00 applies year-round — stamping the shared
+// Turkish +03:00 here would mislabel every instant by one hour.
+export const BAKU_ISO_OFFSET = '+04:00';
 
 // The weekly page path — the only endpoint this provider talks to.
 export const WEEK_PAGE_PATH = '/az/program';
@@ -237,12 +242,12 @@ export async function scrape({
     const { year, month, day: dayNum } = splitDate(date);
     for (let s = 0; s < day.slots.length; s++) {
       const slot = day.slots[s];
-      const start = wallToIso(year, month, dayNum, slot.startMin);
+      const start = wallToIso(year, month, dayNum, slot.startMin, BAKU_ISO_OFFSET);
       const endMin = s + 1 < day.slots.length ? day.slots[s + 1].startMin : 24 * 60;
       // A repeated time on a day (same slot listed twice) would make a
       // zero-length programme — skip it instead of emitting garbage.
       if (endMin <= slot.startMin) continue;
-      const stop = wallToIso(year, month, dayNum, endMin);
+      const stop = wallToIso(year, month, dayNum, endMin, BAKU_ISO_OFFSET);
       programmes.push({ channel: channel.id, start, stop, title: slot.title });
     }
     log(`ok:   ${day.dayName} (${date}): ${day.slots.length} programmes`);
