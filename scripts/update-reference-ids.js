@@ -24,21 +24,13 @@ import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeEntities } from '../src/entities.js';
+import { REFERENCE_SNAPSHOTS } from '../src/provider-catalog.js';
 
-// One snapshot per country guide we normalize provider ids against.  `file`
-// lives in test/fixtures/epgshare01/ and keeps the same schema for both.
-export const SNAPSHOTS = [
-  {
-    country: 'TR',
-    file: 'reference.json',
-    url: 'https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz',
-  },
-  {
-    country: 'SE',
-    file: 'reference-se.json',
-    url: 'https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz',
-  },
-];
+export const SNAPSHOTS = REFERENCE_SNAPSHOTS.map((snapshot) => ({
+  country: snapshot.country,
+  file: path.basename(snapshot.file),
+  url: snapshot.url,
+}));
 
 const root = path.dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
 const today = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD

@@ -78,9 +78,9 @@ describe('hurriyet wallToIso', () => {
     expect(wallToIso(2026, 9, 7, 0)).toBe('2026-09-07T00:00:00+03:00');
   });
 
-  it('rolls minutes beyond 1440 into the next day', () => {
-    expect(wallToIso(2026, 9, 7, 24 * 60 + 30)).toBe('2026-09-08T00:30:00+03:00');
-    expect(wallToIso(2026, 9, 30, 25 * 60)).toBe('2026-10-01T01:00:00+03:00'); // month rollover
+  it('rejects minutes beyond end-of-day instead of rolling hostile input', () => {
+    expect(wallToIso(2026, 9, 7, 24 * 60 + 30)).toBeUndefined();
+    expect(wallToIso(2026, 9, 30, 25 * 60)).toBeUndefined();
   });
 });
 
@@ -158,6 +158,9 @@ describe('hurriyet scrape (stubbed week)', () => {
     // Every programme's channel must be a known channel id.
     const ids = new Set(result.channels.map((c) => c.id));
     expect(result.programmes.every((p) => ids.has(p.channel))).toBe(true);
+    expect(
+      result.programmes.some((programme) => programme.stop.slice(0, 10) > programme.start.slice(0, 10))
+    ).toBe(true);
     expect(logs.some((l) => l.startsWith('ok:'))).toBe(true);
   });
 

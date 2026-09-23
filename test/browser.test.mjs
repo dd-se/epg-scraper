@@ -53,6 +53,7 @@ beforeEach(() => {
 
 // Import browser.js once — the top-level vi.mock intercepts import('playwright').
 import { createBrowserFetcher, isPlaywrightAvailable } from '../src/browser.js';
+import { fetchText } from '../src/http.js';
 
 describe('createBrowserFetcher', () => {
   it('launches a headless Chromium and returns a fetchImpl-compatible function', async () => {
@@ -81,6 +82,32 @@ describe('createBrowserFetcher', () => {
     expect(mocks.browser.close).toHaveBeenCalled();
   });
 
+  it('rejects non-GET requests before opening a page', async () => {
+    const { fetchImpl, close } = await createBrowserFetcher();
+    await expect(
+      fetchImpl('https://example.com/api', { method: 'POST', body: '{}' })
+    ).rejects.toThrow(/GET requests only/);
+    expect(mocks.context.newPage).not.toHaveBeenCalled();
+    await close();
+  });
+
+  it('honors the transport abort signal while content is pending', async () => {
+    mocks.page.content.mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const { fetchImpl, close } = await createBrowserFetcher();
+    const pending = fetchImpl('https://example.com/page', { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toThrow(/aborted/);
+    expect(mocks.page.close).toHaveBeenCalled();
+    await close();
+  });
+
+  it('closes Chromium when context setup fails', async () => {
+    mocks.browser.newContext.mockRejectedValue(new Error('context failed'));
+    await expect(createBrowserFetcher()).rejects.toThrow('context failed');
+    expect(mocks.browser.close).toHaveBeenCalled();
+  });
+
   it('closes the page even when goto throws', async () => {
     mocks.page.goto.mockRejectedValue(new Error('Navigation timeout'));
     const { fetchImpl, close } = await createBrowserFetcher();
@@ -90,6 +117,31 @@ describe('createBrowserFetcher', () => {
     );
     expect(mocks.page.close).toHaveBeenCalled();
 
+    await close();
+  });
+
+  it('preserves navigation status for transport retry decisions', async () => {
+    mocks.page.goto
+      .mockResolvedValueOnce({ status: () => 503, ok: () => false })
+      .mockResolvedValueOnce({ status: () => 200, ok: () => true });
+    const { fetchImpl, close } = await createBrowserFetcher();
+    const html = await fetchText('https://example.com/page', {
+      fetchImpl,
+      retries: 1,
+      retryDelayMs: 0,
+    });
+    expect(html).toContain('rendered');
+    expect(mocks.page.goto).toHaveBeenCalledTimes(2);
+    await close();
+  });
+
+  it('uses the configured navigation timeout', async () => {
+    const { fetchImpl, close } = await createBrowserFetcher({ timeoutMs: 4321 });
+    await fetchImpl('https://example.com/page');
+    expect(mocks.page.goto).toHaveBeenCalledWith(
+      'https://example.com/page',
+      expect.objectContaining({ timeout: 4321 })
+    );
     await close();
   });
 

@@ -12,20 +12,18 @@
 
 import { decodeEntities } from '../entities.js';
 import { channelIdFromName } from '../slug.js';
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
   weekDays,
   weekdayIndex,
-  dedupeProgrammes,
+  parseClockMinutes,
   finishResult,
 } from './shared.js';
 
 // Re-exported for the other providers and tests that import the wall-clock
 // and week helpers from this module (historical import site).
 export { wallToIso, weekDays };
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://www.hurriyet.com.tr';
 export const DAY_SLUGS = [
@@ -176,8 +174,9 @@ export function parseDayPage(html) {
       if (!title || !time) continue;
 
       const [, sh, sm, eh, em] = time;
-      const startMin = Number(sh) * 60 + Number(sm);
-      const endClock = Number(eh) * 60 + Number(em);
+      const startMin = parseClockMinutes(Number(sh), Number(sm));
+      const endClock = parseClockMinutes(Number(eh), Number(em), { allowEndOfDay: true });
+      if (startMin == null || endClock == null) continue;
       const duration = (endClock - startMin + 1440) % 1440 || 1440;
 
       const dataType = matchOne(attrs, /data-type="([^"]*)"/);
@@ -194,6 +193,18 @@ export function parseDayPage(html) {
   return { channels, slots, rowCount: rowChunks.length };
 }
 
+function wallSlotToIso(year, month, day, minutes) {
+  const dayOffset = Math.floor(minutes / 1440);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day + dayOffset);
+  return wallToIso(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+    minutes % 1440
+  );
+}
+
 export function slugForDate(date) {
   return DAY_SLUGS[weekdayIndex(date)]; // Mon=0..Sun=6
 }
@@ -208,8 +219,12 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 250,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const channelsById = new Map();
   const channels = [];
   const programmes = [];
@@ -234,7 +249,7 @@ export async function scrape({
     } catch (error) {
       failures++;
       log(`warn: ${date} (${slug}) fetch failed: ${error.message}`);
-      continue;
+        continue;
     }
 
     const { channels: dayChannels, slots, rowCount } = parseDayPage(html);
@@ -265,8 +280,8 @@ export async function scrape({
         skipped++;
         continue;
       }
-      const start = wallToIso(year, month, day, slot.startMin);
-      const stop = wallToIso(year, month, day, slot.endMin);
+      const start = wallSlotToIso(year, month, day, slot.startMin);
+      const stop = wallSlotToIso(year, month, day, slot.endMin);
       programmes.push({
         channel: mapChannelId(channel.name),
         start,
@@ -279,9 +294,8 @@ export async function scrape({
       log(`warn: ${date}: ${skipped} slots skipped (row index without rail channel)`);
     }
     log(`ok:   ${date} (${slug}): ${dayChannels.length} channels, ${slots.length} slots`);
-    await sleep(politenessDelayMs);
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
-  return finishResult({ channels, programmes, days: week.length, failures });
+  return finishResult({ channels, programmes, days: week.length, failures, log });
 }

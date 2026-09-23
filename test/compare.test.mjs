@@ -11,6 +11,7 @@ import {
 import { registerProvider } from '../src/registry.js';
 import { runCli } from '../src/cli.js';
 import { createCanonicalizer } from '../src/aliases.js';
+import { fetchText } from '../src/http.js';
 
 // --- pure comparison logic ---
 
@@ -450,6 +451,25 @@ describe('cli --compare', () => {
     expect(mocks.browser.close).not.toHaveBeenCalled();
   });
 
+  it('validates --max-channels before launching the browser', async () => {
+    registerProvider({
+      id: 'invalid-cap-compare',
+      name: 'Invalid Cap Compare',
+      baseUrl: 'https://example.com',
+      scrape: async () => httpResult,
+    });
+    const stderr = [];
+    const exit = await runCli({
+      argv: ['--provider', 'invalid-cap-compare', '--compare', '--max-channels', '0'],
+      stdout: { write: () => {} },
+      stderr: { write: (line) => stderr.push(line) },
+      cwd: tmpDir,
+    });
+    expect(exit).toBe(1);
+    expect(stderr.join('')).toMatch(/positive integer/);
+    expect(mocks.chromium.launch).not.toHaveBeenCalled();
+  });
+
   it('compares two providers channel by channel and writes both sides', async () => {
     const cmpA = {
       channels: [{ id: 'ATV.tr', name: 'ATV' }],
@@ -518,6 +538,91 @@ describe('cli --compare', () => {
     // cmp-b's side contains the channel cmp-a lacks.
     const bXml = readFileSync(path.join(tmpDir, 'cmp.cmp-b.xml'), 'utf8');
     expect(bXml).toContain('<channel id="NTV.tr">');
+  });
+
+  it('writes each provider-comparison side with its declared language', async () => {
+    const result = {
+      channels: [{ id: 'KANAL.D.se', name: 'KANAL D' }],
+      programmes: [
+        {
+          channel: 'KANAL.D.se',
+          start: '2026-09-07T15:00:00+03:00',
+          stop: '2026-09-07T16:00:00+03:00',
+          title: 'Program',
+        },
+      ],
+      days: 1,
+      failures: 0,
+    };
+    registerProvider({
+      id: 'cmp-sv',
+      name: 'Swedish',
+      baseUrl: 'https://sv',
+      language: 'sv',
+      scrape: async () => result,
+    });
+    registerProvider({
+      id: 'cmp-de',
+      name: 'German',
+      baseUrl: 'https://de',
+      language: 'de',
+      scrape: async () => result,
+    });
+
+    const exit = await runCli({
+      argv: [
+        '--provider',
+        'cmp-sv,cmp-de',
+        '--compare',
+        '--no-gzip',
+        '--out',
+        path.join(tmpDir, 'language.xml'),
+      ],
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      cwd: tmpDir,
+    });
+
+    expect(exit).toBe(0);
+    expect(readFileSync(path.join(tmpDir, 'language.cmp-sv.xml'), 'utf8')).toContain('lang="sv"');
+    expect(readFileSync(path.join(tmpDir, 'language.cmp-de.xml'), 'utf8')).toContain('lang="de"');
+  });
+
+  it('passes the CLI timeout to browser navigation', async () => {
+    registerProvider({
+      id: 'timeout-compare-fake',
+      name: 'Timeout Compare Fake',
+      baseUrl: 'https://example.com',
+      scrape: async ({ fetchImpl, fetchOptions }) => {
+        if (fetchImpl) {
+          await fetchText('https://example.com/page', { fetchImpl, ...fetchOptions });
+          return browserResult;
+        }
+        return httpResult;
+      },
+    });
+
+    const exit = await runCli({
+      argv: [
+        '--provider',
+        'timeout-compare-fake',
+        '--compare',
+        '--timeout-ms',
+        '4321',
+        '--no-gzip',
+        '--out',
+        path.join(tmpDir, 'timeout.xml'),
+      ],
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      cwd: tmpDir,
+    });
+
+    expect(exit).toBe(0);
+    expect(mocks.page.goto).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ timeout: 4321 })
+    );
   });
 
   it('passes --stealth through to the browser launch', async () => {

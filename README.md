@@ -22,6 +22,7 @@ dependencies; Chromium installation is a separate browser-mode setup step.
 npm install                  # package dependencies, including Playwright and test tools
 npm run scrape               # hurriyet provider, epg_hurriyet_TR.xml.gz
 npm run scrape:gz            # same (gzip is the default)
+npm run inventory           # print provider, CI, and merge inventory
 node bin/epg-scraper.js --list-providers
 node bin/epg-scraper.js --provider hurriyet --no-gzip --out out/guide.xml
 node bin/epg-scraper.js --provider hurriyet --date 2026-09-14   # anchor week
@@ -45,21 +46,20 @@ Turkish providers (the default) and `_SE` for `tvnu`, e.g.
 `epg_tvnu_SE.xml.gz`.  A provider may also declare the language of its guide
 (`tvnu` writes `lang="sv"` instead of `lang="tr"`) and the time zone that
 decides what "today" means for the default window (`tvnu` anchors on
-Stockholm, so a late-evening run in another zone still means today in
-Sweden).
+Stockholm and `idmantv` on Baku, so a late-evening run in another zone
+still means today in the guide's country).
 
 Transport failsafes are tunable: `--retries N` sets the retry attempts per
 request after the first (defaults: 2 for plain-HTTP page GETs, 1 for the
 JSON/form API POSTs), `--timeout-ms N` the per-request hard timeout
-(default 20000), and `--retry-delay-ms N` the base backoff between
-attempts (default 400, scaled linearly per attempt).  Transient failures
-(HTTP 5xx/429, network errors, timeouts) are retried; deterministic
-statuses fail on the first attempt — 404/410 (and 403 on page GETs, e.g.
-WAF-blocked hosts) are never retried, while 403 on the API POSTs stays
-retryable because TV+/Tivibu use it to signal an expired session that the
-provider's re-auth failsafe repairs.  Raise `--retries` for unreliable
-links, lower `--timeout-ms`
- to fail fast on dead hosts.
+(default 20000, including response-body consumption), and
+`--retry-delay-ms N` the base backoff between attempts (default 400,
+scaled linearly per attempt). Transient failures (HTTP 5xx/429, network
+errors, timeouts, body-read failures) are retried. Deterministic statuses
+fail on the first attempt: 404/410 and 403 on GET requests. Session API POST
+403 remains retryable; TV+ rebuilds its session once after exhaustion, while
+Tivibu records the failed channel-day. Raise `--retries` for unreliable
+links, or lower `--timeout-ms` to fail fast on dead hosts.
 
 The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
 `digiturkburada`, `sporekrani`, `tivibu`, and `idmantv` (38 channels together).
@@ -236,12 +236,10 @@ node bin/epg-scraper.js --merge --from guides/epg_a_TR.xml.gz,guides/epg_b_TR.xm
 - Accepts plain `.xml` and gzipped `.xml.gz` (detected by extension).
 - `--provider` is ignored when `--from` is given; `--alias-map` still
   applies, so aliased channel ids collapse across files.
-- **Language limitation:** offline merge defaults to `_TR` filenames and
-  `lang="tr"` for names, titles, descriptions and categories, even for Swedish
-  input files. Text and timestamp offsets are retained, but input language
-  metadata is not preserved. `--out ..._SE.xml.gz` changes only the filename;
-  there is currently no CLI language override. Keep the original Swedish
-  guide when preserving `lang="sv"` is required.
+- The first valid input language is preserved, so an offline merge of
+  Swedish guides keeps `lang="sv"`. Country is not encoded in XMLTV, so the
+  default output filename still uses `_TR`; pass `--out ..._SE.xml.gz` when
+  the desired asset name is Swedish.
 - This is how CI avoids scraping twice: per-provider jobs upload their
   guides, the sports-merge job downloads them and merges offline.
 
@@ -343,12 +341,16 @@ node scripts/dev-tools.js status browser     # check CDP endpoint
 ## Adding a provider
 
 1. Create `src/providers/<id>.js` exporting:
-   - `id`-relevant constants (`BASE_URL`, …),
-   - a pure parser `parse<X>(html) -> data` (no I/O — keep it fixture-testable),
-   - `async scrape({ dates, fetchImpl, log, ... }) -> { channels, programmes }`.
-2. Register it in `src/providers/index.js` (`registerProvider({ id, name, baseUrl, scrape })`).
-   Set `requiresBrowser: true` if the source needs JS rendering.
-3. Add fixtures under `test/fixtures/<id>/` and tests under `test/`.
+   - `BASE_URL` and a curated `CHANNEL_ID_MAP`,
+   - pure fixture-testable parsers,
+   - `async scrape({ dates, fetchImpl, log, ... })` returning through
+     `finishResult()`.
+2. Add one entry to `src/provider-catalog.js` with its display name,
+   country/language/time zone, browser capability, reference country, CI
+   arguments, and sports-profile membership. `src/providers/index.js` derives
+   registrations from that catalog.
+3. Add fixtures, provider tests, and any intentional provider-inventory
+   assertions.
 
 Conventions every provider must follow:
 
@@ -385,9 +387,10 @@ Conventions every provider must follow:
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
+  browserCompatible?: false, // POST/session sources opt out of browser rendering
   country?: string,        // output filename suffix (default: 'TR' — tvnu: 'SE')
   language?: string,       // `lang` attribute on titles/names (default: 'tr' — tvnu: 'sv')
-  timeZone?: string,       // default-window "today" anchor (default: 'Europe/Istanbul' — tvnu: 'Europe/Stockholm')
+  timeZone?: string,       // default-window "today" anchor (Istanbul default; tvnu Stockholm; idmantv Baku)
   scrape({                 // async
     dates,                 // YYYY-MM-DD[] — the week window
     fetchImpl,             // injected: HTTP fetch or browser fetcher
@@ -395,7 +398,7 @@ Conventions every provider must follow:
     politenessDelayMs,     // ms between page fetches
     fetchOptions,          // transport options for fetchText / fetchResponseWithRetry
     maxChannels,           // optional channel cap where supported (including tvnu)
-  }) => Promise<{ channels, programmes, days, failures }>
+  }) => Promise<{ channels, programmes, days, failures, language }>
 }
 ```
 
@@ -403,7 +406,9 @@ When `requiresBrowser` is true (or `--browser` is passed), `fetchImpl` is
 a Playwright-backed function that opens each URL in a headless Chromium tab,
 waits for network idle, and returns the rendered HTML.  Provider code
 that calls `fetchImpl(url)` works unchanged — the browser layer is
-transparent.
+transparent. Registrations with `browserCompatible: false` are rejected before
+any scrape when `--browser` or a one-provider browser comparison would assign
+browser transport to them.
 
 ## Provider: hurriyet
 
@@ -417,8 +422,8 @@ transparent.
   `column-time` as `HH:MM - HH:MM`). Rail↔rows pairing is **positional**.
   Channel logos come from the rail `<img src>` with the deploy-version
   `?v=…` query stripped so guide diffs stay stable.
-- Programme slots after midnight roll into the next day (`wallToIso` handles
-  minutes ≥ 1440 via date overflow).
+- Programme slots after midnight are normalized to the next calendar date
+  before the shared wall-time converter stamps the stop instant.
 - Genres: the page's `data-type` values map to Turkish category labels
   (`dizi` → `Dizi`, `film` → `Film`, …). The source has no descriptions, so
   `<desc>` is not emitted.
@@ -706,13 +711,14 @@ adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 
 ## Scheduled scrapes (GitHub Actions)
 
-`.github/workflows/scrape.yml` runs the configured providers daily at
+`.github/workflows/scrape.yml` builds its matrix and sports-merge inputs
+from `src/provider-catalog.js`, then runs the configured providers daily at
 00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets on a rolling
 `latest` GitHub Release. The matrix excludes beinsports because
 DigiturkBurada already covers its beIN 1–4 feeds with full-day schedules.
 Mynet runs with an explicit `--delay-ms 500` because a full run is ~260
-page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 54 channels ×
-(3 requested days + 1 lookback day) = 216 requests before retries.
+page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 69 channels ×
+(3 requested days + 1 lookback day) = 276 requests before retries.
 The sports-merge job reuses per-provider artifacts via offline merge
 (`--merge --from`), rather than performing a second scrape for merging.
 Transport retries and whole-provider retry attempts can still repeat requests.
@@ -804,12 +810,15 @@ src/aliases.js          optional channel-id alias map (--alias-map)
 src/http.js             fetch helper (UA, timeout, retries)
 src/entities.js         HTML entity decoder
 src/slug.js             generic channel-id slug (country suffix, default .tr)
-src/model.js            channel/programme model + validation
+src/model.js            guide-result normalization + strict writer validation
+src/time.js             wall-clock, guide-instant, and XMLTV timestamp semantics
 src/registry.js         provider registry + date-range helper
+src/provider-catalog.js authored provider, reference, CI, and sports inventory
 src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
 src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
+scripts/provider-inventory.js  print provider/CI/sports inventory projections
 scripts/update-reference-ids.js  refresh the vendored epgshare01 TR + SE id snapshots
 scripts/scraper-server.js  static file server for EPG output
 test/                   vitest suites + fixtures

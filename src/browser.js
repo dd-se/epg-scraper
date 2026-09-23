@@ -128,6 +128,28 @@ async function loadPlaywright() {
   }
 }
 
+function withAbort(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error('browser fetch aborted'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(new Error('browser fetch aborted'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
 /**
  * Create a browser-backed fetcher compatible with the `fetchImpl` contract
  * used by `fetchText()`.
@@ -173,64 +195,69 @@ export async function createBrowserFetcher(options = {}) {
     args: launchArgs,
   });
 
-  const context = await browser.newContext({
-    userAgent,
-    viewport: { width: viewportWidth, height: viewportHeight },
-    // Block heavy resources that aren't needed for EPG scraping.
-    bypassCSP: true,
-    ...(stealth
-      ? {
-          locale: 'tr-TR',
-          timezoneId: 'Europe/Istanbul',
-          extraHTTPHeaders: clientHintHeaders(userAgent),
-        }
-      : {}),
-  });
+  try {
+    const context = await browser.newContext({
+      userAgent,
+      viewport: { width: viewportWidth, height: viewportHeight },
+      bypassCSP: true,
+      ...(stealth
+        ? {
+            locale: 'tr-TR',
+            timezoneId: 'Europe/Istanbul',
+            extraHTTPHeaders: clientHintHeaders(userAgent),
+          }
+        : {}),
+    });
 
-  if (stealth) {
-    await context.addInitScript(STEALTH_INIT_SCRIPT);
-  }
-
-  // Per-page resource budget: skip images, stylesheets, fonts, media.
-  await context.route('**/*', (route) => {
-    const type = route.request().resourceType();
-    if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
-      return route.abort();
+    if (stealth) {
+      await context.addInitScript(STEALTH_INIT_SCRIPT);
     }
-    return route.continue();
-  });
 
-  /**
-   * fetchImpl-compatible function.  Returns a Response-like object so
-   * fetchText() in http.js works unchanged.
-   */
-  async function fetchImpl(url, _fetchOptions) {
-    const page = await context.newPage();
-    try {
-      await page.goto(String(url), {
-        waitUntil,
-        timeout: timeoutMs,
-      });
-      if (stealth) {
-        await simulateHumanInteraction(page);
+    await context.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
+        return route.abort();
       }
-      const html = await page.content();
-      return { ok: true, status: 200, text: async () => html };
-    } finally {
-      await page.close().catch(() => {});
+      return route.continue();
+    });
+
+    async function fetchImpl(url, fetchOptions = {}) {
+      const method = String(fetchOptions.method || 'GET').toUpperCase();
+      if (method !== 'GET' || fetchOptions.body != null) {
+        throw new Error('browser transport supports GET requests only');
+      }
+      const page = await context.newPage();
+      try {
+        const response = await withAbort(
+          page.goto(String(url), { waitUntil, timeout: timeoutMs }),
+          fetchOptions.signal
+        );
+        const status = typeof response?.status === 'function' ? response.status() : 200;
+        const ok =
+          typeof response?.ok === 'function' ? response.ok() : status >= 200 && status < 300;
+        const html = await withAbort(
+          (async () => {
+            if (stealth) await simulateHumanInteraction(page);
+            return page.content();
+          })(),
+          fetchOptions.signal
+        );
+        return { ok, status, text: async () => html };
+      } finally {
+        await page.close().catch(() => {});
+      }
     }
-  }
 
-  /**
-   * Tear down the browser context and close the browser process.
-   * Always call this when scraping is done.
-   */
-  async function close() {
-    await context.close().catch(() => {});
+    async function close() {
+      await context.close().catch(() => {});
+      await browser.close().catch(() => {});
+    }
+
+    return { fetchImpl, close };
+  } catch (error) {
     await browser.close().catch(() => {});
+    throw error;
   }
-
-  return { fetchImpl, close };
 }
 
 /**

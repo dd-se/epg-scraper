@@ -173,15 +173,15 @@ describe('adversarial: toXmltvTimestamp', () => {
 // ---------------------------------------------------------------------------
 
 describe('adversarial: wallToIso', () => {
-  it('rolls minutes >= 1440 into the next day instead of emitting 24:xx', () => {
+  it('accepts end-of-day and rejects larger minute offsets', () => {
     expect(wallToIso(2026, 9, 7, 1440)).toBe('2026-09-08T00:00:00+03:00');
-    expect(wallToIso(2026, 9, 7, 1500)).toBe('2026-09-08T01:00:00+03:00');
-    expect(wallToIso(2026, 12, 31, 1500)).toBe('2027-01-01T01:00:00+03:00'); // year rollover
+    expect(wallToIso(2026, 9, 7, 1500)).toBeUndefined();
+    expect(wallToIso(2026, 12, 31, 1500)).toBeUndefined();
   });
 
-  it('rolls negative minutes back into the previous day', () => {
-    expect(wallToIso(2026, 9, 7, -30)).toBe('2026-09-06T23:30:00+03:00');
-    expect(wallToIso(2026, 1, 1, -1)).toBe('2025-12-31T23:59:00+03:00'); // year rollback
+  it('rejects negative minutes instead of rolling hostile input', () => {
+    expect(wallToIso(2026, 9, 7, -30)).toBeUndefined();
+    expect(wallToIso(2026, 1, 1, -1)).toBeUndefined();
   });
 
   it('keeps the fixed +03:00 offset on every output', () => {
@@ -275,13 +275,14 @@ describe('adversarial: generateXmltv', () => {
     expect(xml).not.toContain('<script>');
   });
 
-  it('tolerates empty titles/names without crashing', () => {
-    const xml = generateXmltv({
-      channels: [{ id: 'X.tr', name: 'X' }, { id: 'Y.tr', name: '' }],
-      programmes: [programme(''), programme('   ', { start: '2026-09-07T01:00:00+03:00' })],
-    });
-    expect(xml).toContain('<display-name lang="tr"></display-name>');
-    expect(xml).toContain('<title lang="tr"></title>');
+  it('rejects empty titles and channel names at the writer seam', () => {
+    expect(() =>
+      generateXmltv({
+        channels: [{ id: 'Y.tr', name: '' }],
+        programmes: [],
+      })
+    ).toThrow(/name/);
+    expect(() => generateXmltv({ channels, programmes: [programme('')] })).toThrow(/title/);
   });
 
   it('throws on non-array inputs and unknown channels', () => {
@@ -341,8 +342,8 @@ describe('adversarial: provider parsers', () => {
     // 99:99 / missing minutes: no match, slot dropped.
     expect(parseDayPage(page('99:99 - 99:99')).slots).toEqual([]);
     expect(parseDayPage(page('10 - 11')).slots).toEqual([]);
-    // 25:00 parses as 1500 minutes since midnight (rolls into next day).
-    expect(parseDayPage(page('25:00 - 26:00')).slots[0].startMin).toBe(1500);
+    expect(parseDayPage(page('25:00 - 26:00')).slots).toEqual([]);
+    expect(parseDayPage(page('24:30 - 25:00')).slots).toEqual([]);
   });
 
   it('parseDayPage tolerates columns missing a title or time', () => {
@@ -767,36 +768,61 @@ describe('adversarial: mergeResults and compare', () => {
     expect(mergeResults([null, undefined, { channels: [], programmes: [] }])).toEqual({
       channels: [],
       programmes: [],
+      days: 0,
+      failures: 0,
+      language: 'tr',
       duplicates: 0,
     });
   });
 
-  it('mergeResults tolerates null channel entries and missing arrays', () => {
+  it('mergeResults drops malformed entries while preserving valid guide data', () => {
     const merged = mergeResults([
-      { channels: [null, { id: 'A.tr', name: 'A' }], programmes: undefined },
-      { channels: undefined, programmes: [{ channel: 'A.tr', start: 's', stop: 't' }] }, // no title
+      {
+        channels: [null, { id: 'A.tr', name: 'A' }],
+        programmes: [
+          { channel: 'A.tr', start: 's', stop: 't', title: 'Invalid' },
+          {
+            channel: 'A.tr',
+            start: '2026-09-08T10:00:00+03:00',
+            stop: '2026-09-08T11:00:00+03:00',
+            title: 'Valid',
+          },
+        ],
+      },
+      { channels: undefined, programmes: undefined },
     ]);
     expect(merged.channels).toEqual([{ id: 'A.tr', name: 'A' }]);
-    expect(merged.programmes).toHaveLength(1); // kept, not crashed on
+    expect(merged.programmes).toHaveLength(1);
+    expect(merged.programmes[0].title).toBe('Valid');
   });
 
   it('mergeResults skips null programme entries instead of crashing', () => {
     const merged = mergeResults([
       {
         channels: [{ id: 'A.tr', name: 'A' }],
-        programmes: [null, undefined, { channel: 'A.tr', start: 's', stop: 't', title: 'T' }],
+        programmes: [
+          null,
+          undefined,
+          {
+            channel: 'A.tr',
+            start: '2026-09-08T10:00:00+03:00',
+            stop: '2026-09-08T11:00:00+03:00',
+            title: 'T',
+          },
+        ],
       },
     ]);
     expect(merged.programmes).toHaveLength(1);
     expect(merged.programmes[0].title).toBe('T');
   });
 
-  it('mergeResults tolerates non-array channels/programmes via || []', () => {
-    // A hostile result with string fields would otherwise be iterated char
-    // by char — the guard keeps the merge to real arrays.
+  it('mergeResults degrades non-array channels/programmes to empty', () => {
     expect(mergeResults([{ channels: null, programmes: null }])).toEqual({
       channels: [],
       programmes: [],
+      days: 0,
+      failures: 0,
+      language: 'tr',
       duplicates: 0,
     });
     expect(mergeResults([{ channels: 'x', programmes: 42 }]).programmes).toEqual([]);
@@ -819,7 +845,15 @@ describe('adversarial: mergeResults and compare', () => {
     const report = compareProviderResults({
       a: {
         channels: [{ id: 'A.tr', name: 'A' }],
-        programmes: [null, { channel: 'A.tr', start: 's', stop: 't', title: 'X' }],
+        programmes: [
+          null,
+          {
+            channel: 'A.tr',
+            start: '2026-09-08T10:00:00+03:00',
+            stop: '2026-09-08T11:00:00+03:00',
+            title: 'X',
+          },
+        ],
       },
       b: { channels: [{ id: 'A.tr', name: 'A' }], programmes: [] },
     });
@@ -953,10 +987,8 @@ describe('adversarial: scrape against hostile responses', () => {
     expect(result.programmes.every((p) => p.stop > p.start)).toBe(true);
   });
 
-  it('digiturkburada scrape stamps slots when the page omits the served-date heading', async () => {
+  it('digiturkburada scrape skips pages without a verifiable served date', async () => {
     const { scrape } = await import('../src/providers/digiturkburada.js');
-    // No <h2> means servedDate is undefined; the scrape cannot verify the
-    // date, so it proceeds rather than silently dropping the slots.
     const page =
       '<table><tr><td style="padding:2px"><strong>Only</strong></td><td style="padding:2px"><strong>10:00</strong></td></tr></table>';
     const result = await scrape({
@@ -966,8 +998,7 @@ describe('adversarial: scrape against hostile responses', () => {
       politenessDelayMs: 0,
       maxChannels: 1,
     });
-    expect(result.programmes).toHaveLength(1);
-    expect(result.programmes[0].start).toBe('2026-09-08T10:00:00+03:00');
+    expect(result.programmes).toEqual([]);
   });
 
   it('sporekrani scrape skips duplicate-start events and sorts unsorted pages', async () => {
@@ -1510,7 +1541,7 @@ describe('adversarial: CLI flags', () => {
     expect(existsSync(path.join(tmpDir, 'sub/merged.xml'))).toBe(true);
   });
 
-  it('fails cleanly when a merged programme references an undeclared channel', async () => {
+  it('drops orphan programmes while preserving valid merged guide data', async () => {
     registerProvider({
       id: 'adv-ghost-a',
       name: 'Ghost A',
@@ -1560,11 +1591,8 @@ describe('adversarial: CLI flags', () => {
       stderr: { write: (s) => stderr.push(s) },
       cwd: tmpDir,
     });
-    // Honest error: the merge keeps the orphan programme, the writer refuses
-    // to emit it — exit 1 with a clear message, not a silent partial guide.
-    expect(exit).toBe(1);
-    expect(stderr.join('')).toMatch(/unknown channel "GHOST.tr"/);
-    expect(existsSync(path.join(tmpDir, 'ghost.xml'))).toBe(false);
+    expect(exit).toBe(0);
+    expect(existsSync(path.join(tmpDir, 'ghost.xml'))).toBe(true);
   });
 
   it('applies an alias chain so merged programmes land on one canonical channel', async () => {
@@ -1715,7 +1743,7 @@ describe('adversarial: merge and compare pipelines through runCli', () => {
     expect(existsSync(out)).toBe(false);
   });
 
-  it('merge: corrupt programme timestamps fail with an honest error, never a partial guide', async () => {
+  it('merge: corrupt programme timestamps are dropped while valid data survives', async () => {
     registerProvider(goodProvider('adv-pipe-mrg-good'));
     registerProvider({
       id: 'adv-pipe-mrg-corrupt',
@@ -1739,12 +1767,12 @@ describe('adversarial: merge and compare pipelines through runCli', () => {
     const { exit, stderr } = await run([
       '--provider', 'adv-pipe-mrg-good,adv-pipe-mrg-corrupt', '--merge', '--no-gzip', '--out', out,
     ]);
-    // The corrupt slot survives the merge (merging does not validate
-    // timestamps), so the writer refuses to emit it — exit 1 with a clear
-    // message, not a silently wrong guide.
-    expect(exit).toBe(1);
-    expect(stderr).toMatch(/stop <= start/);
-    expect(existsSync(out)).toBe(false);
+    expect(exit).toBe(0);
+    expect(existsSync(out)).toBe(true);
+    const { readFileSync } = await import('node:fs');
+    const xml = readFileSync(out, 'utf8');
+    expect(xml).toContain('From adv-pipe-mrg-good');
+    expect(xml).not.toContain('Corrupt');
   });
 
   it('merge: null programme entries from a provider are skipped, the guide still writes', async () => {
@@ -1838,7 +1866,7 @@ describe('adversarial: merge and compare pipelines through runCli', () => {
     expect(existsSync(path.join(tmpDir, 'none.adv-pipe-cmp-e2.xml'))).toBe(false);
   });
 
-  it('compare: corrupt programme data on one side fails with an honest error', async () => {
+  it('compare: corrupt programme data is dropped without losing the valid side', async () => {
     registerProvider(goodProvider('adv-pipe-cmp-c1'));
     registerProvider({
       id: 'adv-pipe-cmp-c2',
@@ -1862,11 +1890,7 @@ describe('adversarial: merge and compare pipelines through runCli', () => {
     const { exit, stderr } = await run([
       '--provider', 'adv-pipe-cmp-c1,adv-pipe-cmp-c2', '--compare', '--no-gzip', '--out', out,
     ]);
-    // The comparison itself renders fine (it does not validate timestamps);
-    // the corrupt side aborts at write time — side A was already written, so
-    // the run stops at the first corrupt side rather than emitting garbage.
-    expect(exit).toBe(1);
-    expect(stderr).toMatch(/stop <= start/);
+    expect(exit).toBe(0);
     expect(existsSync(path.join(tmpDir, 'corrupt-cmp.adv-pipe-cmp-c1.xml'))).toBe(true);
     expect(existsSync(path.join(tmpDir, 'corrupt-cmp.adv-pipe-cmp-c2.xml'))).toBe(false);
   });

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { SaxesParser } from 'saxes';
 import { generateXmltv, writeXmltv } from '../src/xmltv.js';
+import { createGuideResult } from '../src/model.js';
 import { parseDayPage, wallToIso, mapChannelId } from '../src/providers/hurriyet.js';
 
 // Parse XML with saxes in strict mode.  Any well-formedness violation fires
@@ -115,22 +116,13 @@ describe('xmltv output: well-formed against saxes', () => {
         category: s.category,
       }));
 
-    // The writer dedupes exact (channel, start, stop) slots (the real page
-    // carries some overlapping repeats), so expect the deduped count.
-    const seen = new Set();
-    const deduped = programmes.filter((p) => {
-      const key = [p.channel, p.start, p.stop].join('|');
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    const xml = generateXmltv({ channels: guideChannels, programmes, generatorInfoName: 'test' });
+    const guide = createGuideResult({ channels: guideChannels, programmes });
+    const xml = generateXmltv({ ...guide, generatorInfoName: 'test' });
     const parsed = parseXml(xml);
 
     expect(parsed.errors).toEqual([]);
-    expect(parsed.channelIds).toHaveLength(guideChannels.length);
-    expect(parsed.programmeCount).toBe(deduped.length);
+    expect(parsed.channelIds).toHaveLength(guide.channels.length);
+    expect(parsed.programmeCount).toBe(guide.programmes.length);
     // Every parsed title matches a decoded source title exactly (no mojibake).
     const expected = new Set(programmes.map((p) => p.title));
     expect(parsed.titles.every((t) => expected.has(t))).toBe(true);

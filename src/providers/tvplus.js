@@ -40,16 +40,15 @@
 // NOTE: this provider talks to a JSON API, so it is plain-HTTP only — do not
 // run it with --browser (the browser fetcher renders pages and cannot POST).
 
-import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
+import { fetchResponseWithRetry, DEFAULT_UA, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
   normalizeChannelKey,
   isRealCalendarDate,
+  parseClockMinutes,
   finishResult,
   defaultDates,
 } from './shared.js';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://tvplus.com.tr';
 export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
@@ -108,23 +107,29 @@ export function parsePlatformInfo(text) {
 // components { year, month, day, minutes }.  Missing/malformed input -> null.
 export function parseApiInstant(value) {
   if (typeof value !== 'string') return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2})(?::\d{2})?(?: UTC[+-]\d{2}:\d{2})?$/.exec(
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2})(?::\d{2})? UTC([+-])(\d{2}):(\d{2})$/.exec(
     value.trim()
   );
   if (!match) return null;
-  const [, y, mo, d, h, mi] = match;
-  const hours = Number(h);
-  const minutes = Number(mi);
+  const [, y, mo, d, h, mi, sign, offsetHours, offsetMinutes] = match;
+  if (
+    sign !== '+' ||
+    Number(offsetHours) !== 3 ||
+    Number(offsetMinutes) !== 0
+  ) {
+    return null;
+  }
+  const minutes = parseClockMinutes(Number(h), Number(mi), { allowEndOfDay: true });
   const year = Number(y);
   const month = Number(mo);
   const day = Number(d);
-  if (hours > 24 || minutes > 59) return null;
+  if (minutes == null) return null;
   // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
   // (month 13, Feb 30, day 32) would otherwise silently roll into a
   // different instant via wallToIso — reject them like the other providers
   // do.
   if (!isRealCalendarDate(year, month, day)) return null;
-  return { year, month, day, minutes: hours * 60 + minutes };
+  return { year, month, day, minutes };
 }
 
 // Parse a PlayBillList response body into programme slots.  Degrades to [].
@@ -238,8 +243,8 @@ export function extractSessionCookie(response) {
 // ---- JSON transport (plain HTTP only; the browser fetcher cannot POST) ----
 //
 // Every POST goes through fetchResponseWithRetry: hard timeout, bounded
-// retries with backoff, transient 5xx/429 tolerated.  The response is NOT
-// consumed here — Authenticate needs its Set-Cookie headers read.
+// retries with backoff, transient 5xx/429 tolerated. The returned object
+// buffers the body from the same attempt while preserving Set-Cookie access.
 
 export function jsonPost(url, body, { fetchImpl, headers = {}, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
   return fetchResponseWithRetry(url, {
@@ -254,6 +259,7 @@ export function jsonPost(url, body, { fetchImpl, headers = {}, userAgent = DEFAU
       ...headers,
     },
     method: 'POST',
+    retry403: true,
     body: JSON.stringify(body),
   });
 }
@@ -317,9 +323,13 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 400,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const programmes = [];
 
   // 1. Session: rotating host + auth cookie.  Re-established once mid-run
@@ -327,7 +337,7 @@ export async function scrape({
   // fetchOptions flows into every transport call (retries, timeoutMs, ...).
   let session = await establishSession({ fetchImpl, log, fetchOptions });
   if (!session) {
-    return { channels: [], programmes: [], days: 0, failures: 1 };
+    return finishResult({ channels: [], programmes: [], days: 0, failures: 1, log });
   }
 
   const channels = CHANNELS.slice(0, maxChannels);
@@ -375,11 +385,11 @@ export async function scrape({
         // The load balancer rotates hosts and sessions expire: rebuild the
         // session once and retry this channel-day before giving up on it.
         log(`warn: ${channel.name} (${date}) failed (${error.message}); re-authenticating`);
-        const fresh = await establishSession({ fetchImpl, log });
+            const fresh = await establishSession({ fetchImpl, log, fetchOptions });
         if (!fresh) {
           failuresCount++;
           log(`warn: ${channel.name} (${date}) skipped: session re-establishment failed`);
-          continue;
+                continue;
         }
         session = fresh;
         try {
@@ -392,7 +402,7 @@ export async function scrape({
         } catch (retryError) {
           failuresCount++;
           log(`warn: ${channel.name} (${date}) failed after re-auth: ${retryError.message}`);
-          continue;
+                continue;
         }
       }
       const slots = parsePlaybill(text);
@@ -400,8 +410,7 @@ export async function scrape({
         programmes.push({ channel: channel.id, ...slot });
       }
       log(`ok:   ${channel.name} (${date}): ${slots.length} programmes`);
-      await sleep(politenessDelayMs);
-    }
+      }
   }
 
   const result = finishResult({
@@ -409,6 +418,7 @@ export async function scrape({
     programmes,
     days: activeDates.length,
     failures: failuresCount,
+    log,
   });
   return result;
 }

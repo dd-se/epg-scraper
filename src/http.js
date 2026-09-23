@@ -8,13 +8,34 @@ export const DEFAULT_UA =
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// One abortable attempt. Resolves with the Response (status NOT checked —
-// the caller decides what counts as success), or throws on transport failure.
-async function attemptOnce(doFetch, url, init, timeoutMs) {
+export function createPoliteFetch(fetchImpl, delayMs = 0) {
+  const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
+  if (!Number.isFinite(delayMs) || delayMs <= 0) return doFetch;
+  let nextAllowedAt = 0;
+  return async (...args) => {
+    const waitMs = Math.max(0, nextAllowedAt - Date.now());
+    if (waitMs > 0) await sleep(waitMs);
+    nextAllowedAt = Date.now() + delayMs;
+    return doFetch(...args);
+  };
+}
+
+async function attemptOnce(doFetch, url, init, timeoutMs, finalize, nonRetryableStatuses) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await doFetch(url, { ...init, signal: controller.signal });
+    const response = await doFetch(url, { ...init, signal: controller.signal });
+    if (!response || !response.ok) {
+      const status = response && response.status;
+      const error = new Error(`HTTP ${status == null ? 'undefined' : status} for ${url}`);
+      const configuredNonRetryable = nonRetryableStatuses?.includes(status) === true;
+      const transient = status === 429 || (status >= 500 && status < 600);
+      const sessionPost403 = status === 403 && !configuredNonRetryable;
+      error.status = status;
+      error.nonRetryable = configuredNonRetryable || (!transient && !sessionPost403);
+      throw error;
+    }
+    return await finalize(response);
   } finally {
     clearTimeout(timer);
   }
@@ -30,9 +51,9 @@ async function attemptOnce(doFetch, url, init, timeoutMs) {
 //
 // `nonRetryableStatuses` opts a transport out for deterministic failures:
 // a 404/410 page or a WAF 403 will answer the same way on every attempt,
-// so retrying only delays the per-page degradation.  The POST transports
-// deliberately keep 403 retryable — the TV+/Tivibu APIs answer 403 when a
-// session expires, which the providers repair by re-authenticating.
+// so retrying only delays the per-page degradation. Session POST transports
+// opt into 403 retries; TV+ rebuilds its session after exhaustion, while
+// Tivibu records the failed channel-day.
 async function requestWithRetry(url, options = {}) {
   const {
     timeoutMs = 20000,
@@ -50,20 +71,18 @@ async function requestWithRetry(url, options = {}) {
 
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    let fatal = false;
     try {
-      const response = await attemptOnce(doFetch, url, buildInit(), timeoutMs);
-      if (!response || !response.ok) {
-        const status = response && response.status;
-        if (nonRetryableStatuses && status != null && nonRetryableStatuses.includes(status)) {
-          fatal = true; // deterministic answer: fail on the first attempt
-        }
-        throw new Error(`HTTP ${status == null ? 'undefined' : status} for ${url}`);
-      }
-      return await finalize(response);
+      return await attemptOnce(
+        doFetch,
+        url,
+        buildInit(),
+        timeoutMs,
+        finalize,
+        nonRetryableStatuses
+      );
     } catch (error) {
       lastError = error;
-      if (fatal || attempt >= retries) break;
+      if (error?.nonRetryable || attempt >= retries) break;
       await sleep(retryDelayMs * (attempt + 1));
     }
   }
@@ -99,11 +118,19 @@ export async function fetchText(url, options = {}) {
   });
 }
 
-// POST (or any method) a payload and return the Response (NOT consumed —
-// some callers need Set-Cookie headers off it before reading the body; they
-// must call .text()).  Give the transport-level failsafes (timeout,
-// retries, backoff) to the JSON/form providers that the GET providers
-// already had.
+async function bufferResponse(response) {
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    headers: response.headers,
+    text: async () => text,
+  };
+}
+
+// POST (or any method) a payload and return a buffered Response-like object.
+// Headers and body are captured within the same timeout/retry attempt, while
+// preserving the .headers and .text() interface used by session providers.
 export async function fetchResponseWithRetry(url, options = {}) {
   const {
     userAgent = DEFAULT_UA,
@@ -111,17 +138,16 @@ export async function fetchResponseWithRetry(url, options = {}) {
     fetchImpl,
     method = 'POST',
     body,
+    retry403 = false,
     ...retryOptions
   } = options;
   return await requestWithRetry(url, {
     retries: 1,
     ...retryOptions,
     fetchImpl,
-    // 404/410 on an API endpoint are deterministic (dead path); 403 stays
-    // retryable — TV+/Tivibu use it to signal an expired session that the
-    // provider's re-auth failsafe repairs.
-    nonRetryableStatuses: [404, 410],
-    finalize: (response) => response,
+    nonRetryableStatuses:
+      method === 'GET' || !retry403 ? [403, 404, 410] : [404, 410],
+    finalize: bufferResponse,
     describe: () => `${method} ${url}`,
     buildInit: () => ({
       method,

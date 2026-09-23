@@ -17,17 +17,16 @@
 
 import { decodeEntities } from '../entities.js';
 import { channelIdFromName } from '../slug.js';
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
   normalizeChannelKey,
-  dedupeProgrammes,
+  parseClockMinutes,
+  deriveStartOnlyProgrammes,
   finishResult,
   defaultDates,
   splitDate,
 } from './shared.js';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://www.mynet.com';
 export const MAIN_URL = `${BASE_URL}/tv-rehberi`;
@@ -187,12 +186,10 @@ export function parseChannelPage(html) {
   for (let i = 0; i < count; i++) {
     const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(times[i]);
     if (!timeMatch) continue;
-    const hours = Number(timeMatch[1]);
-    const minutes = Number(timeMatch[2]);
-    // Out-of-clock garbage (99:99, 25:00, 10:99) would otherwise stamp
-    // programmes days or hours into the future; drop the slot instead.
-    if (hours > 24 || minutes > 59) continue;
-    const startMin = hours * 60 + minutes;
+    const startMin = parseClockMinutes(Number(timeMatch[1]), Number(timeMatch[2]), {
+      allowEndOfDay: true,
+    });
+    if (startMin == null) continue;
     slots.push({ title: names[i], startMin });
   }
   return slots;
@@ -246,9 +243,13 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 500,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   // Step 3: Fetch each channel's schedule for each active day.
   const channelsById = new Map();
   const channels = [];
@@ -263,12 +264,12 @@ export async function scrape({
     log(`ok:   discovered ${channelList.length} channels from main page`);
   } catch (error) {
     log(`error: failed to fetch main page: ${error.message}`);
-    return { channels: [], programmes: [], days: 0, failures: 1 };
+        return finishResult({ channels: [], programmes: [], days: 0, failures: 1, log });
   }
 
   if (channelList.length === 0) {
     log('warn: no channels found on main page');
-    return { channels: [], programmes: [], days: 0, failures: 0 };
+    return finishResult({ channels: [], programmes: [], days: 0, failures: 0, log });
   }
 
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
@@ -294,7 +295,7 @@ export async function scrape({
 
   if (activeDays.length === 0) {
     log('warn: requested dates fall outside the 3-day window (today + 2 days)');
-    return { channels: [], programmes: [], days: 0, failures: 0 };
+    return finishResult({ channels: [], programmes: [], days: 0, failures: 0, log });
   }
 
   log(`window: ${activeDays.map((d) => d.date).join(' .. ')} (${activeDays.length} day(s))`);
@@ -324,33 +325,19 @@ export async function scrape({
         continue;
       }
 
-      const slots = parseChannelPage(html);
-      // Stamp with the resolved day date (anchored on the first requested
-      // date), never the real clock.
       const { year, month, day: dayNum } = splitDate(day.date);
-
-      for (let i = 0; i < slots.length; i++) {
-        const slot = slots[i];
-        const start = wallToIso(year, month, dayNum, slot.startMin);
-        // Stop time = next programme's start, or end of day (24:00 = 1440 min).
-        const endMin = i + 1 < slots.length ? slots[i + 1].startMin : 24 * 60;
-        // Some pages repeat a time (e.g. Al Jazeera lists every slot twice);
-        // a stop that does not follow the start would be a zero-length slot.
-        // Skip it — the duplicated row carries the real start.
-        if (endMin <= slot.startMin) continue;
-        const stop = wallToIso(year, month, dayNum, endMin);
-        programmes.push({
+      programmes.push(
+        ...deriveStartOnlyProgrammes(parseChannelPage(html), {
           channel: id,
-          start,
-          stop,
-          title: slot.title,
-        });
-      }
+          year,
+          month,
+          day: dayNum,
+        })
+      );
 
-      await sleep(politenessDelayMs);
-    }
+          }
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
-  return finishResult({ channels, programmes, days: activeDays.length, failures });
+  return finishResult({ channels, programmes, days: activeDays.length, failures, log });
 }

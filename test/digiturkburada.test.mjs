@@ -253,10 +253,11 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       politenessDelayMs: 0,
     });
     const keys = result.programmes.map((p) => [p.channel, p.start]);
-    const sorted = [...keys].sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+    const sorted = [...keys].sort(
+      (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || a[1].localeCompare(b[1])
+    );
     expect(keys).toEqual(sorted);
-    // Channels in XMLTV id order, GS TV last.
-    expect(result.programmes[result.programmes.length - 1].channel).toBe('GS.TV.tr');
+    expect(result.programmes[0].channel).toBe('GS.TV.tr');
     // Within one channel, starts ascend.
     const gs = result.programmes.filter((p) => p.channel === 'GS.TV.tr');
     expect(gs.map((p) => p.start)).toEqual([...gs.map((p) => p.start)].sort());

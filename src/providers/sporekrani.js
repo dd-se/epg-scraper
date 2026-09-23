@@ -23,17 +23,16 @@
 // The rolling window covers ~30 days from the server's "today"; requested
 // dates outside the window are silently skipped (one fetch per channel).
 
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
   normalizeChannelKey,
   isRealCalendarDate,
+  parseClockMinutes,
   finishResult,
   defaultDates,
   splitDate,
 } from './shared.js';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export { normalizeChannelKey };
 
@@ -143,9 +142,10 @@ export function parseChannelPage(html, channelName) {
     const dt = typeof event.date_time === 'string' ? event.date_time.trim() : '';
     const timeMatch = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::\d{2})?$/.exec(dt);
     if (!title || !timeMatch) continue;
-    const hours = Number(timeMatch[4]);
-    const minutes = Number(timeMatch[5]);
-    if (hours > 24 || minutes > 59) continue;
+    const startMin = parseClockMinutes(Number(timeMatch[4]), Number(timeMatch[5]), {
+      allowEndOfDay: true,
+    });
+    if (startMin == null) continue;
     // Impossible calendar dates (month 13, Feb 30) would silently roll into
     // a different month via wallToIso — validate like the other parsers.
     if (!isRealCalendarDate(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3]))) {
@@ -157,7 +157,7 @@ export function parseChannelPage(html, channelName) {
         : undefined;
     out.push({
       date: `${timeMatch[1]}-${timeMatch[2]}-${timeMatch[3]}`,
-      startMin: hours * 60 + minutes,
+      startMin,
       title,
       category,
     });
@@ -184,8 +184,12 @@ export async function scrape({
   log = () => {},
   politenessDelayMs = 500,
   maxChannels = Infinity,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const activeDates =
     dates && dates.length > 0 ? dates : defaultDates();
   const requested = new Set(activeDates);
@@ -235,7 +239,6 @@ export async function scrape({
       });
     }
     log(`ok:   ${channel.name}: ${events.length} events in page, ${inWindow} in window`);
-    await sleep(politenessDelayMs);
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
@@ -247,5 +250,6 @@ export async function scrape({
     programmes,
     days: activeDates.length,
     failures,
+    log,
   });
 }

@@ -1,3 +1,5 @@
+import { createGuideResult } from './model.js';
+
 // Comparisons between two scrape() results.
 //
 // Two flavours, both wired to the CLI under --compare:
@@ -80,13 +82,12 @@ export function compareProviderResults({ a, b, canonicalize }) {
 }
 
 function compareSides({ a, b, canonicalize = (id) => id }) {
-  // Tolerate absent sides entirely (null/undefined scrape results), and
-  // drop null programme entries — a hostile result must never crash the
-  // comparison (the writer validates whatever is emitted later).
-  const aChannels = (a && a.channels) || [];
-  const bChannels = (b && b.channels) || [];
-  const aProgrammes = ((a && a.programmes) || []).filter(Boolean);
-  const bProgrammes = ((b && b.programmes) || []).filter(Boolean);
+  const left = createGuideResult(a);
+  const right = createGuideResult(b);
+  const aChannels = left.channels;
+  const bChannels = right.channels;
+  const aProgrammes = left.programmes;
+  const bProgrammes = right.programmes;
 
   // Canonicalize channel ids (optional alias map) so both sides land on the
   // same id for the same channel.

@@ -22,12 +22,16 @@
 // it with --browser (the Playwright fetcher renders pages and cannot POST).
 
 import { decodeEntities } from '../entities.js';
-import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
-import { wallToIso, finishResult, defaultDates } from './shared.js';
+import { fetchResponseWithRetry, DEFAULT_UA, createPoliteFetch } from '../http.js';
+import {
+  isRealCalendarDate,
+  parseClockMinutes,
+  deriveStartOnlyProgrammes,
+  finishResult,
+  defaultDates,
+} from './shared.js';
 
 export const BASE_URL = 'https://www.digiturkburada.com.tr';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Curated channel table: display name -> page slug + XMLTV id (normalized to
 // the epgshare01 reference where the reference carries the channel).
@@ -125,7 +129,8 @@ export function parseServedDate(text) {
   const month = TURKISH_MONTHS[match[2]];
   if (!month) return undefined;
   const day = Number(match[1]);
-  if (day < 1 || day > 31) return undefined;
+  const year = Number(match[3]);
+  if (!isRealCalendarDate(year, month, day)) return undefined;
   return `${match[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
@@ -160,10 +165,11 @@ export function parseDayPage(html) {
   let match;
   while ((match = rowPattern.exec(source)) !== null) {
     const title = decodeEntities(match[1]).replace(/\s+/g, ' ').trim();
-    const hours = Number(match[2]);
-    const minutes = Number(match[3]);
-    if (!title || hours > 24 || minutes > 59) continue;
-    slots.push({ startMin: hours * 60 + minutes, title });
+    const startMin = parseClockMinutes(Number(match[2]), Number(match[3]), {
+      allowEndOfDay: true,
+    });
+    if (!title || startMin == null) continue;
+    slots.push({ startMin, title });
   }
   return { date, slots };
 }
@@ -197,9 +203,13 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 400,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
   const channels = CHANNELS.slice(0, maxChannels);
@@ -230,23 +240,17 @@ export async function scrape({
         if (logo) entry.icon = logo;
       }
       const { date: servedDate, slots } = parseDayPage(html);
-      if (servedDate && servedDate !== date) {
-        log(`warn: ${channel.name} (${date}) served ${servedDate} — skipped`);
+      if (servedDate !== date) {
+        log(
+          `warn: ${channel.name} (${date}) served ${servedDate || 'no verifiable date'} — skipped`
+        );
         continue;
       }
       const [year, month, day] = date.split('-').map(Number);
-      for (let s = 0; s < slots.length; s++) {
-        const slot = slots[s];
-        const start = wallToIso(year, month, day, slot.startMin);
-        const endMin = s + 1 < slots.length ? slots[s + 1].startMin : 24 * 60;
-        // Repeated times on a page (same slot listed twice) would make a
-        // zero-length programme — skip it instead of emitting garbage.
-        if (endMin <= slot.startMin) continue;
-        const stop = wallToIso(year, month, day, endMin);
-        programmes.push({ channel: channel.id, start, stop, title: slot.title });
-      }
+      programmes.push(
+        ...deriveStartOnlyProgrammes(slots, { channel: channel.id, year, month, day })
+      );
       log(`ok:   ${channel.name} (${date}): ${slots.length} programmes`);
-      await sleep(politenessDelayMs);
     }
   }
 
@@ -256,5 +260,6 @@ export async function scrape({
     programmes,
     days: activeDates.length,
     failures,
+    log,
   });
 }

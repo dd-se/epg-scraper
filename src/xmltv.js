@@ -21,80 +21,14 @@ import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { decodeEntities } from './entities.js';
+import {
+  isoToEpochMs,
+  toXmltvTimestamp,
+  fromXmltvTimestamp,
+} from './time.js';
+import { createGuideResult, normalizeLanguageTag, validateGuideResult } from './model.js';
 
-// Shared ISO 8601 matcher: date, optional seconds/fraction, optional offset.
-const ISO_RE =
-  /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?(?:\.([0-9]+))?(Z|[+-][0-9]{2}:?[0-9]{2})?$/;
-
-// Split an ISO 8601 timestamp into its wall-clock parts + offset.  Returns
-// undefined when the shape is not an ISO datetime at all.
-function parseIso(iso) {
-  const match = ISO_RE.exec(String(iso == null ? '' : iso));
-  if (!match) return undefined;
-  const [, y, mo, d, h, mi, s = '00', frac, off] = match;
-  return { y, mo, d, h, mi, s, frac, off };
-}
-
-// ISO 8601 (with an explicit offset) -> epoch ms, or undefined when the value
-// is unparseable.  Ordering and the stop>start check compare *instants*
-// through this: providers in DST zones emit two offsets in one guide
-// (Europe/Stockholm +01:00/+02:00), where lexicographic string order is not
-// chronological — "2026-10-25T02:15:00+01:00" precedes
-// "2026-10-25T02:30:00+02:00" as text but is the later instant.
-export function isoToEpochMs(iso) {
-  const parts = parseIso(iso);
-  if (!parts) return undefined;
-  const { y, mo, d, h, mi, s, frac, off } = parts;
-  const wallMs = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
-  let offsetMs = 0;
-  if (off != null && off !== 'Z') {
-    const normalized = off.replace(':', '');
-    const sign = normalized.startsWith('-') ? -1 : 1;
-    offsetMs =
-      sign * (Number(normalized.slice(1, 3)) * 3600000 + Number(normalized.slice(3, 5)) * 60000);
-  }
-  // Sub-second precision is rejected elsewhere, but fold it in so a hostile
-  // fractional value cannot silently shift an ordering decision.
-  const fracMs = frac ? Math.round(Number(`0.${frac}`) * 1000) : 0;
-  return wallMs - offsetMs + fracMs;
-}
-
-// "2026-09-07T15:00:00+03:00" -> "20260907150000 +0300"
-export function toXmltvTimestamp(iso) {
-  const parsed = parseIso(iso);
-  if (!parsed) {
-    throw new Error(`Invalid ISO datetime: ${JSON.stringify(iso)}`);
-  }
-  const { y, mo, d, h, mi, s, frac, off } = parsed;
-  if (frac) {
-    throw new Error(`Fractional seconds are not representable in XMLTV: ${JSON.stringify(iso)}`);
-  }
-  // Wall-clock sanity: reject impossible values (Feb 30, hour 24, minute 60,
-  // ...) that a lenient date parser would silently roll over into a
-  // different instant.  Date.UTC normalizes, so a round-trip comparison
-  // catches every overflow at once.
-  const check = new Date(
-    Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s))
-  );
-  if (
-    check.getUTCFullYear() !== Number(y) ||
-    check.getUTCMonth() + 1 !== Number(mo) ||
-    check.getUTCDate() !== Number(d) ||
-    check.getUTCHours() !== Number(h) ||
-    check.getUTCMinutes() !== Number(mi) ||
-    check.getUTCSeconds() !== Number(s)
-  ) {
-    throw new Error(`Impossible datetime: ${JSON.stringify(iso)}`);
-  }
-  if (off != null && off !== 'Z') {
-    const nums = off.replace(':', '');
-    if (Number(nums.slice(1, 3)) > 23 || Number(nums.slice(3)) > 59) {
-      throw new Error(`Invalid offset in datetime: ${JSON.stringify(iso)}`);
-    }
-  }
-  const normalizedOffset = off == null || off === 'Z' ? '+0000' : off.replace(':', '');
-  return `${y}${mo}${d}${h}${mi}${s} ${normalizedOffset}`;
-}
+export { isoToEpochMs, toXmltvTimestamp, fromXmltvTimestamp };
 
 function esc(text) {
   const escaped = String(text == null ? '' : text)
@@ -168,49 +102,19 @@ function channelElement(channel, lang) {
   return lines.join('\n');
 }
 
-// The `lang` attribute written on <display-name>/<title>/<sub-title>/<desc>/
-// <category>.  It defaults to the reference guide's "tr"; a non-Turkish
-// provider declares its own (tvnu: "sv") so Swedish titles are not labelled
-// Turkish.  Anything that is not a plausible language tag degrades to "tr"
-// rather than emitting a malformed attribute.
-function normalizeLang(lang) {
-  return typeof lang === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(lang.trim())
-    ? lang.trim()
-    : 'tr';
-}
+export function generateXmltv({
+  channels,
+  programmes,
+  generatorInfoName = 'epg-scraper',
+  lang,
+  language: declaredLanguage,
+}) {
+  const language = validateGuideResult({
+    channels,
+    programmes,
+    lang: declaredLanguage ?? lang ?? 'tr',
+  });
 
-export function generateXmltv({ channels, programmes, generatorInfoName = 'epg-scraper', lang = 'tr' }) {
-  if (!Array.isArray(channels)) throw new Error('channels must be an array');
-  if (!Array.isArray(programmes)) throw new Error('programmes must be an array');
-  const language = normalizeLang(lang);
-
-  const knownIds = new Set(channels.map((c) => c.id));
-  for (const programme of programmes) {
-    // A null entry (hostile provider result that slipped past merge/compare
-    // filtering) must fail with a clear message, never a raw TypeError.
-    if (!programme) {
-      throw new Error('programmes must not contain null entries');
-    }
-    if (!knownIds.has(programme.channel)) {
-      throw new Error(`Programme references unknown channel "${programme.channel}"`);
-    }
-    toXmltvTimestamp(programme.start);
-    toXmltvTimestamp(programme.stop);
-    // A programme whose stop does not follow its start (zero-length or
-    // reversed) is corrupt data — cross-midnight mishandling and bad
-    // provider math both produce it.  Refuse to emit it instead of writing
-    // a guide no consumer can trust.  Compared as instants (not as strings)
-    // because a DST-observing provider emits two offsets in one guide, where
-    // string order is not chronological.
-    const startMs = isoToEpochMs(programme.start);
-    const stopMs = isoToEpochMs(programme.stop);
-    if (startMs == null || stopMs == null || stopMs <= startMs) {
-      throw new Error(
-        `Programme "${programme.title}" on "${programme.channel}" has stop <= start ` +
-          `(${programme.stop} <= ${programme.start})`
-      );
-    }
-  }
 
   // Order by channel, then by start instant.  Comparing instants (not the ISO
   // strings) keeps the order chronological for providers whose timestamps
@@ -254,9 +158,16 @@ export async function writeXmltv({
   outputPath,
   gzip = true,
   generatorInfoName,
-  lang = 'tr',
+  lang,
+  language,
 }) {
-  const xml = generateXmltv({ channels, programmes, generatorInfoName, lang });
+  const xml = generateXmltv({
+    channels,
+    programmes,
+    generatorInfoName,
+    lang,
+    language,
+  });
   const nodeStream = Readable.from([xml]);
   const fs = await import('node:fs');
   const out = fs.createWriteStream(outputPath);
@@ -292,31 +203,9 @@ function firstIconSrc(body) {
   return match ? decodeEntities(match[1]) : undefined;
 }
 
-// "20260907150000 +0300" -> "2026-09-07T15:00:00+03:00".  Throws on malformed
-// or impossible input (validated with a Date.UTC round-trip, mirroring
-// toXmltvTimestamp).
-export function fromXmltvTimestamp(value) {
-  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-])(\d{2})(\d{2})$/.exec(
-    String(value == null ? '' : value).trim()
-  );
-  if (!match) {
-    throw new Error(`Invalid XMLTV timestamp: ${JSON.stringify(value)}`);
-  }
-  const [, y, mo, d, h, mi, s, sign, oh, om] = match;
-  const check = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s)));
-  if (
-    check.getUTCFullYear() !== Number(y) ||
-    check.getUTCMonth() + 1 !== Number(mo) ||
-    check.getUTCDate() !== Number(d) ||
-    check.getUTCHours() !== Number(h) ||
-    check.getUTCMinutes() !== Number(mi) ||
-    check.getUTCSeconds() !== Number(s) ||
-    Number(oh) > 23 ||
-    Number(om) > 59
-  ) {
-    throw new Error(`Impossible XMLTV timestamp: ${JSON.stringify(value)}`);
-  }
-  return `${y}-${mo}-${d}T${h}:${mi}:${s}${sign}${oh}:${om}`;
+function documentLanguage(source) {
+  const match = /<(?:display-name|title)\b[^>]*\blang\s*=\s*(["'])([^"']*)\1/i.exec(source || '');
+  return (match && normalizeLanguageTag(decodeEntities(match[2]))) || 'tr';
 }
 
 // Parse an XMLTV document string into the internal { channels, programmes }
@@ -383,7 +272,13 @@ export function parseXmltv(xml) {
     });
   }
 
-  return { channels, programmes };
+  return createGuideResult({
+    channels,
+    programmes,
+    days: 0,
+    failures: 0,
+    language: documentLanguage(source),
+  });
 }
 
 // Read an XMLTV file (.xml or .xml.gz, detected by extension) into the

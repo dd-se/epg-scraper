@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { decodeEntities } from '../src/entities.js';
 import { channelIdFromName } from '../src/slug.js';
 import { toXmltvTimestamp, generateXmltv } from '../src/xmltv.js';
 import { buildDateRange, registerProvider, getProvider, listProviders } from '../src/registry.js';
-import { createChannel, createProgramme } from '../src/model.js';
+import { createGuideResult, validateGuideResult, normalizeLanguageTag } from '../src/model.js';
+import { parseClockMinutes, wallToInstant, parseGuideInstant } from '../src/time.js';
+import { runCli } from '../src/cli.js';
 
 describe('entities', () => {
   it('decodes numeric hex/dec references', () => {
@@ -115,6 +117,22 @@ describe('xmltv writer', () => {
     expect(xml).not.toContain('<category');
   });
 
+  it('accepts the canonical guide language field', () => {
+    const xml = generateXmltv({
+      channels,
+      programmes: [
+        {
+          channel: 'ATV.tr',
+          start: '2026-09-07T06:00:00+03:00',
+          stop: '2026-09-07T07:00:00+03:00',
+          title: 'Svenska',
+        },
+      ],
+      language: 'sv',
+    });
+    expect(xml).toContain('lang="sv"');
+  });
+
   it('sorts programmes by channel then start', () => {
     const xml = generateXmltv({
       channels,
@@ -180,6 +198,53 @@ describe('registry', () => {
     expect(() => getProvider('missing')).toThrow(/Unknown provider/);
     expect(() => registerProvider({ id: 'bad', name: 'no scrape' })).toThrow(/scrape/);
   });
+
+  it('rejects invalid browser compatibility declarations', () => {
+    expect(() =>
+      registerProvider({ id: 'bad-browser-metadata', scrape: async () => ({}), browserCompatible: 'no' })
+    ).toThrow(/browserCompatible/);
+    expect(() =>
+      registerProvider({
+        id: 'contradictory-browser-metadata',
+        scrape: async () => ({}),
+        requiresBrowser: true,
+        browserCompatible: false,
+      })
+    ).toThrow(/browserCompatible/);
+  });
+});
+
+describe('cli provider transport preflight', () => {
+  it('rejects browser transport for an HTTP-only provider before scraping', async () => {
+    const scrape = vi.fn(async () => ({ channels: [], programmes: [], days: 0, failures: 0 }));
+    const stdout = [];
+    const stderr = [];
+    const exitCode = await runCli({
+      argv: [
+        '--provider',
+        'test-http-only',
+        '--browser',
+        '--date',
+        '2026-09-08',
+        '--days-forward',
+        '0',
+      ],
+      providerLoader: () => [
+        {
+          id: 'test-http-only',
+          name: 'HTTP only',
+          baseUrl: 'https://example.test',
+          browserCompatible: false,
+          scrape,
+        },
+      ],
+      stdout: { write: (line) => stdout.push(line) },
+      stderr: { write: (line) => stderr.push(line) },
+    });
+    expect(exitCode).toBe(1);
+    expect(scrape).not.toHaveBeenCalled();
+    expect(stderr.join('')).toMatch(/HTTP-only/);
+  });
 });
 
 describe('buildDateRange', () => {
@@ -204,24 +269,154 @@ describe('buildDateRange', () => {
   });
 });
 
-describe('model', () => {
-  it('validates required fields', () => {
-    expect(() => createChannel({ name: 'X' })).toThrow(/id/);
-    expect(() => createChannel({ id: 'X.tr' })).toThrow(/name/);
-    expect(() => createProgramme({ channel: 'a', start: 's', title: 't' })).toThrow(/stop/);
+describe('guide result', () => {
+  it('sanitizes hostile provider results without mutating the input', () => {
+    const issues = [];
+    const input = {
+      channels: [
+        { id: 'X.tr', name: 'X' },
+        { id: 'X.tr', name: 'Later', icon: 'https://x/i.png', url: 'https://x/' },
+        { id: '', name: 'No id' },
+        null,
+      ],
+      programmes: [
+        {
+          channel: 'X.tr',
+          start: '2026-09-07T06:00:00+03:00',
+          stop: '2026-09-07T07:00:00+03:00',
+          title: 'Keep',
+          desc: { hostile: true },
+        },
+        {
+          channel: 'X.tr',
+          start: '2026-09-07T06:00:00+03:00',
+          stop: '2026-09-07T07:00:00+03:00',
+          title: 'Keep',
+        },
+        {
+          channel: 'MISSING.tr',
+          start: '2026-09-07T08:00:00+03:00',
+          stop: '2026-09-07T09:00:00+03:00',
+          title: 'Drop',
+        },
+        {
+          channel: 'X.tr',
+          start: '2026-09-07T09:00:00+03:00',
+          stop: '2026-09-07T08:00:00+03:00',
+          title: 'Reversed',
+        },
+      ],
+      days: 1,
+      failures: 0,
+    };
+    const result = createGuideResult(input, {
+      onIssue: (code, count) => issues.push([code, count]),
+    });
+
+    expect(result.channels).toEqual([
+      { id: 'X.tr', name: 'X', icon: 'https://x/i.png', url: 'https://x/' },
+    ]);
+    expect(result.programmes).toHaveLength(1);
+    expect(result.programmes[0].desc).toBeUndefined();
+    expect(result).toMatchObject({ days: 1, failures: 0, language: 'tr' });
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        ['invalid-channel', 2],
+        ['duplicate-programme', 1],
+        ['unknown-channel', 1],
+        ['invalid-programme', 1],
+      ])
+    );
+    expect(input.channels[0]).toEqual({ id: 'X.tr', name: 'X' });
+    expect(input.programmes).toHaveLength(4);
   });
 
-  it('keeps optional fields undefined when empty', () => {
-    const channel = createChannel({ id: 'X.tr', name: 'X', icon: '', url: undefined });
-    expect(channel.icon).toBeUndefined();
-    expect(channel.url).toBeUndefined();
-    const programme = createProgramme({
+  it('sorts by instant while keeping literal start strings deterministic', () => {
+    const laterInstant = {
       channel: 'X.tr',
-      start: '2026-09-07T06:00:00+03:00',
-      stop: '2026-09-07T07:00:00+03:00',
-      title: 't',
-      desc: null,
+      start: '2026-10-25T02:30:00+02:00',
+      stop: '2026-10-25T03:30:00+02:00',
+      title: 'Earlier instant',
+    };
+    const earlierText = {
+      channel: 'X.tr',
+      start: '2026-10-25T02:00:00+01:00',
+      stop: '2026-10-25T03:00:00+01:00',
+      title: 'Later instant',
+    };
+    const result = createGuideResult({
+      channels: [{ id: 'X.tr', name: 'X' }],
+      programmes: [earlierText, laterInstant],
     });
-    expect(programme.desc).toBeUndefined();
+    expect(result.programmes.map((programme) => programme.title)).toEqual([
+      'Earlier instant',
+      'Later instant',
+    ]);
+  });
+
+  it('keeps the writer validation seam strict', () => {
+    expect(() =>
+      validateGuideResult({
+        channels: [
+          { id: 'X.tr', name: 'X' },
+          { id: 'X.tr', name: 'Duplicate' },
+        ],
+        programmes: [],
+        lang: 'tr',
+      })
+    ).toThrow(/duplicate channel/);
+    expect(() =>
+      validateGuideResult({
+        channels: [{ id: 'X.tr', name: 'X' }],
+        programmes: [
+          {
+            channel: 'X.tr',
+            start: '2026-09-07T06:00:00+03:00',
+            stop: '2026-09-07T07:00:00+03:00',
+            title: '',
+          },
+        ],
+        lang: 'tr',
+      })
+    ).toThrow(/title/);
+  });
+
+  it('rejects empty optional metadata at the writer seam', () => {
+    expect(() =>
+      validateGuideResult({
+        channels: [{ id: 'X.tr', name: 'X', icon: '' }],
+        programmes: [],
+        lang: 'tr',
+      })
+    ).toThrow(/non-empty string/);
+  });
+
+  it('normalizes guide language tags', () => {
+    expect(normalizeLanguageTag(' sv-SE ')).toBe('sv-SE');
+    expect(normalizeLanguageTag('bad tag')).toBeUndefined();
+  });
+});
+
+describe('guide time semantics', () => {
+  it('accepts end-of-day only where the source wall time allows it', () => {
+    expect(parseClockMinutes(23, 59)).toBe(1439);
+    expect(parseClockMinutes(24, 0, { allowEndOfDay: true })).toBe(1440);
+    expect(parseClockMinutes(24, 0)).toBeUndefined();
+    expect(parseClockMinutes(24, 30, { allowEndOfDay: true })).toBeUndefined();
+  });
+
+  it('converts validated wall dates without Date.UTC rollover', () => {
+    expect(wallToInstant(2026, 9, 7, 1440)).toBe('2026-09-08T00:00:00+03:00');
+    expect(wallToInstant(2026, 2, 30, 0)).toBeUndefined();
+    expect(wallToInstant(2026, 9, 7, 1441)).toBeUndefined();
+    expect(wallToInstant(2026, 9, 7, -1)).toBeUndefined();
+  });
+
+  it('requires canonical offset-bearing guide instants', () => {
+    expect(parseGuideInstant('2026-09-07T06:00:00+03:00')?.epochMs).toBeTypeOf('number');
+    expect(parseGuideInstant('2026-09-07T06:00:00')).toBeUndefined();
+    expect(parseGuideInstant('2026-09-07T06:00:00Z')).toBeUndefined();
+    expect(parseGuideInstant('2026-09-07T06:00:00.000+03:00')).toBeUndefined();
+    expect(parseGuideInstant('2026-09-07T06:00:00+0300')).toBeUndefined();
   });
 });

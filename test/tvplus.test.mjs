@@ -56,12 +56,9 @@ describe('tvplus pure parsers', () => {
       minutes: 0,
     });
     expect(parseApiInstant('2026-09-09 23:45:00 UTC+03:00').minutes).toBe(23 * 60 + 45);
-    expect(parseApiInstant('2026-09-09 00:00')).toEqual({
-      year: 2026,
-      month: 9,
-      day: 9,
-      minutes: 0,
-    });
+    expect(parseApiInstant('2026-09-09 00:00')).toBeNull();
+    expect(parseApiInstant('2026-09-09 00:00:00 UTC+04:00')).toBeNull();
+    expect(parseApiInstant('2026-09-09 00:00:00 UTC+99:99')).toBeNull();
     expect(parseApiInstant('garbage')).toBeNull();
     expect(parseApiInstant(undefined)).toBeNull();
   });

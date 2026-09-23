@@ -20,17 +20,17 @@
 // end of day for the last slot), matching the mynet provider's convention.
 
 import { decodeEntities } from '../entities.js';
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import {
-  wallToIso,
   weekDays,
   weekdayIndex,
   normalizeChannelKey,
+  isRealCalendarDate,
+  parseClockMinutes,
+  deriveStartOnlyProgrammes,
   finishResult,
   splitDate,
 } from './shared.js';
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://beinsports.com.tr';
 
@@ -138,19 +138,23 @@ export function parseDayPage(html) {
     return { date: undefined, slots: [] };
   }
   const { data } = props;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(data.event_date || ''))
-    ? String(data.event_date)
-    : undefined;
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(data.event_date || ''));
+  const date =
+    dateMatch &&
+    isRealCalendarDate(Number(dateMatch[1]), Number(dateMatch[2]), Number(dateMatch[3]))
+      ? String(data.event_date)
+      : undefined;
   const slots = [];
   for (const item of data.listTvGuides) {
     const title = typeof item?.name === 'string' ? decodeEntities(item.name).trim() : '';
     const time = typeof item?.event_time === 'string' ? item.event_time : '';
     const timeMatch = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(time.trim());
     if (!title || !timeMatch) continue;
-    const hours = Number(timeMatch[1]);
-    const minutes = Number(timeMatch[2]);
-    if (hours > 24 || minutes > 59) continue;
-    slots.push({ channelId: Number(item.channel_id), startMin: hours * 60 + minutes, title });
+    const startMin = parseClockMinutes(Number(timeMatch[1]), Number(timeMatch[2]), {
+      allowEndOfDay: true,
+    });
+    if (startMin == null) continue;
+    slots.push({ channelId: Number(item.channel_id), startMin, title });
   }
   return { date, slots };
 }
@@ -164,8 +168,12 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 300,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const channelsById = new Map();
   const channels = [];
   const programmes = [];
@@ -220,23 +228,13 @@ export async function scrape({
       }
 
       const { year, month, day } = splitDate(date);
-      for (let s = 0; s < slots.length; s++) {
-        const slot = slots[s];
-        // The page only contains the selected channel's guide, so the slot's
-        // channel is the one we fetched (channel_id in the payload matches).
-        const start = wallToIso(year, month, day, slot.startMin);
-        const endMin = s + 1 < slots.length ? slots[s + 1].startMin : 24 * 60;
-        // Repeated times on a page (same slot listed twice) would make a
-        // zero-length programme — skip it instead of emitting garbage.
-        if (endMin <= slot.startMin) continue;
-        const stop = wallToIso(year, month, day, endMin);
-        programmes.push({ channel: id, start, stop, title: slot.title });
-      }
+      programmes.push(
+        ...deriveStartOnlyProgrammes(slots, { channel: id, year, month, day })
+      );
       log(`ok:   ${name} (${tag}): ${slots.length} programmes`);
-      await sleep(politenessDelayMs);
     }
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
-  return finishResult({ channels, programmes, days: week.length, failures });
+  return finishResult({ channels, programmes, days: week.length, failures, log });
 }

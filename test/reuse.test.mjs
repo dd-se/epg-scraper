@@ -92,7 +92,12 @@ describe('parseXmltv', () => {
         },
       ],
     };
-    expect(parseXmltv(generateXmltv(full))).toEqual(full);
+    expect(parseXmltv(generateXmltv(full))).toEqual({
+      ...full,
+      days: 0,
+      failures: 0,
+      language: 'tr',
+    });
   });
 
   it('degrades hostile entries to skips instead of throwing', () => {
@@ -120,10 +125,16 @@ describe('parseXmltv', () => {
     ]);
   });
 
+  it('recognizes single-quoted language attributes', () => {
+    const xml = `<tv><channel id="X.de"><display-name lang='de'>X</display-name></channel></tv>`;
+    expect(parseXmltv(xml).language).toBe('de');
+  });
+
   it('returns empty results for null/non-string input', () => {
-    expect(parseXmltv(null)).toEqual({ channels: [], programmes: [] });
-    expect(parseXmltv('')).toEqual({ channels: [], programmes: [] });
-    expect(parseXmltv('<tv></tv>')).toEqual({ channels: [], programmes: [] });
+    const empty = { channels: [], programmes: [], days: 0, failures: 0, language: 'tr' };
+    expect(parseXmltv(null)).toEqual(empty);
+    expect(parseXmltv('')).toEqual(empty);
+    expect(parseXmltv('<tv></tv>')).toEqual(empty);
   });
 
   it('does not let a foreign attribute whose name ends with the real one hijack the value', () => {
@@ -149,8 +160,28 @@ describe('readXmltvFile', () => {
     const gz = path.join(dir, 'guide.xml.gz');
     await writeXmltv({ ...guideA, outputPath: plain, gzip: false });
     await writeXmltv({ ...guideA, outputPath: gz, gzip: true });
-    expect(await readXmltvFile(plain)).toEqual(guideA);
-    expect(await readXmltvFile(gz)).toEqual(guideA);
+    const expected = { ...guideA, days: 0, failures: 0, language: 'tr' };
+    expect(await readXmltvFile(plain)).toEqual(expected);
+    expect(await readXmltvFile(gz)).toEqual(expected);
+  });
+
+  it('preserves Swedish language metadata through a file round trip', async () => {
+    const file = path.join(tmpDir('epg-reuse-sv'), 'swedish.xml');
+    const guide = {
+      channels: [{ id: 'SVT1.se', name: 'SVT1' }],
+      programmes: [
+        {
+          channel: 'SVT1.se',
+          start: '2026-09-07T06:00:00+02:00',
+          stop: '2026-09-07T07:00:00+02:00',
+          title: 'Program',
+        },
+      ],
+    };
+    await writeXmltv({ ...guide, outputPath: file, gzip: false, lang: 'sv' });
+    const parsed = await readXmltvFile(file);
+    expect(parsed.language).toBe('sv');
+    expect(readFileSync(file, 'utf8')).toContain('lang="sv"');
   });
 
   it('rejects on missing files', async () => {
@@ -193,6 +224,28 @@ describe('cli --merge --from', () => {
     const parsed = parseXmltv(xml);
     expect(parsed.channels.map((c) => c.id).sort()).toEqual(['ATV.tr', 'NTV.tr']);
     expect(parsed.programmes).toHaveLength(2);
+  });
+
+  it('preserves the first input language during offline merge', async () => {
+    const swedish = path.join(dir, 'epg_sv_SE.xml.gz');
+    const swedishGuide = {
+      channels: [{ id: 'SVT1.se', name: 'SVT1' }],
+      programmes: [
+        {
+          channel: 'SVT1.se',
+          start: '2026-09-07T06:00:00+02:00',
+          stop: '2026-09-07T07:00:00+02:00',
+          title: 'Swedish programme',
+        },
+      ],
+    };
+    await writeXmltv({ ...swedishGuide, outputPath: swedish, gzip: true, lang: 'sv' });
+    const out = path.join(dir, 'merged-sv.xml');
+    const exit = await run(['--merge', '--from', swedish, '--no-gzip', '--out', out]);
+    expect(exit).toBe(0);
+    const xml = readFileSync(out, 'utf8');
+    expect(xml).toContain('lang="sv"');
+    expect(xml).not.toContain('lang="tr"');
   });
 
   it('ignores --provider when --from is given (proves no live scrape)', async () => {

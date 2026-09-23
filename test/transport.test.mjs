@@ -3,7 +3,7 @@
 // re-establishment failsafe.  All network behavior is stubbed — no live
 // requests (see AGENTS.md).
 import { describe, it, expect, vi } from 'vitest';
-import { fetchText, fetchResponseWithRetry } from '../src/http.js';
+import { createPoliteFetch, fetchText, fetchResponseWithRetry } from '../src/http.js';
 import { scrape as scrapeTvplus, CHANNELS as TVPLUS_CHANNELS } from '../src/providers/tvplus.js';
 import { scrape as scrapeDigiturkburada } from '../src/providers/digiturkburada.js';
 import { scrape as scrapeTivibu } from '../src/providers/tivibu.js';
@@ -43,7 +43,7 @@ describe('fetchResponseWithRetry (POST transport)', () => {
     expect(response.ok).toBe(true);
   });
 
-  it('does not consume the body — the caller reads .text() (Set-Cookie pattern)', async () => {
+  it('buffers the body before returning while preserving response headers', async () => {
     let textReads = 0;
     const response = await fetchResponseWithRetry('https://x/auth', {
       fetchImpl: async () => ({
@@ -58,7 +58,128 @@ describe('fetchResponseWithRetry (POST transport)', () => {
       retries: 0,
     });
     expect(response.headers.get('set-cookie')).toBe('SID=1');
-    expect(textReads).toBe(0); // untouched until the caller reads it
+    expect(textReads).toBe(1);
+    expect(await response.text()).toBe('{}');
+    expect(textReads).toBe(1);
+  });
+
+  it('retries when response-body consumption fails', async () => {
+    let calls = 0;
+    const response = await fetchResponseWithRetry('https://x/api', {
+      fetchImpl: async () => {
+        calls++;
+        if (calls === 1) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => 'first' },
+            text: async () => {
+              throw new Error('truncated body');
+            },
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'second' },
+          text: async () => 'ok',
+        };
+      },
+      retries: 1,
+      retryDelayMs: 0,
+    });
+    expect(calls).toBe(2);
+    expect(response.headers.get()).toBe('second');
+    expect(await response.text()).toBe('ok');
+  });
+
+  it('keeps the hard timeout active while reading the response body', async () => {
+    let signal;
+    await expect(
+      fetchResponseWithRetry('https://x/api', {
+        fetchImpl: async (_url, options) => {
+          signal = options.signal;
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => undefined },
+            text: async () =>
+              new Promise((_resolve, reject) => {
+                signal.addEventListener('abort', () => reject(new Error('body aborted')), {
+                  once: true,
+                });
+              }),
+          };
+        },
+        retries: 0,
+        timeoutMs: 10,
+      })
+    ).rejects.toThrow(/body aborted/);
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('does not retry a raw GET 403', async () => {
+    let calls = 0;
+    await expect(
+      fetchResponseWithRetry('https://x/session', {
+        fetchImpl: async () => {
+          calls++;
+          return { ok: false, status: 403, text: async () => '' };
+        },
+        method: 'GET',
+        retries: 3,
+        retryDelayMs: 0,
+      })
+    ).rejects.toThrow(/HTTP 403/);
+    expect(calls).toBe(1);
+  });
+
+  it('does not retry deterministic 400 or 401 responses', async () => {
+    for (const status of [400, 401]) {
+      let calls = 0;
+      await expect(
+        fetchResponseWithRetry('https://x/api', {
+          fetchImpl: async () => {
+            calls++;
+            return { ok: false, status, text: async () => '' };
+          },
+          retries: 3,
+          retryDelayMs: 0,
+        })
+      ).rejects.toThrow(new RegExp(`HTTP ${status}`));
+      expect(calls).toBe(1);
+    }
+  });
+
+  it('does not retry a stateless POST 403 by default', async () => {
+    let calls = 0;
+    await expect(
+      fetchResponseWithRetry('https://x/form', {
+        fetchImpl: async () => {
+          calls++;
+          return { ok: false, status: 403, text: async () => '' };
+        },
+        retries: 3,
+        retryDelayMs: 0,
+      })
+    ).rejects.toThrow(/HTTP 403/);
+    expect(calls).toBe(1);
+  });
+
+  it('retries session POST 403 responses when requested', async () => {
+    let calls = 0;
+    const response = await fetchResponseWithRetry('https://x/api', {
+      fetchImpl: async () => {
+        calls++;
+        if (calls === 1) return { ok: false, status: 403, text: async () => '' };
+        return { ok: true, status: 200, text: async () => 'ok' };
+      },
+      retries: 1,
+      retryDelayMs: 0,
+      retry403: true,
+    });
+    expect(calls).toBe(2);
+    expect(await response.text()).toBe('ok');
   });
 
   it('propagates the status error after exhausting retries', async () => {
@@ -88,6 +209,19 @@ describe('fetchResponseWithRetry (POST transport)', () => {
       })
     ).rejects.toThrow(/down/);
     expect(calls).toBe(2); // 1 initial + 1 retry
+  });
+});
+
+describe('createPoliteFetch', () => {
+  it('spaces consecutive request starts across success and failure', async () => {
+    const times = [];
+    const politeFetch = createPoliteFetch(async () => {
+      times.push(Date.now());
+      return { ok: true };
+    }, 20);
+    await politeFetch('https://x/one');
+    await politeFetch('https://x/two');
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(15);
   });
 });
 

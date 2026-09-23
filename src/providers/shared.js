@@ -1,50 +1,43 @@
-// Shared helpers for provider adapters.  Every provider needs the same
-// plumbing — channel-key normalization, wall-clock conversion, week math,
-// date validation, dedupe/sort — so it lives here once instead of being
-// copy-pasted per provider.  Nothing in this module does I/O; the transport
+import { isRealCalendarDate, parseClockMinutes, wallToInstant } from '../time.js';
+import { createGuideResult } from '../model.js';
+
+export { isRealCalendarDate, parseClockMinutes, wallToInstant };
+
+// Shared helpers for provider adapters. Every provider needs the same
+// channel-key normalization, validated wall-clock conversion, week/date math,
+// start-only slot derivation, and guide-result finalization, so it lives here
+// once instead of being copy-pasted per provider. Nothing here does I/O; the transport
 // (fetch) stays in src/http.js and the scraping loops stay in the provider
 // files.
 
 // ---- Wall-clock <-> ISO conversion (fixed +03:00, Turkey) ----
 
-// Wall-clock date (Y/M/D in the guide's time zone) + minutes since day start
-// -> ISO instant stamped with a fixed UTC offset.  Minutes >= 1440 (slots
-// crossing midnight) roll into the next day via Date.UTC overflow; negative
-// minutes roll back into the previous day.  Callers MUST pre-validate the
-// calendar date (see isRealCalendarDate) — Date.UTC silently normalizes
-// overflow.  `offset` defaults to the Turkish fixed +03:00; a provider whose
-// country does not share it (idmantv — Baku, UTC+4 year-round) passes its own
-// (see idmantv.js `BAKU_ISO_OFFSET`).
+// Wall-clock date (Y/M/D in the guide's time zone) + validated minutes since
+// day start -> ISO instant stamped with the supplied UTC offset. Only
+// 00:00 through explicit 24:00 are accepted; invalid dates, negative minutes,
+// and values above 1440 return undefined. `offset` defaults to Turkey's fixed
+// +03:00; idmantv supplies Baku's fixed +04:00.
 export function wallToIso(year, month, day, minutes, offset = '+03:00') {
-  const ms = Date.UTC(year, month - 1, day, 0, minutes);
-  return new Date(ms).toISOString().slice(0, 19) + offset;
-}
-
-// True when (year, month, day) is a real calendar date.  Date.UTC silently
-// normalizes overflow (month 13, Feb 30, day 32), so validate with a
-// round-trip comparison before converting with wallToIso — otherwise a
-// hostile "Feb 30" would silently land on March 2.
-export function isRealCalendarDate(year, month, day) {
-  const check = new Date(Date.UTC(year, month - 1, day));
-  return (
-    check.getUTCFullYear() === year &&
-    check.getUTCMonth() + 1 === month &&
-    check.getUTCDate() === day
-  );
+  return wallToInstant(year, month, day, minutes, offset);
 }
 
 // ---- Week math (Mon..Sun week-publishing providers) ----
 
-// Monday..Sunday (wall dates, YYYY-MM-DD) of the week containing the
-// reference date (default: now, Istanbul wall time).
-export function weekDays(referenceDate = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Istanbul',
+function zonedDateString(referenceDate, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  });
-  const anchor = fmt.format(referenceDate); // YYYY-MM-DD
+  }).formatToParts(referenceDate);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+// Monday..Sunday (wall dates, YYYY-MM-DD) of the week containing the
+// reference date (default: now, Istanbul wall time).
+export function weekDays(referenceDate = new Date(), timeZone = 'Europe/Istanbul') {
+  const anchor = zonedDateString(referenceDate, timeZone);
   const base = new Date(`${anchor}T12:00:00Z`);
   const monday = new Date(base.getTime() - ((base.getUTCDay() + 6) % 7) * 86400000);
   const days = [];
@@ -70,10 +63,9 @@ export function normalizeChannelKey(name) {
 
 // ---- Date window helpers ----
 
-// The date window a provider should cover when the CLI passes none:
-// today in Istanbul (UTC+3 year-round), as YYYY-MM-DD.
-export function defaultDates() {
-  return [new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10)];
+// The date window a provider should cover when the CLI passes none.
+export function defaultDates(timeZone = 'Europe/Istanbul') {
+  return [zonedDateString(new Date(), timeZone)];
 }
 
 // YYYY-MM-DD -> { year, month, day } numbers.
@@ -82,38 +74,57 @@ export function splitDate(date) {
   return { year, month, day };
 }
 
+export function deriveStartOnlyProgrammes(slots, { channel, year, month, day, offset = '+03:00' }) {
+  const ordered = [...slots].sort((a, b) => a.startMin - b.startMin);
+  const programmes = [];
+  for (let index = 0; index < ordered.length; index++) {
+    const slot = ordered[index];
+    const endMin = index + 1 < ordered.length ? ordered[index + 1].startMin : 1440;
+    if (endMin <= slot.startMin) continue;
+    const start = wallToIso(year, month, day, slot.startMin, offset);
+    const stop = wallToIso(year, month, day, endMin, offset);
+    if (!start || !stop) continue;
+    programmes.push({
+      channel,
+      start,
+      stop,
+      title: slot.title,
+      ...(slot.category != null ? { category: slot.category } : {}),
+    });
+  }
+  return programmes;
+}
+
 // ---- Result finishing (dedupe + canonical order + summary log) ----
 
-// Dedupe exact (channel, start, stop, title) repeats, keep first — the
-// same slot scraped twice (overlapping windows, repeated pages) must not
-// produce duplicate <programme> entries.
-export function dedupeProgrammes(programmes) {
-  const seen = new Set();
-  const out = [];
-  for (const p of programmes) {
-    const key = [p.channel, p.start, p.stop, p.title].join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(p);
-  }
-  return out;
-}
+const ISSUE_TEXT = {
+  'invalid-result': 'invalid result field(s)',
+  'invalid-channel': 'invalid channel entr(ies)',
+  'duplicate-channel': 'duplicate channel id(s)',
+  'invalid-programme': 'invalid programme entr(ies)',
+  'unknown-channel': 'programme(s) with unknown channels',
+  'duplicate-programme': 'duplicate programme(s)',
+  'invalid-metadata': 'invalid result metadata',
+  'invalid-language': 'invalid language tag',
+};
 
-// Canonical result ordering: by channel (codepoint order) then start
-// (ISO string order).  Mutates and returns the array, like Array#sort.
-export function sortProgrammes(programmes) {
-  return programmes.sort(
-    (a, b) => a.channel.localeCompare(b.channel) || a.start.localeCompare(b.start)
+export function finishResult({
+  channels,
+  programmes,
+  days = 0,
+  failures = 0,
+  language = 'tr',
+  log = () => {},
+}) {
+  const result = createGuideResult(
+    { channels, programmes, days, failures, language },
+    {
+      onIssue: (code, count) => log(`warn: dropped ${count} ${ISSUE_TEXT[code] || code}`),
+    }
   );
-}
-
-// Finish a scrape result: dedupe, sort into the canonical order, log the
-// summary line and shape the object every provider returns.
-export function finishResult({ channels, programmes, days, failures, log = () => {} }) {
-  const deduped = sortProgrammes(dedupeProgrammes(programmes));
   log(
-    `done:  ${channels.length} channels, ${deduped.length} programmes, ` +
-      `${failures} failed request(s)`
+    `done:  ${result.channels.length} channels, ${result.programmes.length} programmes, ` +
+      `${result.failures} failed request(s)`
   );
-  return { channels, programmes: deduped, days, failures };
+  return result;
 }

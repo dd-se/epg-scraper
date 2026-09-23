@@ -4,7 +4,7 @@
 import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { loadProviders } from './providers/index.js';
-import { getProvider, listProviders, buildDateRange } from './registry.js';
+import { buildDateRange } from './registry.js';
 import { writeXmltv, readXmltvFile } from './xmltv.js';
 import {
   compareResults,
@@ -14,6 +14,8 @@ import {
 } from './compare.js';
 import { mergeResults } from './merge.js';
 import { loadAliasMap, createCanonicalizer } from './aliases.js';
+import { createGuideResult } from './model.js';
+import { resolveProviderContext } from './provider-catalog.js';
 
 const HELP_TEXT = `Usage: epg-scraper [options]
 
@@ -35,11 +37,11 @@ const HELP_TEXT = `Usage: epg-scraper [options]
                        channel and day (~46 per window day incl. the
                        small-hours lookback), so keep this polite)
   --retries N          transport retries per request after the first attempt
-                       (default: 2 for GET pages, 1 for API POSTs; a 5xx/
-                       429 or network error is retried, a deterministic 404/
-                       410 — and 403 on GET pages — is not; POST 403 stays
-                       retryable: TV+/Tivibu signal session expiry with it)
-  --timeout-ms N       per-request hard timeout in ms (default: 20000)
+                       (default: 2 for GET pages, 1 for API POSTs; 5xx/429,
+                       transport and body-read errors are retried; 404/410
+                       and GET 403 are not; API POST 403 remains retryable)
+  --timeout-ms N       per-request hard timeout in ms, including body reads
+                       and browser navigation (default: 20000)
   --retry-delay-ms N   base ms between retry attempts, scaled linearly per
                        attempt (default: 400)
   --browser            launch a headless browser for JS-rendered providers
@@ -93,6 +95,7 @@ export async function runCli({
   stdout = process.stdout,
   stderr = process.stderr,
   cwd = process.cwd(),
+  providerLoader = loadProviders,
 } = {}) {
   const write = (stream, line) => (stream.write ? stream.write(line + '\n') : undefined);
 
@@ -138,12 +141,14 @@ export async function runCli({
     return 0;
   }
 
-  const loaded = loadProviders();
+  const loaded = providerLoader();
+  const providersById = new Map(loaded.map((provider) => [provider.id, provider]));
 
   if (values['list-providers']) {
     for (const provider of loaded) {
       const flags = [];
       if (provider.requiresBrowser) flags.push('browser');
+      if (provider.browserCompatible === false) flags.push('http-only');
       const suffix = flags.length ? ` [${flags.join(', ')}]` : '';
       write(stdout, `${provider.id}\t${provider.name}\t${provider.baseUrl}${suffix}`);
     }
@@ -267,11 +272,28 @@ export async function runCli({
   // no live scrape happens), which tests rely on.
   if (!(values.merge && fromFiles.length > 0)) {
     for (const id of providerIds) {
-      if (!listProviders().some((provider) => provider.id === id)) {
-        const registered = listProviders().map((provider) => provider.id).join(', ') || '(none)';
+      if (!providersById.has(id)) {
+        const registered = loaded.map((provider) => provider.id).join(', ') || '(none)';
         fail(`Unknown provider "${id}". Registered: ${registered}`);
         return 1;
       }
+    }
+
+    const selectedProviders = providerIds.map((id) => providersById.get(id));
+    const browserCompare = values.compare && providerIds.length === 1;
+    const browserProviders = selectedProviders.filter(
+      (provider) => browserCompare || values.browser || provider.requiresBrowser
+    );
+    const incompatible = browserProviders.filter(
+      (provider) => provider.browserCompatible === false
+    );
+    if (incompatible.length > 0) {
+      const ids = incompatible.map((provider) => `"${provider.id}"`).join(', ');
+      fail(
+        `${incompatible.length === 1 ? 'provider' : 'providers'} ${ids} ` +
+          `${incompatible.length === 1 ? 'is' : 'are'} HTTP-only and cannot use browser transport`
+      );
+      return 1;
     }
   }
 
@@ -281,134 +303,45 @@ export async function runCli({
   // `--merge --from` never touches the registry, so it keeps the default.
   const windowProvider =
     !(values.merge && fromFiles.length > 0) && providerIds.length > 0
-      ? getProvider(providerIds[0])
+      ? providersById.get(providerIds[0])
       : undefined;
   const dates = buildDateRange({
     referenceDate,
     daysBack,
     daysForward,
-    timeZone: windowProvider ? providerTimeZone(windowProvider) : undefined,
+    timeZone: windowProvider ? resolveProviderContext(windowProvider).timeZone : undefined,
   });
 
-  if (values.compare) {
-    const compareProviders = providerIds.map((id) => getProvider(id));
-    if (compareProviders.length === 1) {
-      return runCompare({
-        provider: compareProviders[0],
-        canonicalize,
-        dates,
-        values,
-        delayMs,
-        transportOptions,
-        log,
-        fail,
-        write,
-        stdout,
-        stderr,
-        cwd,
-      });
-    }
-    return runProviderCompare({
-      providers: compareProviders,
-      canonicalize,
-      dates,
-      values,
-      delayMs,
-      transportOptions,
-      log,
-      fail,
-      write,
-      stdout,
-      stderr,
-      cwd,
-    });
-  }
+  const offline = values.merge && fromFiles.length > 0;
+  const providers = offline ? [] : providerIds.map((id) => providersById.get(id));
+  const mode = values.compare
+    ? providers.length === 1
+      ? 'http-browser-compare'
+      : 'provider-compare'
+    : values.merge
+      ? offline
+        ? 'offline-merge'
+        : 'live-merge'
+      : 'single';
 
-  if (values.merge) {
-    // Offline merge reuses files and never touches providers or the network.
-    const providers = fromFiles.length > 0 ? [] : providerIds.map((id) => getProvider(id));
-    return runMerge({
-      providers,
-      fromFiles,
-      canonicalize,
-      dates,
-      values,
-      delayMs,
-      transportOptions,
-      log,
-      fail,
-      write,
-      stdout,
-      stderr,
-      cwd,
-    });
-  }
-
-  const provider = getProvider(providerIds[0]);
-
-  // Determine whether to use browser rendering.
-  const useBrowser = values.browser || provider.requiresBrowser;
-
-  // Lazily created browser fetcher — only when --browser or requiresBrowser.
-  let browserFetcher = null;
-
-  if (useBrowser) {
-    try {
-      const { createBrowserFetcher } = await import('./browser.js');
-      browserFetcher = await createBrowserFetcher({ headless: true, stealth: values.stealth });
-      log('browser: Playwright headless Chromium launched');
-    } catch (error) {
-      fail(error && error.message ? error.message : String(error));
-      return 1;
-    }
-  }
-  const extension = values.gzip ? '.xml.gz' : '.xml';
-  const outputPath =
-    values.out != null
-      ? path.resolve(cwd, values.out)
-      : path.join(cwd, `epg_${provider.id}_${providerCountry(provider)}${extension}`);
-
-  log(`provider: ${provider.id} (${provider.name})`);
-  log(`window:   ${dates[0]} .. ${dates[dates.length - 1]} (${dates.length} day(s))`);
-
-  try {
-    const scrapeOptions = { dates, log, fetchOptions: { ...transportOptions } };
-    if (delayMs !== undefined) scrapeOptions.politenessDelayMs = delayMs;
-    if (browserFetcher) {
-      scrapeOptions.fetchImpl = browserFetcher.fetchImpl;
-    }
-    const maxChannels = parseMaxChannels(values, fail);
-    if (maxChannels === null) return 1;
-    if (maxChannels !== undefined) scrapeOptions.maxChannels = maxChannels;
-
-    const { channels, programmes, days, failures } = await provider.scrape(scrapeOptions);
-    log(
-      `scraped:  ${channels.length} channels, ${programmes.length} programmes from ${days} day page(s), ${failures} failed page(s)`
-    );
-
-    if (channels.length === 0 || programmes.length === 0) {
-      fail('nothing scraped — refusing to write an empty guide');
-      return 1;
-    }
-
-    const { bytes } = await writeGuideFile({
-      channels,
-      programmes,
-      outputPath,
-      gzip: values.gzip,
-      generatorInfoName: `epg-scraper (${provider.id})`,
-      lang: providerLanguage(provider),
-    });
-    log(`written:  ${outputPath} (${bytes} bytes uncompressed XML)`);
-    return 0;
-  } catch (error) {
-    fail(error && error.message ? error.message : String(error));
-    return 1;
-  } finally {
-    if (browserFetcher) {
-      await browserFetcher.close().catch(() => {});
-    }
-  }
+  return executeCliRun({
+    mode,
+    providers,
+    fromFiles,
+    canonicalize,
+    dates,
+    cwd,
+    gzip: values.gzip,
+    out: values.out,
+    forceBrowser: values.browser,
+    stealth: values.stealth,
+    maxChannelsArg: values['max-channels'],
+    delayMs,
+    transportOptions,
+    log,
+    emit: (line) => write(stdout, line),
+    fail,
+  });
 }
 
 // Parse `--delay-ms` once for all modes.  Returns the delay in ms,
@@ -457,6 +390,14 @@ function parseTransportOptions(values, fail) {
   return options;
 }
 
+function browserFetchOptions(stealth, transportOptions = {}) {
+  return {
+    headless: true,
+    stealth,
+    timeoutMs: transportOptions.timeoutMs ?? 20000,
+  };
+}
+
 // Strip a trailing .gz / .xml so `--compare` can derive the per-mode output
 // paths (guide.xml.gz -> guide.http.xml.gz + guide.browser.xml.gz).
 function stripXmltvExtension(outputPath) {
@@ -469,9 +410,9 @@ function stripXmltvExtension(outputPath) {
 // Parse `--max-channels` once for all modes.  Returns the cap, undefined
 // when the flag was not passed, or null after reporting an invalid value
 // (caller must exit 1).
-function parseMaxChannels(values, fail) {
-  if (values['max-channels'] == null) return undefined;
-  const n = Number(values['max-channels']);
+function parseMaxChannels(value, fail) {
+  if (value == null) return undefined;
+  const n = Number(value);
   if (!Number.isInteger(n) || n < 1) {
     fail('--max-channels expects a positive integer');
     return null;
@@ -479,322 +420,325 @@ function parseMaxChannels(values, fail) {
   return n;
 }
 
-// Write one guide file.  Small shared helper so single/merge/compare don't
-// each re-implement the writeXmltv call.
-async function writeGuideFile({ channels, programmes, outputPath, gzip, generatorInfoName, lang }) {
-  return writeXmltv({ channels, programmes, outputPath, gzip, generatorInfoName, lang });
-}
+async function executeCliRun(context) {
+  const maxChannels = parseMaxChannels(context.maxChannelsArg, context.fail);
+  if (maxChannels === null) return 1;
 
-// ---- Provider-declared locale defaults ----
-//
-// A provider may declare where its guide belongs:
-//   country   — output filename suffix (`epg_<id>_<COUNTRY>.xml`), default TR
-//   language  — the `lang` attribute on titles/display names, default tr
-//   timeZone  — the zone that decides what "today" means for the default
-//               date window, default Europe/Istanbul
-// Each value is validated and falls back to the Turkish default, so a
-// malformed declaration can never produce a broken filename or attribute.
-
-function providerCountry(provider) {
-  const value = provider && provider.country;
-  return typeof value === 'string' && /^[A-Za-z]{2}$/.test(value.trim())
-    ? value.trim().toUpperCase()
-    : 'TR';
-}
-
-function providerLanguage(provider) {
-  const value = provider && provider.language;
-  return typeof value === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(value.trim())
-    ? value.trim()
-    : 'tr';
-}
-
-function providerTimeZone(provider) {
-  const value = provider && provider.timeZone;
-  if (typeof value !== 'string' || value.trim() === '') return 'Europe/Istanbul';
-  try {
-    // Throws for an unknown zone; a bad declaration degrades to the default.
-    new Intl.DateTimeFormat('en-CA', { timeZone: value.trim() });
-    return value.trim();
-  } catch {
-    return 'Europe/Istanbul';
-  }
-}
-
-// --compare: scrape the provider twice (plain HTTP, then headless browser),
-// report the structural differences, and write both guides for manual diffing.
-async function runCompare({ provider, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
-  // Launch the browser first so a missing Playwright fails fast.
+  const needBrowser =
+    context.mode === 'http-browser-compare' ||
+    (context.mode !== 'offline-merge' &&
+      (context.forceBrowser || context.providers.some((provider) => provider.requiresBrowser)));
   let browserFetcher = null;
-  try {
-    const { createBrowserFetcher } = await import('./browser.js');
-    browserFetcher = await createBrowserFetcher({ headless: true, stealth: values.stealth });
-    log('browser: Playwright headless Chromium launched');
-  } catch (error) {
-    fail(error && error.message ? error.message : String(error));
-    return 1;
-  }
 
-  try {
-    const extension = values.gzip ? '.xml.gz' : '.xml';
-    const base =
-      values.out != null
-        ? path.resolve(cwd, stripXmltvExtension(values.out))
-        : path.join(cwd, `epg_${provider.id}_${providerCountry(provider)}`);
-    const httpOutput = `${base}.http${extension}`;
-    const browserOutput = `${base}.browser${extension}`;
-
-    const options = { dates, fetchOptions: { ...transportOptions } };
-    if (delayMs !== undefined) options.politenessDelayMs = delayMs;
-    const maxChannels = parseMaxChannels(values, fail);
-    if (maxChannels === null) return 1;
-    if (maxChannels !== undefined) options.maxChannels = maxChannels;
-
-    log('compare: scraping with plain HTTP fetch');
-    const httpResult = await provider.scrape({
-      ...options,
-      log: (line) => log(`http:    ${line}`),
-    });
-
-    log('compare: scraping with headless browser');
-    const browserResult = await provider.scrape({
-      ...options,
-      fetchImpl: browserFetcher.fetchImpl,
-      log: (line) => log(`browser: ${line}`),
-    });
-
-    const report = compareResults({ http: httpResult, browser: browserResult, canonicalize });
-    for (const line of renderCompareReport({ providerId: provider.id, report })) {
-      write(stdout, line);
-    }
-
-    let wroteAny = false;
-    const writeSide = async (label, result, outputPath) => {
-      if (result.channels.length === 0 || result.programmes.length === 0) {
-        write(stdout, `note: ${label} produced no data — skipping ${outputPath}`);
-        return;
-      }
-      const { bytes } = await writeGuideFile({
-        channels: result.channels,
-        programmes: result.programmes,
-        outputPath,
-        gzip: values.gzip,
-        generatorInfoName: `epg-scraper (${provider.id})`,
-        lang: providerLanguage(provider),
-      });
-      write(stdout, `written: ${outputPath} (${bytes} bytes uncompressed XML) [${label}]`);
-      wroteAny = true;
-    };
-    await writeSide('http', httpResult, httpOutput);
-    await writeSide('browser', browserResult, browserOutput);
-
-    if (!wroteAny) {
-      fail('nothing scraped in either mode — refusing to write empty guides');
-      return 1;
-    }
-    return 0;
-  } catch (error) {
-    fail(error && error.message ? error.message : String(error));
-    return 1;
-  } finally {
-    if (browserFetcher) {
-      await browserFetcher.close().catch(() => {});
-    }
-  }
-}
-
-// --merge: scrape every listed provider (sharing one browser when any of
-// them needs JS rendering), or reuse already-scraped XMLTV files with
-// --from (zero network), then combine into a single complete guide and write
-// one XMLTV file.
-async function runMerge({ providers, fromFiles = [], dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
-  const offline = fromFiles.length > 0;
-  // Lazily create one browser fetcher shared by every provider that needs it.
-  const needBrowser = !offline && (values.browser || providers.some((p) => p.requiresBrowser));
-  let browserFetcher = null;
   if (needBrowser) {
     try {
       const { createBrowserFetcher } = await import('./browser.js');
-      browserFetcher = await createBrowserFetcher({ headless: true, stealth: values.stealth });
-      log('browser: Playwright headless Chromium launched');
+      browserFetcher = await createBrowserFetcher(
+        browserFetchOptions(context.stealth, context.transportOptions)
+      );
+      context.log('browser: Playwright headless Chromium launched');
     } catch (error) {
-      fail(error && error.message ? error.message : String(error));
+      context.fail(errorMessage(error));
       return 1;
     }
   }
 
   try {
-    const maxChannels = parseMaxChannels(values, fail);
-    if (maxChannels === null) return 1;
-
-    const results = [];
-    if (offline) {
-      for (const file of fromFiles) {
-        const resolved = path.resolve(cwd, file);
-        let parsed;
-        try {
-          parsed = await readXmltvFile(resolved);
-        } catch (error) {
-          fail(`--from "${file}": ${error && error.message ? error.message : String(error)}`);
-          return 1;
-        }
-        const label = path.basename(file);
-        results.push({ providerId: label, ...parsed });
-        log(`merge: ${label} loaded ${parsed.channels.length} channels, ${parsed.programmes.length} programmes`);
-      }
-    } else {
-      for (const provider of providers) {
-        const useBrowser = values.browser || provider.requiresBrowser;
-        log(`merge: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`);
-        const result = await provider.scrape({
-          dates,
-          maxChannels,
-          fetchOptions: { ...transportOptions },
-          politenessDelayMs: delayMs,
-          fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
-          log: (line) => log(`${provider.id}: ${line}`),
-        });
-        results.push({ providerId: provider.id, ...result });
-        log(
-          `merge: ${provider.id} contributed ${result.channels.length} channels, ` +
-            `${result.programmes.length} programmes (${result.failures} failed page(s))`
-        );
-      }
+    if (context.mode === 'single') {
+      const provider = context.providers[0];
+      context.log(`provider: ${provider.id} (${provider.name})`);
+      context.log(
+        `window:   ${context.dates[0]} .. ${context.dates[context.dates.length - 1]} ` +
+          `(${context.dates.length} day(s))`
+      );
     }
 
-    const merged = mergeResults(results, canonicalize);
-    const sourceCount = offline ? fromFiles.length : providers.length;
-    const sourceNoun = offline ? 'file(s)' : 'provider(s)';
-    log(
-      `merge: ${merged.channels.length} channels, ${merged.programmes.length} programmes ` +
-        `from ${sourceCount} ${sourceNoun}, ${merged.duplicates} duplicate programme(s) removed`
-    );
+    const runContext = {
+      ...context,
+      maxChannels,
+      browserFetchImpl: browserFetcher?.fetchImpl,
+    };
 
-    if (merged.channels.length === 0 || merged.programmes.length === 0) {
-      fail(offline ? 'nothing merged — refusing to write an empty guide' : 'nothing scraped — refusing to write an empty guide');
-      return 1;
+    switch (runContext.mode) {
+      case 'single':
+        return await runSingleMode(runContext);
+      case 'http-browser-compare':
+        return await runHttpBrowserCompareMode(runContext);
+      case 'provider-compare':
+        return await runProviderCompareMode(runContext);
+      case 'live-merge':
+      case 'offline-merge':
+        return await runMergeMode(runContext);
+      default:
+        throw new Error(`Unknown CLI mode ${runContext.mode}`);
     }
-
-    const extension = values.gzip ? '.xml.gz' : '.xml';
-    // Country and language follow the first provider — the one whose channel
-    // names and conflict precedence win.  `--merge --from` has no providers,
-    // so it keeps the Turkish defaults.
-    const leadProvider = offline ? undefined : providers[0];
-    const outputPath =
-      values.out != null
-        ? path.resolve(cwd, values.out)
-        : path.join(cwd, `epg_merged_${providerCountry(leadProvider)}${extension}`);
-    const generatorInfoName = offline
-      ? `epg-scraper (merged files: ${fromFiles.map((f) => path.basename(f)).join('+')})`
-      : `epg-scraper (merged: ${providers.map((p) => p.id).join('+')})`;
-    const { bytes } = await writeGuideFile({
-      channels: merged.channels,
-      programmes: merged.programmes,
-      outputPath,
-      gzip: values.gzip,
-      generatorInfoName,
-      lang: providerLanguage(leadProvider),
-    });
-    log(`written: ${outputPath} (${bytes} bytes uncompressed XML)`);
-    return 0;
   } catch (error) {
-    fail(error && error.message ? error.message : String(error));
+    context.fail(errorMessage(error));
     return 1;
   } finally {
     if (browserFetcher) {
       await browserFetcher.close().catch(() => {});
     }
   }
+}
+
+function errorMessage(error) {
+  return error && error.message ? error.message : String(error);
+}
+
+async function scrapeProvider(provider, context, { useBrowser = false, logPrefix = '' } = {}) {
+  const options = {
+    dates: context.dates,
+    fetchOptions: { ...context.transportOptions },
+    log: (line) => context.log(`${logPrefix}${line}`),
+  };
+  if (context.delayMs !== undefined) options.politenessDelayMs = context.delayMs;
+  if (context.maxChannels !== undefined) options.maxChannels = context.maxChannels;
+  if (useBrowser) options.fetchImpl = context.browserFetchImpl;
+  const result = await provider.scrape(options);
+  return createGuideResult(
+    {
+      ...result,
+      language: result?.language || resolveProviderContext(provider).language,
+    },
+    {
+      onIssue: (code, count) => context.log(`warn: dropped ${count} invalid ${code} result entr(ies)`),
+    }
+  );
+}
+
+async function writeComparisonSides(context, sides) {
+  let wroteAny = false;
+  for (const side of sides) {
+    const { label, result, outputPath, generatorInfoName, language } = side;
+    if (result.channels.length === 0 || result.programmes.length === 0) {
+      context.emit(`note: ${label} produced no data — skipping ${outputPath}`);
+      continue;
+    }
+    const { bytes } = await writeXmltv({
+      channels: result.channels,
+      programmes: result.programmes,
+      outputPath,
+      gzip: context.gzip,
+      generatorInfoName,
+      language,
+    });
+    context.emit(`written: ${outputPath} (${bytes} bytes uncompressed XML) [${label}]`);
+    wroteAny = true;
+  }
+  return wroteAny;
+}
+
+async function runSingleMode(context) {
+  const provider = context.providers[0];
+  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const outputPath =
+    context.out != null
+      ? path.resolve(context.cwd, context.out)
+      : path.join(context.cwd, `epg_${provider.id}_${resolveProviderContext(provider).country}${extension}`);
+  const useBrowser = context.forceBrowser || provider.requiresBrowser;
+  const result = await scrapeProvider(provider, context, { useBrowser });
+  context.log(
+    `scraped:  ${result.channels.length} channels, ${result.programmes.length} programmes ` +
+      `from ${result.days} day page(s), ${result.failures} failed page(s)`
+  );
+
+  if (result.channels.length === 0 || result.programmes.length === 0) {
+    context.fail('nothing scraped — refusing to write an empty guide');
+    return 1;
+  }
+
+  const { bytes } = await writeXmltv({
+    channels: result.channels,
+    programmes: result.programmes,
+    outputPath,
+    gzip: context.gzip,
+    generatorInfoName: `epg-scraper (${provider.id})`,
+    language: result.language || resolveProviderContext(provider).language,
+  });
+  context.log(`written:  ${outputPath} (${bytes} bytes uncompressed XML)`);
+  return 0;
+}
+
+async function runHttpBrowserCompareMode(context) {
+  const provider = context.providers[0];
+  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const base =
+    context.out != null
+      ? path.resolve(context.cwd, stripXmltvExtension(context.out))
+      : path.join(context.cwd, `epg_${provider.id}_${resolveProviderContext(provider).country}`);
+
+  context.log('compare: scraping with plain HTTP fetch');
+  const httpResult = await scrapeProvider(provider, context, { logPrefix: 'http:    ' });
+  context.log('compare: scraping with headless browser');
+  const browserResult = await scrapeProvider(provider, context, {
+    useBrowser: true,
+    logPrefix: 'browser: ',
+  });
+
+  const report = compareResults({
+    http: httpResult,
+    browser: browserResult,
+    canonicalize: context.canonicalize,
+  });
+  for (const line of renderCompareReport({ providerId: provider.id, report })) {
+    context.emit(line);
+  }
+
+  const wroteAny = await writeComparisonSides(context, [
+    {
+      label: 'http',
+      result: httpResult,
+      outputPath: `${base}.http${extension}`,
+      generatorInfoName: `epg-scraper (${provider.id})`,
+      language: httpResult.language || resolveProviderContext(provider).language,
+    },
+    {
+      label: 'browser',
+      result: browserResult,
+      outputPath: `${base}.browser${extension}`,
+      generatorInfoName: `epg-scraper (${provider.id})`,
+      language: browserResult.language || resolveProviderContext(provider).language,
+    },
+  ]);
+  if (!wroteAny) {
+    context.fail('nothing scraped in either mode — refusing to write empty guides');
+    return 1;
+  }
+  return 0;
+}
+
+async function runMergeMode(context) {
+  const offline = context.mode === 'offline-merge';
+  const results = [];
+
+  if (offline) {
+    for (const file of context.fromFiles) {
+      let parsed;
+      try {
+        parsed = await readXmltvFile(path.resolve(context.cwd, file));
+      } catch (error) {
+        context.fail(`--from "${file}": ${errorMessage(error)}`);
+        return 1;
+      }
+      const label = path.basename(file);
+      results.push({ providerId: label, ...parsed });
+      context.log(
+        `merge: ${label} loaded ${parsed.channels.length} channels, ` +
+          `${parsed.programmes.length} programmes`
+      );
+    }
+  } else {
+    for (const provider of context.providers) {
+      const useBrowser = context.forceBrowser || provider.requiresBrowser;
+      context.log(
+        `merge: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`
+      );
+      const result = await scrapeProvider(provider, context, {
+        useBrowser,
+        logPrefix: `${provider.id}: `,
+      });
+      results.push({ providerId: provider.id, ...result });
+      context.log(
+        `merge: ${provider.id} contributed ${result.channels.length} channels, ` +
+          `${result.programmes.length} programmes (${result.failures} failed page(s))`
+      );
+    }
+  }
+
+  const merged = mergeResults(results, context.canonicalize, {
+    onIssue: (code, count) => context.log(`warn: merge reported ${count} ${code}`),
+  });
+  const sourceCount = offline ? context.fromFiles.length : context.providers.length;
+  const sourceNoun = offline ? 'file(s)' : 'provider(s)';
+  context.log(
+    `merge: ${merged.channels.length} channels, ${merged.programmes.length} programmes ` +
+      `from ${sourceCount} ${sourceNoun}, ${merged.duplicates} duplicate programme(s) removed`
+  );
+
+  if (merged.channels.length === 0 || merged.programmes.length === 0) {
+    context.fail(
+      offline
+        ? 'nothing merged — refusing to write an empty guide'
+        : 'nothing scraped — refusing to write an empty guide'
+    );
+    return 1;
+  }
+
+  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const leadProvider = offline ? undefined : context.providers[0];
+  const outputPath =
+    context.out != null
+      ? path.resolve(context.cwd, context.out)
+      : path.join(context.cwd, `epg_merged_${resolveProviderContext(leadProvider).country}${extension}`);
+  const generatorInfoName = offline
+    ? `epg-scraper (merged files: ${context.fromFiles.map((file) => path.basename(file)).join('+')})`
+    : `epg-scraper (merged: ${context.providers.map((provider) => provider.id).join('+')})`;
+  const { bytes } = await writeXmltv({
+    channels: merged.channels,
+    programmes: merged.programmes,
+    outputPath,
+    gzip: context.gzip,
+    generatorInfoName,
+    language: merged.language || resolveProviderContext(leadProvider).language,
+  });
+  context.log(`written: ${outputPath} (${bytes} bytes uncompressed XML)`);
+  return 0;
 }
 
 // --compare with two providers: scrape both (each in its natural mode,
 // sharing one browser when any of them needs JS rendering), diff the guides
 // channel by channel, and write both sides for manual diffing.
-async function runProviderCompare({ providers, dates, values, delayMs, transportOptions = {}, log, fail, write, stdout, stderr, cwd, canonicalize }) {
-  const needBrowser = values.browser || providers.some((p) => p.requiresBrowser);
-  let browserFetcher = null;
-  if (needBrowser) {
-    try {
-      const { createBrowserFetcher } = await import('./browser.js');
-      browserFetcher = await createBrowserFetcher({ headless: true, stealth: values.stealth });
-      log('browser: Playwright headless Chromium launched');
-    } catch (error) {
-      fail(error && error.message ? error.message : String(error));
-      return 1;
-    }
+async function runProviderCompareMode(context) {
+  const sides = [];
+  for (const provider of context.providers) {
+    const useBrowser = context.forceBrowser || provider.requiresBrowser;
+    context.log(
+      `compare: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`
+    );
+    const result = await scrapeProvider(provider, context, {
+      useBrowser,
+      logPrefix: `${provider.id}: `,
+    });
+    sides.push({ provider, result });
+    context.log(
+      `compare: ${provider.id} produced ${result.channels.length} channels, ` +
+        `${result.programmes.length} programmes (${result.failures} failed page(s))`
+    );
   }
 
-  try {
-    const maxChannels = parseMaxChannels(values, fail);
-    if (maxChannels === null) return 1;
+  const [a, b] = sides;
+  const report = compareProviderResults({
+    a: a.result,
+    b: b.result,
+    canonicalize: context.canonicalize,
+  });
+  for (const line of renderProviderCompareReport({
+    providerA: a.provider.id,
+    providerB: b.provider.id,
+    report,
+  })) {
+    context.emit(line);
+  }
 
-    const results = [];
-    for (const provider of providers) {
-      const useBrowser = values.browser || provider.requiresBrowser;
-      log(`compare: scraping ${provider.id} (${provider.name})${useBrowser ? ' [browser]' : ''}`);
-      const result = await provider.scrape({
-        dates,
-        maxChannels,
-        fetchOptions: { ...transportOptions },
-        politenessDelayMs: delayMs,
-        fetchImpl: useBrowser ? browserFetcher.fetchImpl : undefined,
-        log: (line) => log(`${provider.id}: ${line}`),
-      });
-      results.push({ providerId: provider.id, ...result });
-      log(
-        `compare: ${provider.id} produced ${result.channels.length} channels, ` +
-          `${result.programmes.length} programmes (${result.failures} failed page(s))`
-      );
-    }
-
-    const [a, b] = results;
-    const report = compareProviderResults({ a, b, canonicalize });
-    for (const line of renderProviderCompareReport({
-      providerA: a.providerId,
-      providerB: b.providerId,
-      report,
-    })) {
-      write(stdout, line);
-    }
-
-    const extension = values.gzip ? '.xml.gz' : '.xml';
-    const base =
-      values.out != null
-        ? path.resolve(cwd, stripXmltvExtension(values.out))
-        : path.join(cwd, 'epg_compare');
-    const aOutput = `${base}.${a.providerId}${extension}`;
-    const bOutput = `${base}.${b.providerId}${extension}`;
-
-    let wroteAny = false;
-    const writeSide = async (label, result, outputPath) => {
-      if (result.channels.length === 0 || result.programmes.length === 0) {
-        write(stdout, `note: ${label} produced no data — skipping ${outputPath}`);
-        return;
-      }
-      const { bytes } = await writeGuideFile({
-        channels: result.channels,
-        programmes: result.programmes,
-        outputPath,
-        gzip: values.gzip,
-        generatorInfoName: `epg-scraper (${label})`,
-      });
-      write(stdout, `written: ${outputPath} (${bytes} bytes uncompressed XML) [${label}]`);
-      wroteAny = true;
-    };
-    await writeSide(a.providerId, a, aOutput);
-    await writeSide(b.providerId, b, bOutput);
-
-    if (!wroteAny) {
-      fail('nothing scraped in either provider — refusing to write empty guides');
-      return 1;
-    }
-    return 0;
-  } catch (error) {
-    fail(error && error.message ? error.message : String(error));
+  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const base =
+    context.out != null
+      ? path.resolve(context.cwd, stripXmltvExtension(context.out))
+      : path.join(context.cwd, 'epg_compare');
+  const wroteAny = await writeComparisonSides(
+    context,
+    sides.map(({ provider, result }) => ({
+      label: provider.id,
+      result,
+      outputPath: `${base}.${provider.id}${extension}`,
+      generatorInfoName: `epg-scraper (${provider.id})`,
+      language: result.language || resolveProviderContext(provider).language,
+    }))
+  );
+  if (!wroteAny) {
+    context.fail('nothing scraped in either provider — refusing to write empty guides');
     return 1;
-  } finally {
-    if (browserFetcher) {
-      await browserFetcher.close().catch(() => {});
-    }
   }
+  return 0;
 }

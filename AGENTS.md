@@ -52,30 +52,30 @@ Development tooling includes a static file server in
   the writer and the reader compare `start`/`stop` as **instants**
   (`isoToEpochMs()`) rather than as ISO strings.  (Merge/compare only key
   slots on the literal strings — they never order by time.)
-- **Hostile-input hardening.** Every parser must apply the same guards as
-  the existing providers: reject out-of-clock wall times (hours > 24,
-  minutes > 59) and impossible calendar dates (month 13, Feb 30, day 32)
-  before converting with `wallToIso()` — `Date.UTC` normalizes overflow, so
-  validate with a round-trip comparison like `toXmltvTimestamp()` does
-  (a bare month/day range check misses Feb 30); drop reversed/zero-length
-  slots (`stop <= start` — compared as instants when the provider stamps
-  more than one offset, i.e. in a DST zone; compare on the ISO strings when
-  the provider pins a single offset);
-  skip null/hostile channel and programme entries; degrade non-string /
-  non-array fields to empty.  Providers must never push a corrupt slot
-  into the merge/compare pipeline — the writer (`generateXmltv`) is the
-  last line of defense, not the first.
+- **Hostile-input hardening.** Source wall times pass through
+  `parseClockMinutes()` and `wallToInstant()` (`src/time.js`): `24:00`
+  is accepted only as an explicit end-of-day boundary, while `24:30`,
+  larger offsets, negative minutes, month 13, Feb 30, and day 32 are
+  rejected before conversion. Every provider returns through
+  `finishResult()` / `createGuideResult()` (`src/model.js`), which drops
+  null/hostile channels and programmes, unknown channel references,
+  non-canonical or reversed instants, invalid metadata, and exact duplicates
+  while preserving every valid partial guide. `generateXmltv()` repeats the
+  invariant strictly through `validateGuideResult()` and remains the final
+  defense when a caller bypasses the provider seam.
 
 ## Runtime map
 
 `bin/epg-scraper.js` is a thin wrapper that calls `runCli()` from
 `src/cli.js`. The module tree:
 
-1. `src/http.js` — `fetchText()` (GET) and `fetchResponseWithRetry()` (POST/raw
-   Response) with UA, hard timeout, bounded retries with backoff, abort
-   control.  `DEFAULT_UA` and `sleep` are exported for the browser layer.
-   The POST transport is what gives the JSON/form providers (tvplus,
-   digiturkburada, tivibu) the same failsafes the GET providers have.
+1. `src/http.js` — `fetchText()` (GET) and `fetchResponseWithRetry()`
+   (POST or session GET) with UA, hard timeout covering body consumption,
+   bounded retries with backoff, and abort control. The latter returns a
+   buffered Response-like object so headers and body come from the same
+   successful attempt. `createPoliteFetch()` spaces every provider request,
+   including retries and session setup; `DEFAULT_UA` and `sleep` are shared
+   by browser and provider adapters.
 2. `src/browser.js` — `createBrowserFetcher()` lazy-loads Playwright, launches
    headless Chromium, returns a `fetchImpl`-compatible function that renders
    pages and returns HTML.  Also exports `isPlaywrightAvailable()`.  With
@@ -84,22 +84,30 @@ Development tooling includes a static file server in
    plugins / `window.chrome` via an init script, `Sec-CH-UA*` client hints,
    `tr-TR` locale/timezone) and simulates human interaction (incremental
    scrolling to load lazy content, small mouse movements) before snapshotting
-   the DOM.
+   the DOM. This adapter renders GET pages only; provider registrations that
+   POST JSON/forms declare `browserCompatible: false`, and the CLI rejects an
+   incompatible browser run before any scrape starts.
 3. `src/entities.js` — HTML entity/numeric-reference decoder.
 4. `src/slug.js` — Generic channel-id slug (uppercase, non-alphanum → `.`,
    country suffix — `.tr` default, `.se` for the Swedish provider).
-5. `src/model.js` — `createChannel()` / `createProgramme()` validation helpers.
-6. `src/registry.js` — Provider registry (`registerProvider`/`getProvider`/`listProviders`)
+5. `src/model.js` — tolerant `createGuideResult()` used by providers,
+   comparison, merge, and the XMLTV reader; strict
+   `validateGuideResult()` used by the writer.
+6. `src/time.js` — source wall-clock validation/conversion, canonical guide
+   instant parsing/order, and XMLTV timestamp conversion.
+7. `src/registry.js` — Provider registry (`registerProvider`/`getProvider`/`listProviders`)
    and `buildDateRange()` date helper.
-7. `src/xmltv.js` — XMLTV document writer (`generateXmltv` → string, `writeXmltv` → file),
-   timestamp formatter, XML escaping, plus the reader (`parseXmltv` ← string,
-   `readXmltvFile` ← `.xml`/`.xml.gz`, `fromXmltvTimestamp` for `start`/`stop`)
-   so already-scraped guides can be reused without hitting live servers.
-8. `src/providers/` — Provider adapters (shared plumbing — wallToIso,
-   weekDays, weekdayIndex, normalizeChannelKey, calendar-date validation,
-   defaultDates, dedupe/sort, finishResult — lives in
-   `src/providers/shared.js`; wallToIso/weekDays are re-exported from
-   hurriyet.js for compatibility):
+8. `src/provider-catalog.js` — one authored inventory for registrations,
+   effective country/language/time-zone metadata, reference coverage, daily
+   CI membership/arguments, and live/CI sports profiles.
+9. `src/xmltv.js` — XMLTV document writer (`generateXmltv` → string, `writeXmltv` → file),
+   XML escaping, plus the reader (`parseXmltv` ← string, `readXmltvFile` ←
+   `.xml`/`.xml.gz`) so already-scraped guides can be reused without live
+   servers. Timestamp functions are re-exported from `src/time.js`.
+10. `src/providers/` — Provider adapters (shared plumbing — wallToIso,
+    weekDays, weekdayIndex, normalizeChannelKey, defaultDates, finishResult —
+    lives in `src/providers/shared.js`; wallToIso/weekDays are re-exported
+    from hurriyet.js for compatibility):
     - `hurriyet.js` — Hürriyet TV Rehberi: `parseDayPage(html)`, `scrape()`, day
       slug/date mapping, curated channel-id map.  Uses positional rail/row
       pairing; handles the `passive` class added by client-side JS.  Channel
@@ -190,7 +198,8 @@ Development tooling includes a static file server in
       cross-channel note to the last Sunday slots). Baku is UTC+4 year-round
       in 2026 — Azerbaijan abolished DST in 2016 (tzdb `Asia/Baku`), so the
       provider stamps Baku wall times with the fixed `+04:00` (`BAKU_ISO_
-      OFFSET`), keeping emitted instants equal to the source's. The XMLTV
+      OFFSET`), and its catalog time zone is `Asia/Baku` for the default
+      date window. This keeps emitted instants equal to the source's. The XMLTV
       writer/reader compare start/stop as instants, so a merged guide carrying
       both `+03:00` and `+04:00` timestamps stays correct.
     - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 69 Swedish national + Nordic
@@ -213,17 +222,15 @@ Development tooling includes a static file server in
       (`lang="sv"` titles) and `timeZone: 'Europe/Stockholm'` (Stockholm
       "today"), and ids normalize to the Swedish `epg_ripper_SE1.xml.gz`
       snapshot (`reference-se.json`).
-   - `index.js` — `loadProviders()` registry loader.
-9. `src/cli.js` — CLI argument parsing, orchestration, output writing.
-   Exports `runCli({ argv, stdout, stderr, cwd })` for testability.
-   Manages browser lifecycle when `--browser` or `requiresBrowser`.
-   Dispatches between the modes described under "CLI modes".  Providers may
-   declare `country` (output filename suffix, default `TR`), `language`
-   (`lang` attribute, default `tr`) and `timeZone` (default window anchor,
-   default `Europe/Istanbul`) — tvnu declares `SE` / `sv` /
-   `Europe/Stockholm`.  Compare/merge filenames and merge language follow
-   the same declarations; offline `--merge --from` keeps the TR/tr defaults.
-10. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
+   - `index.js` — `loadProviders()` registry loader derived from the catalog.
+11. `src/cli.js` — CLI argument parsing, orchestration, output writing.
+    Exports `runCli({ argv, stdout, stderr, cwd, providerLoader })` for
+    testability. One execution lifecycle owns browser creation, scrape option
+    construction, result acceptance, error conversion, and browser shutdown;
+    the single, compare, merge, and offline mode handlers keep their distinct
+    behavior behind that seam. Provider metadata comes from
+    `src/provider-catalog.js`.
+12. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
     provider, plain HTTP vs headless browser) and `compareProviderResults()`
     (two providers, channel by channel) share one `compareSides()` core;
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
@@ -238,20 +245,20 @@ full-day schedules).  `sporekrani` adds the tabii spor 1-8
 simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
 adds İdman TV (an Azerbaijani charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.
-11. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
+13. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later
     providers), programmes
     unioned + deduped, conflicting slots resolved first-provider-wins (the
     order in `--provider a,b,c` sets the precedence).
-12. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
+14. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
     differ between providers line up.  Resolution is transitive (alias
     chains collapse onto one id) and cycle-safe.
 
 Script load order is not critical (ES modules resolve automatically), but
-the dependency chain flows upward: providers → registry/http/xmltv/model/slug → cli.
+the dependency chain flows upward: providers → catalog/registry/http/xmltv/model/time/slug → cli.
 
 ## CLI modes
 
@@ -273,9 +280,9 @@ the dependency chain flows upward: providers → registry/http/xmltv/model/slug 
   (`epg_merged_<COUNTRY>.xml[.gz]`); country and language follow the first
   provider. The first provider wins conflicts, later ones fill the gaps.
   With `--from a.xml.gz,b.xml.gz`, no server is hit: already-scraped guides
-  are merged offline (file order sets precedence). Offline merge defaults
-  to `_TR` and `lang="tr"`, even for Swedish input; input language metadata
-  is not preserved, and changing `--out` cannot change that language.
+  are merged offline (file order sets precedence). The reader preserves the
+  first valid input guide language, so Swedish files stay `lang="sv"`;
+  country still defaults to `_TR` because XMLTV filenames do not carry it.
   CI uses offline merge to avoid scraping the sports providers twice.
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
   canonicalizes channel ids in compare and merge (e.g. mynet's `AHABER.tr`
@@ -286,9 +293,9 @@ most two providers; multiple providers without either flag is an error.
 
 ## Provider contract
 
-Every provider registration in `src/providers/index.js` must supply the
-following contract (adapter modules export the parsers, constants and
-`scrape()` used by that registration):
+Every entry in `src/provider-catalog.js` must supply the following contract
+(adapter modules export the parsers, constants and `scrape()` used by that
+catalog entry):
 
 ```js
 {
@@ -296,10 +303,11 @@ following contract (adapter modules export the parsers, constants and
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
+  browserCompatible?: false, // POST/session sources opt out of browser rendering
   country?: string,        // filename suffix; default TR, tvnu SE
   language?: string,       // output lang attribute; default tr, tvnu sv
-  timeZone?: string,       // today anchor; default Europe/Istanbul, tvnu Europe/Stockholm
-  scrape({                 // async, returns { channels, programmes, days, failures }
+  timeZone?: string,       // today anchor; Istanbul default, tvnu Stockholm, idmantv Baku
+  scrape({                 // async, returns a canonical guide result
     dates,                 // YYYY-MM-DD[] — the week window to cover
     fetchImpl,             // injected: HTTP fetch or browser fetcher
     log,                   // (line: string) => void — progress output
@@ -311,21 +319,22 @@ following contract (adapter modules export the parsers, constants and
                              // flags --retries / --timeout-ms /
                              // --retry-delay-ms)
     maxChannels,           // optional channel cap where supported (including tvnu)
-  }) => Promise<{ channels, programmes, days, failures }>
+  }) => Promise<{ channels, programmes, days, failures, language }>
 }
 ```
 
 Transport failsafes are provided by `src/http.js`, not re-implemented per
 provider: `fetchText()` for GET providers, `fetchResponseWithRetry()` for
-the JSON/form POST providers.  Every request carries a hard timeout, is
-retried on transport errors AND transient non-2xx responses (5xx/429) with
-linear backoff, and a request that still fails degrades to a per-page
-warning — a provider run fails only when it cannot produce any data at all.
-Deterministic statuses (404/410 always; 403 on GET pages, e.g. WAF-blocked
-hosts) are never retried — except 403 on API POSTs, where TV+/Tivibu signal
-session expiry and the providers' re-auth failsafe depends on the retry.
-CLI `--days-back`/`--days-forward` are capped at 60 so a hostile window
-cannot hang `buildDateRange()`.
+the JSON/form POST providers. Every request carries a hard timeout that
+includes body consumption and is retried on transport errors AND transient
+non-2xx responses (5xx/429) with linear backoff. A request that still fails
+degrades to a per-page warning; a provider run fails only when it cannot
+produce any data. Deterministic statuses (404/410 always; 403 on GET pages)
+are never retried. POST 403 remains retryable for the session-based APIs;
+TV+ then rebuilds its rotating session once, while Tivibu records the failed
+channel-day without another session request. CLI `--days-back`/
+`--days-forward` are capped at 60 so a hostile window cannot hang
+`buildDateRange()`.
 
 When `requiresBrowser` is true (or `--browser` is passed), `fetchImpl` is
 a Playwright-backed function that opens each URL in a headless Chromium tab,
@@ -335,60 +344,39 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
 ### Adding a provider
 
 1. Create `src/providers/<id>.js` with:
-   - Pure parser function(s) — no I/O, fully fixture-testable.  Apply the
-     hostile-input hardening rules from the constraints above: validate
-     wall-clock times AND calendar dates before converting (a `Date.UTC`
-     round-trip catches month 13 / Feb 30 / day 32). For absolute epoch-ms
-     sources such as tvnu, validate finite values within the supported
-     instant range and require stop > start; `parseBroadcast()` uses this
-     approach rather than a wall-calendar round-trip. Drop reversed /
-     zero-length slots and null entries, and degrade malformed bodies to
-     empty results — never emit a slot whose instant would silently roll
-     into a different day/month.
-   - `scrape()` — fetches pages, parses, merges, dedupes.
-   - A curated channel-id map for channels that need case-sensitive or
-     aliased ids (see `hurriyet.js` for the pattern).  Ids are normalized
-     to the epgshare01 reference for the provider's own country
-     (`epg_ripper_TR1.xml.gz` for the Turkish providers,
-     `epg_ripper_SE1.xml.gz` for tvnu) as the source
-     of truth — diacritics kept, HD-only ids where the reference has no
-     SD variant, renamed/split feeds collapsed (NOW→FOX.tr, TV2→TEVE2.tr;
-     tvnu collapses playlist quality variants FHD/HD/SD onto the one id
-     the Swedish reference carries per feed, e.g. `SVT.1.se` →
-     `[SVT1HD].SVT1.HD.se`).  A provider whose ids carry a source tag must
-     export `CHANNEL_ID_MAP` (name → id) for `test/reference.test.mjs` —
-     tvnu's is derived from the `CHANNELS` table.
-   - If the source requires JS rendering, set `requiresBrowser: true` in
-     its registration. The CLI will auto-launch Playwright.
-     Independently, declare the guide's locale in `src/providers/index.js`:
-     `country` (filename suffix, default `TR`), `language` (`lang`
-     attribute, default `tr`) and `timeZone` (default-window anchor,
-     default `Europe/Istanbul`) — tvnu is the so-far only provider that
-     declares all three (`SE` / `sv` / `Europe/Stockholm`) because Sweden
-     observes DST.
-2. Register in `src/providers/index.js`:
-   ```js
-   import * as myProvider from './my-provider.js';
-   // Inside loadProviders():
-   registerProvider({ id: 'my-provider', name: '...', baseUrl: myProvider.BASE_URL, scrape: myProvider.scrape });
-   // If JS-rendered:
-   registerProvider({ id: 'my-provider', name: '...', baseUrl: myProvider.BASE_URL, requiresBrowser: true, scrape: myProvider.scrape });
-   ```
-3. Add fixtures under `test/fixtures/<id>/` and tests under `test/`.
+   - Pure parser function(s) — no I/O, fully fixture-testable. Apply the
+     hostile-input hardening rules from the constraints above. Source wall
+     times use `parseClockMinutes()`; calendar dates use
+     `isRealCalendarDate()`. Absolute epoch-ms sources validate finite values
+     inside the supported range and require stop > start. Malformed bodies
+     degrade to empty results.
+   - `scrape()` — fetches pages, parses, and returns through
+     `finishResult()` so every provider crosses the same guide-result seam.
+   - `BASE_URL` and a curated `CHANNEL_ID_MAP`. Ids are normalized to the
+     epgshare01 reference for the provider's country. A source-tagged
+     provider still exports its map because the catalog and reference suite
+     consume it.
+2. Add one entry to `src/provider-catalog.js`: module, display name,
+   effective country/language/time zone, `requiresBrowser` or
+   `browserCompatible: false`, reference country, CI membership/arguments,
+   and sports-profile membership. `src/providers/index.js` derives the
+   registry from this catalog; do not add a second registration list.
+3. Add fixtures under `test/fixtures/<id>/`, provider tests, and update
+   `test/provider-inventory.test.mjs` when the new operational profile is
+   intentional.
 
 ## Data flow
 
 ```
-fetch text ──> parseDayPage() ──> { channels, slots } ──> wallToIso() ──> { channel, start, stop, title }
-                  │                       │
-                  │ (7 pages)             │
-                  ▼                       ▼
-              scrape() ──────────> merge channels (dedupe by id)
-                                   merge programmes (dedupe by channel|start|stop|title)
-                                   sort by channel then start
-                                          │
-                                          ▼
-                                   generateXmltv() ──> writeXmltv() ──> .xml.gz file
+fetch text ──> pure parser ──> source slots ──> wallToInstant() ──> guide slot
+                  │                  │               │
+                  │                  │               └─ explicit epoch sources skip wall conversion
+                  ▼                  ▼
+              scrape() ───────> finishResult() / createGuideResult()
+                                    │
+                                    ├─ compare or merge as needed
+                                    ▼
+                              generateXmltv() ──> writeXmltv() ──> .xml.gz file
 ```
 
 ## Editing and testing workflow
@@ -400,6 +388,7 @@ npm scripts:
 npm install                 # install dev dependencies (vitest)
 npm test                    # vitest run — all tests, no live network
 npm run test:watch          # interactive vitest mode
+npm run inventory           # print the authored provider/CI inventory
 npm run scrape              # live scrape (hurriyet, 7 days)
 npm run scrape:gz           # same, gzip output
 npm run install:playwright  # install Chromium browser binary for --browser mode
@@ -416,8 +405,8 @@ node bin/epg-scraper.js --list-providers
 - The `fetchImpl` stub must return Response-like objects:
   `{ ok: true, status: 200, text: async () => html }`. Returning raw
   HTML strings will cause `fetchText` to throw `HTTP undefined`.
-- CLI tests drive `runCli()` directly with injected `argv`/`stdout`/`stderr`
-  — no child processes, no live network.
+- CLI tests drive `runCli()` directly with injected `argv`/`stdout`/`stderr`/
+  `cwd`/`providerLoader` — no child processes, no live network.
 - Use vitest's `beforeEach`/`afterEach` for temp directory setup and
   `globalThis.fetch` restoration. Always restore globals in `finally` blocks.
 - Browser tests (`test/browser.test.mjs`) mock `playwright` via `vi.mock()`
@@ -425,7 +414,9 @@ node bin/epg-scraper.js --list-providers
   a browser with `newContext()` → `newPage()` → `goto()`/`content()`/`close()`.
   No real browser is launched during `npm test`.
 - Coverage by file: `test/core.test.mjs` — units (entities, slug, xmltv,
-  registry, model); `test/hurriyet.test.mjs` — Hürriyet parser, scrape, CLI
+  registry, guide result, time); `test/provider-inventory.test.mjs` — catalog,
+  CI membership, merge profiles, and sports-channel unions;
+  `test/hurriyet.test.mjs` — Hürriyet parser, scrape, CLI
   integration; `test/mynet.test.mjs` — Mynet parser, scrape, CLI integration;
   `test/browser.test.mjs` — Playwright fetcher (mocked);
   `test/compare.test.mjs` — http-vs-browser + provider-vs-provider diff
@@ -447,9 +438,9 @@ Turkish providers to `epg_ripper_TR1.xml.gz`, the Swedish `tvnu` provider to
 (`{ source, country, updated: "YYYY-MM-DD", channelCount, knownGaps, channels }`)
 and enforced by `test/reference.test.mjs`: every curated provider id must
 exist upstream (or sit in that snapshot's `knownGaps` with a reason), and the
-suite **fails when a snapshot's `updated` is older than 7 days**.  tvnu's
-`CHANNEL_ID_MAP` is the `CHANNELS` table's id column — the per-slug map the
-test imports.  Refresh weekly:
+suite **fails when a snapshot's `updated` is older than 7 days**. Provider
+membership is derived from `src/provider-catalog.js`; curated ids are read
+from each adapter's `CHANNEL_ID_MAP`. Refresh weekly:
 
 ```bash
 npm run update:reference   # re-downloads, re-extracts, stamps today's date

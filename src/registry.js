@@ -29,6 +29,14 @@ export function registerProvider(provider) {
   if (typeof provider.scrape !== 'function') {
     throw new Error(`provider "${provider.id}" must implement scrape()`);
   }
+  if (provider.browserCompatible != null && typeof provider.browserCompatible !== 'boolean') {
+    throw new Error(`provider "${provider.id}" browserCompatible must be a boolean`);
+  }
+  if (provider.requiresBrowser === true && provider.browserCompatible === false) {
+    throw new Error(
+      `provider "${provider.id}" cannot require browser transport and set browserCompatible: false`
+    );
+  }
   providers.set(provider.id, provider);
   return provider;
 }

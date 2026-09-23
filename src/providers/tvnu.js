@@ -42,13 +42,11 @@
 // genre name) and `description` onto <desc>.  Channel logos are the page's
 // own `themedLogo.light.url`.
 
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import { channelIdFromName } from '../slug.js';
 import { normalizeChannelKey, finishResult, defaultDates } from './shared.js';
 
 export { normalizeChannelKey };
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://www.tv.nu';
 
@@ -402,9 +400,13 @@ export async function scrape({
   log = () => {},
   politenessDelayMs = 400,
   maxChannels = Infinity,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
 } = {}) {
-  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates('Europe/Stockholm');
   const requested = [...new Set(activeDates)].sort();
   const requestedSet = new Set(requested);
 
@@ -426,8 +428,7 @@ export async function scrape({
       } catch (error) {
         failures++;
         log(`warn: ${channel.name} ${date} fetch failed: ${error.message}`);
-        await sleep(politenessDelayMs);
-        continue;
+          continue;
       }
 
       const parsed = parseChannelPage(html);
@@ -453,7 +454,6 @@ export async function scrape({
           });
         }
       }
-      await sleep(politenessDelayMs);
     }
     log(`ok:   ${channel.name}: ${inWindow} slot(s) in window`);
   }
@@ -468,5 +468,7 @@ export async function scrape({
     programmes,
     days: requested.length,
     failures,
+    language: 'sv',
+    log,
   });
 }

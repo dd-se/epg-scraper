@@ -26,19 +26,18 @@
 // NOTE: this provider POSTs form data + sends an antiforgery cookie, so it
 // is plain-HTTP only — do not run it with --browser.
 
-import { fetchResponseWithRetry, DEFAULT_UA } from '../http.js';
+import { fetchResponseWithRetry, DEFAULT_UA, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
   normalizeChannelKey,
   isRealCalendarDate,
+  parseClockMinutes,
   finishResult,
   defaultDates,
 } from './shared.js';
 
 export const BASE_URL = 'https://www.tivibu.com.tr';
 const PREVUE_URL = `${BASE_URL}/Channel/GetPrevueList`;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Curated channel table: display name -> page slug + XMLTV id.  None of
 // these channels exist in the epgshare01 reference yet, so ids use the
@@ -77,18 +76,19 @@ function parseWallTime(value) {
   if (typeof value !== 'string') return undefined;
   const match = /^(\d{4})\.(\d{2})\.(\d{2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim());
   if (!match) return undefined;
-  const hours = Number(match[4]);
-  const minutes = Number(match[5]);
+  const minutes = parseClockMinutes(Number(match[4]), Number(match[5]), {
+    allowEndOfDay: true,
+  });
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  if (hours > 24 || minutes > 59) return undefined;
+  if (minutes == null) return undefined;
   // Out-of-clock garbage (25:00, 10:99) or impossible calendar dates
   // (month 13, Feb 30, day 32) would otherwise silently roll into a
   // different instant via wallToIso — reject them like the other providers
   // do.
   if (!isRealCalendarDate(year, month, day)) return undefined;
-  return { date: `${match[1]}-${match[2]}-${match[3]}`, min: hours * 60 + minutes };
+  return { date: `${match[1]}-${match[2]}-${match[3]}`, min: minutes };
 }
 
 // Parse a channel page into { channelCode, token }.  Degrades to undefined
@@ -156,7 +156,7 @@ function cookiePairs(setCookieHeader) {
 
 // GET a page and capture the antiforgery cookie(s) for the session.  Goes
 // through fetchResponseWithRetry (hard timeout, bounded retries, backoff);
-// the raw response is kept so the Set-Cookie header can be read.
+// the buffered response preserves the Set-Cookie header and body.
 export async function sessionGet(url, { fetchImpl, userAgent = DEFAULT_UA, ...retryOptions } = {}) {
   const response = await fetchResponseWithRetry(url, {
     // Keep the tight one-retry session default unless the caller overrides.
@@ -195,6 +195,7 @@ export async function prevuePost(url, payload, { fetchImpl, userAgent = DEFAULT_
       referer: payload.referer,
     },
     method: 'POST',
+    retry403: true,
     body,
   });
   const text = await response.text();
@@ -217,8 +218,12 @@ export async function scrape({
   log = () => {},
   politenessDelayMs = 400,
   maxChannels = Infinity,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
 } = {}) {
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
   const channels = CHANNELS.slice(0, maxChannels);
@@ -241,7 +246,6 @@ export async function scrape({
       log(`warn: ${channel.name} page missing channel code or token`);
       continue;
     }
-    await sleep(politenessDelayMs);
 
     for (const date of activeDates) {
       let json;
@@ -260,7 +264,7 @@ export async function scrape({
       } catch (error) {
         failures++;
         log(`warn: ${channel.name} (${date}) failed: ${error.message}`);
-        continue;
+          continue;
       }
       const { slots } = parsePrevueResponse(json);
       let kept = 0;
@@ -283,7 +287,6 @@ export async function scrape({
         });
       }
       log(`ok:   ${channel.name} (${date}): ${kept} programmes`);
-      await sleep(politenessDelayMs);
     }
   }
 
@@ -293,5 +296,6 @@ export async function scrape({
     programmes,
     days: activeDates.length,
     failures,
+    log,
   });
 }

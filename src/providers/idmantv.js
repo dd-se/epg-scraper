@@ -39,10 +39,11 @@
 // last slot), matching the mynet/beinsports/digiturkburada convention.
 
 import { decodeEntities } from '../entities.js';
-import { fetchText } from '../http.js';
+import { fetchText, createPoliteFetch } from '../http.js';
 import {
-  wallToIso,
   isRealCalendarDate,
+  parseClockMinutes,
+  deriveStartOnlyProgrammes,
   normalizeChannelKey,
   finishResult,
   defaultDates,
@@ -50,8 +51,6 @@ import {
 } from './shared.js';
 
 export { normalizeChannelKey };
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const BASE_URL = 'https://idmantv.az';
 
@@ -156,11 +155,10 @@ export function parseWeeklyPage(html) {
   const slotsByDay = markers.map(() => []);
   PROG_ROW_RE.lastIndex = 0;
   while ((match = PROG_ROW_RE.exec(source)) !== null) {
-    const hours = Number(match[1]);
-    const minutes = Number(match[2]);
-    // Out-of-clock wall times (25:10, 24:30, ...) are rejected before
-    // wallToIso — Date.UTC would silently roll them into another day.
-    if (hours > 24 || minutes > 59 || (hours === 24 && minutes > 0)) continue;
+    const startMin = parseClockMinutes(Number(match[1]), Number(match[2]), {
+      allowEndOfDay: true,
+    });
+    if (startMin == null) continue;
     const title = decodeEntities(match[3]).replace(/\s+/g, ' ').trim();
     if (!title) continue;
     let dayIndex = -1;
@@ -171,7 +169,7 @@ export function parseWeeklyPage(html) {
       }
     }
     if (dayIndex === -1) continue;
-    slotsByDay[dayIndex].push({ startMin: hours * 60 + minutes, title });
+    slotsByDay[dayIndex].push({ startMin, title });
   }
 
   const days = markers.map((marker, i) => ({
@@ -199,17 +197,21 @@ export async function scrape({
   fetchImpl,
   log = () => {},
   politenessDelayMs = 250,
-  fetchOptions = {},
+  fetchOptions: inputFetchOptions = {},
   maxChannels = Infinity,
 } = {}) {
-  const activeDates = dates && dates.length > 0 ? dates : defaultDates();
+  const fetchOptions = {
+    ...inputFetchOptions,
+    fetchImpl: createPoliteFetch(fetchImpl, politenessDelayMs),
+  };
+  const activeDates = dates && dates.length > 0 ? dates : defaultDates('Asia/Baku');
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];
   const channel = channels[0];
   let failures = 0;
 
   if (!channel) {
-    return finishResult({ channels: [], programmes, days: activeDates.length, failures });
+    return finishResult({ channels: [], programmes, days: activeDates.length, failures, log });
   }
 
   const url = weekPageUrl();
@@ -219,15 +221,14 @@ export async function scrape({
   } catch (error) {
     failures++;
     log(`warn: ${channel.name} weekly page fetch failed: ${error.message}`);
-    return finishResult({ channels, programmes, days: activeDates.length, failures });
+    return finishResult({ channels, programmes, days: activeDates.length, failures, log });
   }
-  await sleep(politenessDelayMs);
 
   const { weekStart, weekEnd, days } = parseWeeklyPage(html);
   if (!weekStart || !weekEnd) {
     failures++;
     log(`warn: ${channel.name} page carried no parseable weekly schedule`);
-    return finishResult({ channels, programmes, days: activeDates.length, failures });
+    return finishResult({ channels, programmes, days: activeDates.length, failures, log });
   }
   log(`ok:   ${channel.name} published week ${weekStart}..${weekEnd} (${days.length} day-card(s))`);
 
@@ -240,17 +241,17 @@ export async function scrape({
       continue;
     }
     const { year, month, day: dayNum } = splitDate(date);
-    for (let s = 0; s < day.slots.length; s++) {
-      const slot = day.slots[s];
-      const start = wallToIso(year, month, dayNum, slot.startMin, BAKU_ISO_OFFSET);
-      const endMin = s + 1 < day.slots.length ? day.slots[s + 1].startMin : 24 * 60;
-      // A repeated time on a day (same slot listed twice) would make a
-      // zero-length programme — skip it instead of emitting garbage.
-      if (endMin <= slot.startMin) continue;
-      const stop = wallToIso(year, month, dayNum, endMin, BAKU_ISO_OFFSET);
-      programmes.push({ channel: channel.id, start, stop, title: slot.title });
-    }
-    log(`ok:   ${day.dayName} (${date}): ${day.slots.length} programmes`);
+    const slots = day.slots;
+    programmes.push(
+      ...deriveStartOnlyProgrammes(slots, {
+        channel: channel.id,
+        year,
+        month,
+        day: dayNum,
+        offset: BAKU_ISO_OFFSET,
+      })
+    );
+    log(`ok:   ${day.dayName} (${date}): ${slots.length} programmes`);
   }
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
@@ -260,5 +261,6 @@ export async function scrape({
     programmes,
     days: activeDates.length,
     failures,
+    log,
   });
 }
