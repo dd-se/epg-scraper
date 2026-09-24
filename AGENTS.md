@@ -17,9 +17,20 @@ Development tooling includes a static file server in
 
 ## Non-negotiable constraints
 
-- **Node ≥ 18.** The plain-HTTP tool uses built-in `fetch`, `node:zlib`,
-  `node:stream`, and `node:util`. Do not add runtime dependencies beyond
+- **Node ≥ 24.** The plain-HTTP tool uses built-in `fetch`, `node:zlib`,
+  `node:stream`, and `node:util` (including `parseEnv()`, which backs the
+  optional `.env` loader). Do not add runtime dependencies beyond
   Playwright, which is used only for browser functionality.
+- **Local credentials.** A provider that needs secrets reads them from the
+  environment (never from a committed file). The CLI additionally loads
+  `<cwd>/.env` — or the file named by `--dotenv <path>`, **not** `--env-file`:
+  Node parses `--env-file` anywhere in argv, even after the script path, so it
+  never reaches the CLI parser (`node --env-file=<path> bin/epg-scraper.js`
+  works and wins, being applied before the script) — through
+  `src/env-file.js`; names already present in the environment always win, so
+  CI secrets are never overridden, and only the number of applied variables
+  is logged, never a value. `.env` is gitignored (the tracked `.env.example`
+  carries the names as empty placeholders).
 - **ES modules only.** The project uses `"type": "module"`. All source files
   are `.js` with `import`/`export`. Test files are `.mjs`.
 - **No eval.** Provider adapters must parse scraped HTML with regexes or
@@ -233,14 +244,20 @@ Development tooling includes a static file server in
       "today"), and ids normalize to the Swedish `epg_ripper_SE1.xml.gz`
       snapshot (`reference-se.json`).
    - `index.js` — `loadProviders()` registry loader derived from the catalog.
-11. `src/cli.js` — CLI argument parsing, orchestration, output writing.
+11. `src/env-file.js` — optional `.env` loading for local live runs:
+    `readEnvFile(path)` (missing file → `undefined`, unreadable → readable
+    error) and `applyEnv(entries)` (never overwrites an existing variable;
+    returns the applied names). Parsing is Node's own `node:util` `parseEnv()`,
+    so the format matches `node --env-file`. The CLI calls it before any
+    provider reads the environment.
+12. `src/cli.js` — CLI argument parsing, orchestration, output writing.
     Exports `runCli({ argv, stdout, stderr, cwd, providerLoader })` for
     testability. One execution lifecycle owns browser creation, scrape option
     construction, result acceptance, error conversion, and browser shutdown;
     the single, compare, merge, and offline mode handlers keep their distinct
     behavior behind that seam. Provider metadata comes from
     `src/provider-catalog.js`.
-12. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
+13. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
     provider, plain HTTP vs headless browser) and `compareProviderResults()`
     (two providers, channel by channel) share one `compareSides()` core;
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
@@ -257,20 +274,20 @@ full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
 `tivibu` adds Tivibu Spor 1-4; `idmantv` adds İdman TV (an Azerbaijani
 charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.
-13. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
+14. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later
     providers), programmes
     unioned + deduped, conflicting slots resolved first-provider-wins (the
     order in `--provider a,b,c` sets the precedence).
-14. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
+15. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
     differ between providers line up.  Resolution is transitive (alias
     chains collapse onto one id) and cycle-safe.
 
 Script load order is not critical (ES modules resolve automatically), but
-the dependency chain flows upward: providers → catalog/registry/http/xmltv/model/time/slug → cli.
+the dependency chain flows upward: providers → catalog/registry/http/xmltv/model/time/slug → env-file → cli.
 
 ## CLI modes
 
@@ -299,6 +316,14 @@ the dependency chain flows upward: providers → catalog/registry/http/xmltv/mod
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
   canonicalizes channel ids in compare and merge (e.g. mynet's `AHABER.tr`
   and hurriyet's `A.HABER.tr` collapse onto one channel).
+- **Credentials (`--dotenv <path>`)** — providers that need secrets read
+  them from the environment; for local live runs the CLI loads `<cwd>/.env`
+  when it exists, or the named file (`--dotenv` names a file that must
+  exist). Variables already set in the environment always win, so CI secrets
+  are never overridden. The flag is not called `--env-file` because Node
+  intercepts that name in argv; Node's own `node --env-file=<path>
+  bin/epg-scraper.js` still works and takes precedence over `./.env`. Used for
+  live `sporekraniapi` testing without exporting anything by hand.
 
 `--compare` and `--merge` are mutually exclusive; `--compare` supports at
 most two providers; multiple providers without either flag is an error.
@@ -438,6 +463,10 @@ node bin/epg-scraper.js --list-providers
   `test/idmantv.test.mjs` — iDMAN TV weekly-page parser, scrape, CLI
   integration; `test/tvnu.test.mjs` — TV.nu parser (DST offsets, 06:00 day
   boundary), scrape, CLI integration (`_SE` filename, `lang="sv"`);
+  `test/env-file.test.mjs` — `.env` parsing/applying and the CLI's
+  `--env-file` wiring, including value precedence and the never-log-values
+  rule; `test/sporekraniapi.test.mjs` — Spor Ekranı v3 API parser, scrape,
+  and CLI integration;
   `test/reference.test.mjs` — provider id normalization against
   the vendored per-country epgshare01 snapshots (TR + SE; no network — see
   below).
@@ -474,7 +503,8 @@ snapshots together with any map updates.
   (0 on success, 1 on validation/launch errors) and, when a file is
   produced, an `existsSync()` + content check.
 - Exercise failure and degradation paths explicitly: all pages fail, empty
-  guides, bad `--date`, invalid `--max-channels`, missing `--alias-map` file.
+  guides, bad `--date`, invalid `--max-channels`, missing `--alias-map` file,
+  missing `--dotenv` file.
 - Assert the semantics that are easy to get wrong: merge precedence (first
   provider wins), compare `matched` / `changed` / `only-one-side` counts,
   and alias collapse onto the canonical id.

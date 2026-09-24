@@ -11,7 +11,10 @@ epg_*.xml.gz
 # local Spor Ekranı API protocol notes (may contain credentials — never commit)
 sporekrani-api.md
 
-# local environment files
+# local environment files (may hold credentials — never commit)
 .agents
 .cline
 opencode.json
+.env
+.env.*
+!.env.example

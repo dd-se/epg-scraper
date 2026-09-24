@@ -11,9 +11,9 @@ source site ──> provider adapter ──> internal model ──> XMLTV writer
                 (src/providers/)     (src/model.js)      (src/xmltv.js)   (TR unless the provider declares otherwise — tvnu writes _SE)
 ```
 
-Plain-HTTP scraping and XMLTV processing use Node built-ins only. Browser
-mode is optional, but Playwright is currently a regular dependency in
-`package.json` and is installed by `npm install`. Vitest and saxes are dev
+Plain-HTTP scraping and XMLTV processing use Node built-ins only (Node ≥ 24).
+Browser mode is optional, but Playwright is currently a regular dependency
+in `package.json` and is installed by `npm install`. Vitest and saxes are dev
 dependencies; Chromium installation is a separate browser-mode setup step.
 
 ## Usage
@@ -33,7 +33,20 @@ Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 `--days-back N`, `--days-forward N` (both 0–60), `--delay-ms N`,
 `--max-channels N`, `--retries N`,
 `--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
-`--merge`, `--from <files>`, `--alias-map <path>`, `--quiet`, `--list-providers`.
+`--merge`, `--from <files>`, `--alias-map <path>`, `--dotenv <path>`,
+`--quiet`, `--list-providers`.
+
+Providers that need secrets read them from the environment. For local live
+runs the CLI also loads `./.env` (or the file named by `--dotenv`); real
+environment variables always win, so CI secrets are never overridden. The
+flag is `--dotenv` because Node itself intercepts `--env-file` anywhere in
+argv — for that file, use Node's own flag before the script:
+`node --env-file=.env.local bin/epg-scraper.js …`.
+
+```bash
+cp .env.example .env      # then fill in SPOREKRANI_API_APP_ID / _API_KEY
+node bin/epg-scraper.js --provider sporekraniapi --date 2026-09-30
+```
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
@@ -496,12 +509,13 @@ These adapters cover the feeds no other free source carries: **tabii spor 1-8**
   `app_id` and `api_key` query parameters. The JSON response uses a
   `{"data":[...]}` envelope.
 - Credentials are never stored in the repository. Set
-  `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` in the environment. The
-  scheduled workflow reads the same names from GitHub Secrets, and only for
-  the `sporekraniapi` matrix job. `scrape()` also accepts an optional `env`
-  (default `process.env`) so tests can inject credentials; per-day warnings
-  report a failed request as `HTTP <status>` only, and the transport redacts
-  sensitive query values from error messages.
+  `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` in the environment, or put
+  them in the gitignored `./.env` for local live runs (see
+  [Usage](#usage)). The scheduled workflow reads the same names from GitHub
+  Secrets, and only for the `sporekraniapi` matrix job. `scrape()` also
+  accepts an optional `env` (default `process.env`) so tests can inject
+  credentials; per-day warnings report a failed request as `HTTP <status>`
+  only, and the transport redacts sensitive query values from error messages.
 - One request covers all nine channels for one requested day. Events are
   retained for every exact curated owner in `channels[]`, so a listed
   simulcast is emitted on each participating tabii feed.
@@ -513,11 +527,16 @@ These adapters cover the feeds no other free source carries: **tabii spor 1-8**
 - This is a JSON API, not a renderable HTML page, so it is not browser-compatible.
 
 ```bash
-export SPOREKRANI_API_APP_ID='<app id>'
-export SPOREKRANI_API_KEY='<api key>'
+# Local live run: credentials come from ./.env (gitignored) — copy the tracked
+# template once and fill in the two values
+cp .env.example .env
 
 # All 9 channels for a seven-day window
 node bin/epg-scraper.js --provider sporekraniapi --date 2026-09-30
+
+# CI equivalent: the same names arrive from GitHub Secrets
+export SPOREKRANI_API_APP_ID='<app id>'
+export SPOREKRANI_API_KEY='<api key>'
 ```
 
 ### Retained benchmark baseline: `sporekrani`
@@ -544,7 +563,9 @@ S Sport Plus starts, and zero request failures; the first slot matched exactly.
 For `Panathinaikos - Asvel Villeurbanne`, the SSR baseline ended at
 `2026-10-09T19:30:00+03:00` (the next event nine days later), while the API
 adapter ended at `2026-10-01T00:00:00+03:00`. The API adapter is therefore the
-active CI and sports-merge source.
+active CI and sports-merge source. A 7-day run the same day (credentials from
+a local `.env`) returned 52 programmes across the nine channels with zero
+failed requests and every stop inside its own day.
 
 ## Provider: tivibu
 

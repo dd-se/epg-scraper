@@ -14,6 +14,7 @@ import {
 } from './compare.js';
 import { mergeResults } from './merge.js';
 import { loadAliasMap, createCanonicalizer } from './aliases.js';
+import { DEFAULT_ENV_FILE, applyEnv, readEnvFile } from './env-file.js';
 import { createGuideResult } from './model.js';
 import { resolveProviderContext } from './provider-catalog.js';
 
@@ -62,9 +63,26 @@ const HELP_TEXT = `Usage: epg-scraper [options]
   --alias-map <path>   JSON file { aliasId: canonicalId } mapping channel ids
                        that differ between providers onto one canonical id
                        (used by --compare and --merge)
+  --dotenv <path>      env file with credentials (default: ./.env when it
+                       exists; a named file must exist).  Variables already
+                       set in the environment win, so CI secrets are never
+                       overridden.  Read by providers that need secrets, e.g.
+                       sporekraniapi (SPOREKRANI_API_APP_ID / _API_KEY)
+                       (not --env-file: Node intercepts that name in argv —
+                       use  node --env-file=<path> bin/epg-scraper.js  instead)
   --quiet              suppress progress logging
   --list-providers     list registered providers and exit
   --help               this text
+
+Credentials:
+  Providers that need secrets read them from the environment.  For local live
+  runs the CLI loads ./.env (or the file named by --dotenv) before scraping;
+  real environment variables always win, so CI secrets are never overridden.
+  Values are never printed — only how many variables were applied.  Node's own
+  --env-file=<path> option (before the script) also works and wins over the
+  default ./.env, because it applies before this script starts.
+
+    cp .env.example .env   # then fill in SPOREKRANI_API_APP_ID / _API_KEY
 
 Browser mode:
   Providers that set requiresBrowser: true automatically use a headless
@@ -124,6 +142,10 @@ export async function runCli({
         merge: { type: 'boolean', default: false },
         from: { type: 'string' },
         'alias-map': { type: 'string' },
+        // `--dotenv`, not `--env-file`: Node parses `--env-file` (and
+        // `--env-file-if-exists`) anywhere in argv — even after the script
+        // path — so a flag with that name never reaches this parser.
+        dotenv: { type: 'string' },
         quiet: { type: 'boolean', default: false },
         'list-providers': { type: 'boolean', default: false },
         help: { type: 'boolean', default: false },
@@ -236,6 +258,33 @@ export async function runCli({
   }
 
   const log = values.quiet ? () => {} : (line) => write(stdout, line);
+
+  // Local credentials for live runs: load `.env` (or the --dotenv path)
+  // before any provider reads the environment.  The default file is optional;
+  // a file the user named explicitly must exist.  Existing environment values
+  // win over file values, so CI secrets are never overridden — and Node's own
+  // `--env-file=<path>` (applied before this script starts) therefore also
+  // wins over the default .env.
+  try {
+    const envLabel = values.dotenv ?? DEFAULT_ENV_FILE;
+    const envEntries = readEnvFile(path.resolve(cwd, envLabel));
+    if (envEntries === undefined) {
+      if (values.dotenv != null) {
+        fail(`--dotenv "${values.dotenv}" not found`);
+        return 1;
+      }
+    } else {
+      const applied = applyEnv(envEntries);
+      const total = Object.keys(envEntries).length;
+      log(
+        `env: ${envLabel}: applied ${applied.length}/${total} variable(s)` +
+          (applied.length < total ? ' (existing environment values kept)' : '')
+      );
+    }
+  } catch (error) {
+    fail(error && error.message ? error.message : String(error));
+    return 1;
+  }
 
   const delayMs = parseDelayMs(values, fail);
   if (delayMs === null) return 1;
