@@ -20,6 +20,7 @@ const EXPECTED_IDS = [
   'beinsports',
   'digiturkburada',
   'sporekrani',
+  'sporekraniapi',
   'tivibu',
   'idmantv',
   'tvnu',
@@ -65,7 +66,7 @@ describe('provider operational inventory', () => {
     const registrations = PROVIDER_CATALOG.map(toProviderRegistration);
     expect(
       registrations.filter((provider) => provider.browserCompatible === false).map((provider) => provider.id)
-    ).toEqual(['tvplus', 'digiturkburada', 'tivibu']);
+    ).toEqual(['tvplus', 'digiturkburada', 'sporekraniapi', 'tivibu']);
   });
 
   it('owns the daily CI matrix and provider-specific arguments', () => {
@@ -74,7 +75,7 @@ describe('provider operational inventory', () => {
       { provider: 'mynet', args: '--days-forward 2 --delay-ms 500' },
       { provider: 'tvplus', args: '--days-forward 2' },
       { provider: 'digiturkburada', args: '--days-forward 2' },
-      { provider: 'sporekrani', args: '' },
+      { provider: 'sporekraniapi', args: '' },
       { provider: 'tivibu', args: '' },
       { provider: 'tvnu', args: '--days-forward 2 --delay-ms 400' },
       { provider: 'idmantv', args: '' },
@@ -86,14 +87,14 @@ describe('provider operational inventory', () => {
       'tvplus',
       'beinsports',
       'digiturkburada',
-      'sporekrani',
+      'sporekraniapi',
       'tivibu',
       'idmantv',
     ]);
     expect(ciSportsProviders().map((entry) => entry.id)).toEqual([
       'tvplus',
       'digiturkburada',
-      'sporekrani',
+      'sporekraniapi',
       'tivibu',
       'idmantv',
     ]);
@@ -117,7 +118,7 @@ describe('provider operational inventory', () => {
         'tvplus',
         'beinsports',
         'digiturkburada',
-        'sporekrani',
+        'sporekraniapi',
         'tivibu',
         'idmantv',
       ],

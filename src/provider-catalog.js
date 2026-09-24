@@ -5,6 +5,7 @@ import * as tvplus from './providers/tvplus.js';
 import * as beinsports from './providers/beinsports.js';
 import * as digiturkburada from './providers/digiturkburada.js';
 import * as sporekrani from './providers/sporekrani.js';
+import * as sporekraniapi from './providers/sporekraniapi.js';
 import * as tivibu from './providers/tivibu.js';
 import * as idmantv from './providers/idmantv.js';
 import * as tvnu from './providers/tvnu.js';
@@ -77,7 +78,21 @@ export const PROVIDER_CATALOG = [
     name: 'Spor Ekranı Yayın Akışı (tabii spor 1-8 / S Sport Plus)',
     module: sporekrani,
     referenceCountry: 'TR',
-    ci: { enabled: true, args: [], order: 60 },
+    ci: {
+      enabled: false,
+      order: 60,
+      reason: 'sporekraniapi matches starts and bounds the final stop to the requested day.',
+      coveredBy: ['sporekraniapi'],
+    },
+    sports: { live: false },
+  },
+  {
+    id: 'sporekraniapi',
+    name: 'Spor Ekranı API (tabii spor 1-8 / S Sport Plus)',
+    module: sporekraniapi,
+    referenceCountry: 'TR',
+    browserCompatible: false,
+    ci: { enabled: true, args: [], order: 65 },
     sports: { live: true },
   },
   {

@@ -75,7 +75,10 @@ Development tooling includes a static file server in
    buffered Response-like object so headers and body come from the same
    successful attempt. `createPoliteFetch()` spaces every provider request,
    including retries and session setup; `DEFAULT_UA` and `sleep` are shared
-   by browser and provider adapters.
+   by browser and provider adapters.  Request descriptions and non-2xx
+   transport errors pass URLs through `redactUrl()`, which masks sensitive
+   query values (`api_key`, `app_id`, `token`, …) and userinfo before they can
+   reach a log line or an error message.
 2. `src/browser.js` — `createBrowserFetcher()` lazy-loads Playwright, launches
    headless Chromium, returns a `fetchImpl`-compatible function that renders
    pages and returns HTML.  Also exports `isPlaywrightAvailable()`.  With
@@ -85,8 +88,8 @@ Development tooling includes a static file server in
    `tr-TR` locale/timezone) and simulates human interaction (incremental
    scrolling to load lazy content, small mouse movements) before snapshotting
    the DOM. This adapter renders GET pages only; provider registrations that
-   POST JSON/forms declare `browserCompatible: false`, and the CLI rejects an
-   incompatible browser run before any scrape starts.
+   POST JSON/forms or speak a JSON API declare `browserCompatible: false`, and
+   the CLI rejects an incompatible browser run before any scrape starts.
 3. `src/entities.js` — HTML entity/numeric-reference decoder.
 4. `src/slug.js` — Generic channel-id slug (uppercase, non-alphanum → `.`,
    country suffix — `.tr` default, `.se` for the Swedish provider).
@@ -160,18 +163,25 @@ Development tooling includes a static file server in
       `parseChannelLogo()` are the pure parsers (logos come from the
       `border="0"` header `<img>`, `?rkt=` query stripped).  **Not browser-
       compatible** (POSTs form data).
-    - `sporekrani.js` — Spor Ekranı Yayın Akışı: tabii spor 1-8 (match-day
-      simulcast feeds) and S Sport Plus via `sporekrani.com/home/channel/
-      {slug}` pages.  Quasar SSR with the schedule in a `window.__INITIAL_
-      STATE__` JSON script tag; each page carries a rolling ~30-day event
-      list (one fetch per channel).  `extractInitialState()` /
-      `parseChannelPage()` / `parseChannelIcon()` are the pure parsers.
-      Events are filtered to
-      the page's own channel (`channels[].name`), and because the source
-      publishes **start times only**, stops derive from the next event on
-      the page (24:00 for the last), like beinsports.  Channel logos come
-      from the page channel's own `channels[].icon` (first matching event
-      wins; pipe-joined garbage rejected).
+    - `sporekraniapi.js` — Spor Ekranı API: tabii spor 1-8 and S Sport Plus via
+      one authenticated `GET https://api.sporekrani.com/v3/events?day=...` per
+      requested date. Credentials come only from `SPOREKRANI_API_APP_ID` and
+      `SPOREKRANI_API_KEY`; never commit them. `parseApiEnvelope()` /
+      `parseDayEvents()` are pure parsers. Every exact curated owner in an
+      event's `channels[]` receives the slot. The source has start times only,
+      so the adapter chains to the next start on the same channel inside that
+      response and ends the final start at midnight; it never chains across
+      days. This is the active daily-CI sports source. **Not browser-compatible**
+      (JSON API, not rendered HTML). `scrape()` accepts an optional `env`
+      (default `process.env`) so tests can inject credentials, and per-day
+      warnings summarize a failed request as `HTTP <status>` only —
+      credential-bearing URLs never reach the log.
+    - `sporekrani.js` — retained Spor Ekranı SSR benchmark baseline: tabii spor
+      1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`. Quasar SSR
+      embeds a rolling ~30-day list in `window.__INITIAL_STATE__`; one fetch per
+      channel. Stops chain across the rolling list. It remains registered for
+      provider-to-provider benchmarking but is excluded from CI because sparse
+      lists can extend a programme for days.
     - `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor 1-4 via
       `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
       and its plain-HTTP JSON API.  One session GET per channel captures the
@@ -236,14 +246,16 @@ Development tooling includes a static file server in
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
     reports into text lines.
 
-Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekrani` +
+Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekraniapi` +
 `tivibu` + `idmantv` merged (`--provider tvplus,beinsports,digiturkburada,
-sporekrani,tivibu,idmantv --merge`) cover 38 of the 50 sports channels; the
-rest are tracked in `UNSUCCESSFUL.md`.  The daily CI merge skips
+sporekraniapi,tivibu,idmantv --merge`) cover 38 of the 50 sports channels; the
+rest are tracked in `UNSUCCESSFUL.md`. The daily CI merge skips
 `beinsports` (its 1-4 feeds are covered by `digiturkburada`, which keeps
-full-day schedules).  `sporekrani` adds the tabii spor 1-8
-simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
-adds İdman TV (an Azerbaijani charter, not in the epgshare01 reference).
+full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
+`sporekraniapi` adapter matches starts and bounds final stops at midnight).
+`sporekraniapi` adds the tabii spor 1-8 simulcast feeds and S Sport Plus;
+`tivibu` adds Tivibu Spor 1-4; `idmantv` adds İdman TV (an Azerbaijani
+charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.
 13. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
@@ -303,7 +315,7 @@ catalog entry):
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
-  browserCompatible?: false, // POST/session sources opt out of browser rendering
+  browserCompatible?: false, // POST/session/JSON-API sources opt out of browser rendering
   country?: string,        // filename suffix; default TR, tvnu SE
   language?: string,       // output lang attribute; default tr, tvnu sv
   timeZone?: string,       // today anchor; Istanbul default, tvnu Stockholm, idmantv Baku
@@ -319,6 +331,8 @@ catalog entry):
                              // flags --retries / --timeout-ms /
                              // --retry-delay-ms)
     maxChannels,           // optional channel cap where supported (including tvnu)
+    env,                   // optional: credential environment for sources that
+                             // need secrets (sporekraniapi; default process.env)
   }) => Promise<{ channels, programmes, days, failures, language }>
 }
 ```

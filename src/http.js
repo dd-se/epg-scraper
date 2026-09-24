@@ -8,6 +8,40 @@ export const DEFAULT_UA =
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Query-parameter names whose *values* must never reach a log line or an
+// error message.  Spor Ekranı's JSON API (sporekraniapi) carries its app id
+// and API key in the query string, and transport errors embed the request
+// URL — so the transport masks those values centrally instead of trusting
+// every provider to truncate its own messages.
+const SENSITIVE_QUERY_PARAMS =
+  /^(?:api[_-]?key|app[_-]?id|key|token|access[_-]?token|auth|secret|password|passwd|pwd|signature|sig)$/i;
+
+// Return `url` with sensitive query values and any userinfo replaced by
+// `REDACTED`.  Non-sensitive URLs come back byte-identical, and a value that
+// is not an absolute URL is returned untouched.
+export function redactUrl(url) {
+  const text = String(url);
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return text;
+  }
+  let touched = false;
+  if (parsed.username || parsed.password) {
+    parsed.username = '';
+    parsed.password = '';
+    touched = true;
+  }
+  for (const name of [...parsed.searchParams.keys()]) {
+    if (SENSITIVE_QUERY_PARAMS.test(name)) {
+      parsed.searchParams.set(name, 'REDACTED');
+      touched = true;
+    }
+  }
+  return touched ? parsed.toString() : text;
+}
+
 export function createPoliteFetch(fetchImpl, delayMs = 0) {
   const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
   if (!Number.isFinite(delayMs) || delayMs <= 0) return doFetch;
@@ -27,7 +61,7 @@ async function attemptOnce(doFetch, url, init, timeoutMs, finalize, nonRetryable
     const response = await doFetch(url, { ...init, signal: controller.signal });
     if (!response || !response.ok) {
       const status = response && response.status;
-      const error = new Error(`HTTP ${status == null ? 'undefined' : status} for ${url}`);
+      const error = new Error(`HTTP ${status == null ? 'undefined' : status} for ${redactUrl(url)}`);
       const configuredNonRetryable = nonRetryableStatuses?.includes(status) === true;
       const transient = status === 429 || (status >= 500 && status < 600);
       const sessionPost403 = status === 403 && !configuredNonRetryable;
@@ -62,7 +96,7 @@ async function requestWithRetry(url, options = {}) {
     fetchImpl,
     buildInit = () => ({}),
     finalize = (response) => response.text(),
-    describe = () => url,
+    describe = () => redactUrl(url),
     nonRetryableStatuses,
   } = options;
   // Resolve fetchImpl at call time — falling back to globalThis.fetch so
@@ -105,7 +139,7 @@ export async function fetchText(url, options = {}) {
     ...retryOptions,
     fetchImpl,
     nonRetryableStatuses: GET_NON_RETRYABLE,
-    describe: () => `GET ${url}`,
+    describe: () => `GET ${redactUrl(url)}`,
     buildInit: () => ({
       headers: {
         'user-agent': userAgent,
@@ -148,7 +182,7 @@ export async function fetchResponseWithRetry(url, options = {}) {
     nonRetryableStatuses:
       method === 'GET' || !retry403 ? [403, 404, 410] : [404, 410],
     finalize: bufferResponse,
-    describe: () => `${method} ${url}`,
+    describe: () => `${method} ${redactUrl(url)}`,
     buildInit: () => ({
       method,
       ...(body !== undefined ? { body } : {}),

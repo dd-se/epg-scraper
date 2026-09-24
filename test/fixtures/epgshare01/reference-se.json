@@ -1,7 +1,7 @@
 {
   "source": "https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz",
   "country": "SE",
-  "updated": "2026-09-17",
+  "updated": "2026-09-24",
   "channelCount": 126,
   "knownGaps": {
     "SVT.BARN.se": "tvnu provider channel SVT Barn; upstream publishes only the combined [COMSVHD].SVTB/SVT24.HD.se feed as of 2026-09-17.",

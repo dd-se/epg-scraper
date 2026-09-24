@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "id": 485822,
+      "name": "Maccabi Fox - Beşiktaş",
+      "date_time": "2026-09-30 21:05:00",
+      "sport_name": "Basketbol",
+      "channels": [
+        {
+          "name": "S Sport Plus",
+          "icon": "https://img.sporekrani.com/channels/s-sport-plus.png"
+        }
+      ]
+    },
+    {
+      "id": 485823,
+      "name": "Panathinaikos - Asvel Villeurbanne",
+      "date_time": "2026-09-30 21:15:00",
+      "sport_name": "Basketbol",
+      "channels": [
+        {
+          "name": "S Sport Plus",
+          "icon": "https://img.sporekrani.com/channels/s-sport-plus.png"
+        }
+      ]
+    },
+    {
+      "id": 485824,
+      "name": "Later event must not define today's stop",
+      "date_time": "2026-10-09 19:30:00",
+      "sport_name": "Futbol",
+      "channels": [{ "name": "S Sport Plus" }]
+    },
+    {
+      "id": 485825,
+      "name": "Other channel",
+      "date_time": "2026-09-30 22:00:00",
+      "sport_name": "Basketbol",
+      "channels": [{ "name": "S Sport" }]
+    }
+  ]
+}

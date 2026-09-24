@@ -37,7 +37,7 @@ Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
 fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
-digiturkburada 400, sporekrani 500, tivibu 400, tvnu 400 —
+digiturkburada 400, sporekrani 500, sporekraniapi 300, tivibu 400, tvnu 400 —
 mynet fetches ~90 channel pages per day and tvnu one page per channel **and
 day**, so keep this polite).
 
@@ -59,10 +59,13 @@ errors, timeouts, body-read failures) are retried. Deterministic statuses
 fail on the first attempt: 404/410 and 403 on GET requests. Session API POST
 403 remains retryable; TV+ rebuilds its session once after exhaustion, while
 Tivibu records the failed channel-day. Raise `--retries` for unreliable
-links, or lower `--timeout-ms` to fail fast on dead hosts.
+links, or lower `--timeout-ms` to fail fast on dead hosts. Request
+descriptions and non-2xx error messages pass URLs through `redactUrl()`, which
+masks sensitive query values (`app_id`, `api_key`, `token`, …) and userinfo, so
+a credential-bearing URL cannot leak into output or CI logs.
 
 The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
-`digiturkburada`, `sporekrani`, `tivibu`, and `idmantv` (38 channels together).
+`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (38 channels together).
 Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
 sections below and `UNSUCCESSFUL.md` for channels still lacking a usable source.
 
@@ -387,7 +390,7 @@ Conventions every provider must follow:
   name: string,            // human label
   baseUrl: string,         // informational
   requiresBrowser?: boolean, // if true, CLI auto-launches headless Chromium
-  browserCompatible?: false, // POST/session sources opt out of browser rendering
+  browserCompatible?: false, // POST/session/JSON-API sources opt out of browser rendering
   country?: string,        // output filename suffix (default: 'TR' — tvnu: 'SE')
   language?: string,       // `lang` attribute on titles/names (default: 'tr' — tvnu: 'sv')
   timeZone?: string,       // default-window "today" anchor (Istanbul default; tvnu Stockholm; idmantv Baku)
@@ -398,6 +401,7 @@ Conventions every provider must follow:
     politenessDelayMs,     // ms between page fetches
     fetchOptions,          // transport options for fetchText / fetchResponseWithRetry
     maxChannels,           // optional channel cap where supported (including tvnu)
+    env,                   // optional: credential environment (sporekraniapi — default process.env)
   }) => Promise<{ channels, programmes, days, failures, language }>
 }
 ```
@@ -480,33 +484,67 @@ node bin/epg-scraper.js --provider tvplus --date 2026-09-09
 node bin/epg-scraper.js --provider digiturkburada --date 2026-09-08 --days-forward 1
 ```
 
-## Provider: sporekrani
+## Providers: sporekraniapi and sporekrani
 
-- Source: `https://www.sporekrani.com/home/channel/{slug}` (Spor Ekranı, the
-  "hangi maç hangi kanalda" aggregator).  Covers the feeds no other free
-  source carries: **tabii spor 1-8** (match-day simulcast channels) and
-  **S Sport Plus** (D-Smart-only premium feed).
-- Page anatomy: a Quasar SSR page with the schedule embedded in a
-  `window.__INITIAL_STATE__` JSON script tag — `common.events` holds the
-  channel's rolling ~30-day event list
-  (`{ name, date_time: "YYYY-MM-DD HH:MM:SS" (Istanbul wall time),
-  sport_name, channels: [...] }`).  An event often airs on several channels
-  (e.g. a Champions League match on tabii Spor 1 AND CBC Sport), so only
-  events whose `channels[].name` matches the page's channel are kept.
-- Each page covers the whole ~30-day window, so **one fetch per channel**
-  serves any requested dates inside it (dates outside are silently skipped).
-- **Events-only:** the source publishes start times but no end times.
-  Programme stops are derived from the next event on the page, chained
-  across day boundaries (24:00 for the last event) — the same convention as
-  beinsports/mynet/digiturkburada.
-- The `sport_name` (e.g. "Futbol", "Basketbol") is emitted as the category.
-- tabii spor 1-8 are match-day simulcast feeds — most days most of them
-  carry no events at all, which is correct, not a scrape failure.
+These adapters cover the feeds no other free source carries: **tabii spor 1-8**
+(match-day simulcast channels) and **S Sport Plus** (D-Smart-only premium feed).
+
+### Active provider: `sporekraniapi`
+
+- Source: Spor Ekranı's plain-HTTPS v3 content API,
+  `GET https://api.sporekrani.com/v3/events?day=YYYY-MM-DD` with the
+  `app_id` and `api_key` query parameters. The JSON response uses a
+  `{"data":[...]}` envelope.
+- Credentials are never stored in the repository. Set
+  `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` in the environment. The
+  scheduled workflow reads the same names from GitHub Secrets, and only for
+  the `sporekraniapi` matrix job. `scrape()` also accepts an optional `env`
+  (default `process.env`) so tests can inject credentials; per-day warnings
+  report a failed request as `HTTP <status>` only, and the transport redacts
+  sensitive query values from error messages.
+- One request covers all nine channels for one requested day. Events are
+  retained for every exact curated owner in `channels[]`, so a listed
+  simulcast is emitted on each participating tabii feed.
+- The source publishes **start times only**. Stops are derived from the next
+  start for that channel inside the same API response; the final start ends at
+  that day's midnight. The adapter deliberately never chains across days.
+- `sport_name` is emitted as the category. Channel logos come from each exact
+  owning channel's `icon`; pipe-joined logo garbage is rejected.
+- This is a JSON API, not a renderable HTML page, so it is not browser-compatible.
 
 ```bash
-# All 9 channels (tabii spor 1-8 + S Sport Plus)
-node bin/epg-scraper.js --provider sporekrani --date 2026-09-08
+export SPOREKRANI_API_APP_ID='<app id>'
+export SPOREKRANI_API_KEY='<api key>'
+
+# All 9 channels for a seven-day window
+node bin/epg-scraper.js --provider sporekraniapi --date 2026-09-30
 ```
+
+### Retained benchmark baseline: `sporekrani`
+
+The original `sporekrani` adapter remains registered for reproducible
+provider-to-provider comparisons. It reads the rolling ~30-day
+`window.__INITIAL_STATE__` event list from
+`https://www.sporekrani.com/home/channel/{slug}`. It uses nine page requests
+for a full guide and chains each start to the next listed event across day
+boundaries.
+
+That rolling-list policy is no longer used by daily CI: sparse event lists can
+leave a programme open for days when the channel has no known broadcast. Run a
+live comparison with:
+
+```bash
+node bin/epg-scraper.js \
+  --provider sporekrani,sporekraniapi \
+  --compare --date 2026-09-30 --out /tmp/sporekrani-benchmark
+```
+
+Verified live on 2026-09-24: both adapters returned 9 channels, the same two
+S Sport Plus starts, and zero request failures; the first slot matched exactly.
+For `Panathinaikos - Asvel Villeurbanne`, the SSR baseline ended at
+`2026-10-09T19:30:00+03:00` (the next event nine days later), while the API
+adapter ended at `2026-10-01T00:00:00+03:00`. The API adapter is therefore the
+active CI and sports-merge source.
 
 ## Provider: tivibu
 
@@ -699,12 +737,12 @@ node bin/epg-scraper.js --provider tvnu --alias-map aliases.tvnu.json --merge --
 ### Sports guide from the sports providers
 ```bash
 # One guide with all 38 scrapeable sports channels
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekrani,tivibu,idmantv --merge --out epg_sports_merged_TR.xml.gz
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --out epg_sports_merged_TR.xml.gz
 ```
 
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
 `digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV
-exist nowhere else); `sporekrani` adds
+exist nowhere else); `sporekraniapi` adds
 tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
 adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
@@ -715,7 +753,10 @@ adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 from `src/provider-catalog.js`, then runs the configured providers daily at
 00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets on a rolling
 `latest` GitHub Release. The matrix excludes beinsports because
-DigiturkBurada already covers its beIN 1–4 feeds with full-day schedules.
+DigiturkBurada already covers its beIN 1–4 feeds with full-day schedules, and
+`sporekraniapi` supersedes the rolling SSR Spor Ekranı adapter because its
+day-scoped responses bound the final event at midnight. The API job requires
+the `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` GitHub Secrets.
 Mynet runs with an explicit `--delay-ms 500` because a full run is ~260
 page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 69 channels ×
 (3 requested days + 1 lookback day) = 276 requests before retries.
@@ -816,7 +857,7 @@ src/registry.js         provider registry + date-range helper
 src/provider-catalog.js authored provider, reference, CI, and sports inventory
 src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
-src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, tivibu, idmantv, tvnu)
+src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, sporekraniapi, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/provider-inventory.js  print provider/CI/sports inventory projections
 scripts/update-reference-ids.js  refresh the vendored epgshare01 TR + SE id snapshots

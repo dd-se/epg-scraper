@@ -6,11 +6,11 @@
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_mynet_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvplus_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_digiturkburada_TR.xml.gz
-#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sporekrani_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sporekraniapi_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tivibu_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_idmantv_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvnu_SE.xml.gz  (Swedish guide: lang="sv", +01:00/+02:00 Stockholm offsets)
-#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sports_merged_TR.xml.gz  (sports merge: tvplus + digiturkburada + sporekrani + tivibu + idmantv)
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sports_merged_TR.xml.gz  (sports merge: tvplus + digiturkburada + sporekraniapi + tivibu + idmantv)
 #
 # (Replace OWNER/REPO with this repository's path. The repo must be public —
 # release assets on private repos need authentication, which IPTV apps can't
@@ -95,6 +95,9 @@ jobs:
       # so the failure stays visible — downstream jobs run anyway.
       - name: Scrape ${{ matrix.provider }} (with retries)
         id: scrape
+        env:
+          SPOREKRANI_API_APP_ID: ${{ matrix.provider == 'sporekraniapi' && secrets.SPOREKRANI_API_APP_ID || '' }}
+          SPOREKRANI_API_KEY: ${{ matrix.provider == 'sporekraniapi' && secrets.SPOREKRANI_API_KEY || '' }}
         run: |
           attempt=1
           max_attempts=3
@@ -182,7 +185,7 @@ jobs:
           if-no-files-found: warn
 
   # One combined sports guide: union of tvplus (16), digiturkburada (8),
-  # sporekrani (9), tivibu (4) and idmantv (1) channels.
+  # sporekraniapi (9), tivibu (4) and idmantv (1) channels.
   # Reuses the per-provider guides scraped above — zero live-server hits: the
   # artifacts are downloaded and merged offline with --merge --from.
   # Runs even when some providers failed (`!cancelled()`): merges whatever

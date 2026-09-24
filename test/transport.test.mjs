@@ -3,7 +3,7 @@
 // re-establishment failsafe.  All network behavior is stubbed — no live
 // requests (see AGENTS.md).
 import { describe, it, expect, vi } from 'vitest';
-import { createPoliteFetch, fetchText, fetchResponseWithRetry } from '../src/http.js';
+import { createPoliteFetch, fetchText, fetchResponseWithRetry, redactUrl } from '../src/http.js';
 import { scrape as scrapeTvplus, CHANNELS as TVPLUS_CHANNELS } from '../src/providers/tvplus.js';
 import { scrape as scrapeDigiturkburada } from '../src/providers/digiturkburada.js';
 import { scrape as scrapeTivibu } from '../src/providers/tivibu.js';
@@ -254,6 +254,28 @@ describe('fetchText retries (regression coverage)', () => {
         retries: 0,
       })
     ).rejects.toThrow(/EAI_AGAIN \(GET https:\/\/x\/page\)/);
+  });
+});
+
+describe('credential redaction in transport context', () => {
+  it('masks sensitive query values and userinfo, leaving other URLs untouched', () => {
+    expect(
+      redactUrl('https://api.example.com/v3/events?app_id=abc123&api_key=def456&day=2026-09-30')
+    ).toBe('https://api.example.com/v3/events?app_id=REDACTED&api_key=REDACTED&day=2026-09-30');
+    expect(redactUrl('https://user:pass@example.com/x?token=abc')).toBe(
+      'https://example.com/x?token=REDACTED'
+    );
+    expect(redactUrl('https://x/page')).toBe('https://x/page');
+    expect(redactUrl('/relative/page')).toBe('/relative/page');
+  });
+
+  it('redacts the URL a thrown transport error carries', async () => {
+    await expect(
+      fetchText('https://api.example.com/v3/events?app_id=abc&api_key=secret&day=2026-09-30', {
+        fetchImpl: async () => ({ ok: false, status: 401, text: async () => '' }),
+        retries: 0,
+      })
+    ).rejects.toThrow(/app_id=REDACTED&api_key=REDACTED&day=2026-09-30/);
   });
 });
 

@@ -8,6 +8,9 @@ epg_*.xml.gz
 # local scratch / fetched reference files
 .tmp/
 
+# local Spor Ekranı API protocol notes (may contain credentials — never commit)
+sporekrani-api.md
+
 # local environment files
 .agents
 .cline

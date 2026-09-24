@@ -1,7 +1,7 @@
 {
   "source": "https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz",
   "country": "TR",
-  "updated": "2026-09-17",
+  "updated": "2026-09-24",
   "channelCount": 178,
   "knownGaps": {
     "DISNEY.JUNIOR.tr": "Used by both providers (live channel); upstream reference carries no Disney Junior entry as of 2026-09-08. Generic slug kept.",

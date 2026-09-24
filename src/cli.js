@@ -32,7 +32,8 @@ const HELP_TEXT = `Usage: epg-scraper [options]
   --delay-ms N         ms to wait between page fetches (default: provider
                        default — hurriyet 250, mynet 500, tvplus 400,
                        beinsports 300, digiturkburada 400, sporekrani 500,
-                       tivibu 400, idmantv 250, tvnu 400; mynet fetches
+                       sporekraniapi 300, tivibu 400, idmantv 250, tvnu 400;
+                       mynet fetches
                        ~90 channel pages per day and tvnu one page per
                        channel and day (~46 per window day incl. the
                        small-hours lookback), so keep this polite)
