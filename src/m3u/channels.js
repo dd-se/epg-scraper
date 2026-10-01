@@ -44,11 +44,6 @@ export const CHANNEL_CATALOG = [
   { pattern: 'Eurosport 1', note: 'sports' },
 
   // Entertainment / children / regional
-  { pattern: 'Show EMEA', note: 'regional edition' },
-  { pattern: 'ATV Alanya', note: 'regional edition (E1: never folded into ATV)' },
-  { pattern: 'ATV Avrupa', note: 'regional edition (E1: never folded into ATV)' },
-  { pattern: 'Star TV Alanya', note: 'regional edition' },
-  { pattern: 'Kanal D Drama', note: 'spin-off (E1: separate from Kanal D)' },
   { pattern: 'TRT 4K', note: '4K simulcast (E1: separate from TRT 1)' },
   { pattern: 'TRT Çocuk', note: 'children' },
   { pattern: 'Minik Go', note: 'children' },
@@ -59,11 +54,7 @@ export const CHANNEL_CATALOG = [
   { pattern: 'TV 8', note: 'general-interest' },
   { pattern: 'Kanal 7', note: 'general-interest' },
   { pattern: 'Beyaz TV', note: 'general-interest' },
-  { pattern: 'Kanal B', note: 'general-interest' },
   { pattern: 'Flash TV', note: 'general-interest' },
-  { pattern: 'Azure TV', note: 'general-interest' },
-  { pattern: 'TLC Türkiye', note: 'entertainment' },
-  { pattern: 'DMAX', note: 'entertainment' },
   { pattern: 'Investigation', note: 'documentary' },
   { pattern: 'National Geographic', note: 'documentary' },
   { pattern: 'Discovery Channel', note: 'documentary' },
