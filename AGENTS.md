@@ -305,7 +305,8 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
     - `liveness.js` — `probeEntries()` (opt-in, manifest-only by default).
     - `config.js` — `loadM3uConfig()`, strict validation + `${ENV_VAR}`.
     - `channels.js` — the curated, data-driven `CHANNEL_CATALOG` that decides
-      which channels a run selects.
+      which channels a run selects, and optionally declares each one's
+      `group-title` (Turkish labels that outrank the sources' own).
 16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fetchText, createPoliteFetch, redactUrl } from '../http.js';
 import { parseM3U } from './parser.js';
-import { selectEntries } from './selection.js';
+import { selectEntries, applyGroupOverrides } from './selection.js';
 import {
   groupEntries,
   collapseIdenticalFeeds,
@@ -59,6 +59,7 @@ export async function collectEntries(options = {}) {
     transportOptions = {},
     want = [],
     exclude = [],
+    groupOverrides = [],
     style = 'backup',
     stripQuality = ['HD', 'FHD', 'UHD', 'SD'],
     useYedek = true,
@@ -114,7 +115,11 @@ export async function collectEntries(options = {}) {
   const { kept, unmatchedPatterns } = selectEntries(all, { want, exclude });
   for (const pattern of unmatchedPatterns) log(`warn: pattern "${pattern}" matched no channel`);
 
-  const { entries: expanded, yedekFound } = expandYedek(kept, { enabled: useYedek });
+  // The catalog's declared groups land here — after selection, so they can only
+  // relabel entries that were already kept, never pull new ones in.
+  const labeled = applyGroupOverrides(kept, groupOverrides);
+
+  const { entries: expanded, yedekFound } = expandYedek(labeled, { enabled: useYedek });
   const groups = groupEntries(expanded, { stripQuality });
   const { groups: collapsed, collapsedDuplicates } = collapseIdenticalFeeds(groups, {
     unifyScheme, keepQuery, dedupeIdenticalUrls,

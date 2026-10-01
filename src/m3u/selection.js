@@ -73,6 +73,35 @@ export function selectionForms(entry) {
 }
 
 /**
+ * Stamp a declared `group-title` onto the entries a rule selects.
+ *
+ * The catalog in `channels.js` may declare the group a channel belongs to. That
+ * declaration is the operator's answer to "the sources disagree, which label do
+ * I actually want", so it replaces what the playlist published and outranks the
+ * unify-by-count pass. Applied **after** selection, so a declared group can
+ * never widen *which* entries are selected.
+ *
+ * The first matching rule wins, which keeps catalog order meaningful.
+ *
+ * @param {object[]} entries
+ * @param {{pattern: string, group: string}[]} overrides
+ * @returns {object[]} the entries, with `group` replaced where a rule matched
+ */
+export function applyGroupOverrides(entries, overrides) {
+  const list = Array.isArray(entries) ? entries : [];
+  const rules = (Array.isArray(overrides) ? overrides : [])
+    .filter((rule) => rule && typeof rule.pattern === 'string' && rule.pattern.trim())
+    .filter((rule) => typeof rule.group === 'string' && rule.group.trim())
+    .map((rule) => ({ matcher: globToMatcher(rule.pattern), group: rule.group.trim() }));
+  if (rules.length === 0) return list;
+  return list.map((entry) => {
+    const forms = selectionForms(entry);
+    const hit = rules.find((rule) => forms.some((form) => rule.matcher.test(form)));
+    return hit ? { ...entry, group: hit.group } : entry;
+  });
+}
+
+/**
  * Keep only the entries the operator asked for.
  *
  * `exclude` always beats `want`.  An empty `want` keeps everything.  Patterns

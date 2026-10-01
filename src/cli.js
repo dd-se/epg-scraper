@@ -789,6 +789,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     transportOptions,
     want: plan.want,
     exclude: plan.exclude,
+    groupOverrides: plan.groupOverrides,
     style: plan.style,
     stripQuality: plan.stripQuality,
     useYedek: plan.useYedek,

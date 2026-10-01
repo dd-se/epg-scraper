@@ -11,7 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { catalogWantPatterns, CHANNEL_CATALOG } from './channels.js';
+import { catalogGroupOverrides, catalogWantPatterns, CHANNEL_CATALOG } from './channels.js';
 import { NAMING_STYLES } from './identity.js';
 
 export const DEFAULT_OUTPUT_PATH = 'playlist.m3u';
@@ -152,6 +152,9 @@ export function loadM3uConfig(configPath, options = {}) {
   const configWant = parsed.want === undefined ? [] : requireStringArray(parsed.want, 'want');
   const exclude = parsed.exclude === undefined ? [] : requireStringArray(parsed.exclude, 'exclude');
   const want = [...(useCatalog ? catalogWantPatterns(CHANNEL_CATALOG) : []), ...configWant];
+  // The catalog's declared groups travel with it: turning the catalog off drops
+  // both the curated selection and the group declarations.
+  const groupOverrides = useCatalog ? catalogGroupOverrides(CHANNEL_CATALOG) : [];
   if (want.length > MAX_PATTERNS) fail(`want: at most ${MAX_PATTERNS} patterns are allowed`);
   if (exclude.length > MAX_PATTERNS) fail(`exclude: at most ${MAX_PATTERNS} patterns are allowed`);
 
@@ -181,6 +184,7 @@ export function loadM3uConfig(configPath, options = {}) {
     sources,
     want,
     exclude,
+    groupOverrides,
     style,
     stripQuality,
     useYedek: optionalBoolean(parsed.useYedek, true, 'useYedek'),

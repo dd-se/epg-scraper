@@ -407,7 +407,7 @@ nothing. The committed [`m3u.config.json`](m3u.config.json) is the file the
 | `stripQuality` | string[] · `["HD","FHD","UHD","SD"]` | Quality tokens folded when matching (`[]` disables; `4K` never folds). | `--m3u-strip-quality` |
 | `useYedek` | boolean · `true` | Expand `Yedek*` backup attributes into real copies. | `--m3u-no-yedek` |
 | `dedupeIdenticalUrls` | boolean · `true` | Collapse entries whose normalized URL is the same feed. | — |
-| `unifyGroups` | boolean · `true` | Give every copy of a channel one `group-title`: `Undefined`/empty is a placeholder and loses to any real label, then the most-copied label wins (ties keep the base copy's). | — |
+| `unifyGroups` | boolean · `true` | Give every copy of a channel one `group-title`: `Undefined`/empty is a placeholder and loses to any real label, then the most-copied label wins (ties keep the base copy's). A group declared in `src/m3u/channels.js` outranks all of this. | — |
 | `unifyScheme` | boolean · `true` | Treat `http`/`https` as one when comparing URLs. | `--m3u-keep-scheme` |
 | `keepQuery` | boolean · `false` | Keep the query string when comparing URLs. | `--m3u-keep-query` |
 | `inferTvgId` | boolean · `true` | Infer a missing `tvg-id` from the channel name. | `--m3u-no-infer-tvg-id` |
@@ -469,6 +469,24 @@ stripped display name and `group-title` — never the raw decorated name:
 --m3u-want "ATV*"         # ATV and its editions, as separate channels
 --m3u-want "*Undefined*"  # anything in the "Undefined" group
 ```
+
+### Declaring the group in the catalog
+
+Each catalog entry may also declare the group the channel belongs to, written
+in the playlist's own language (Turkish):
+
+```js
+{ pattern: 'ATV', group: 'ULUSAL', note: 'national general-interest' },
+{ pattern: 'TRT Spor', group: 'SPOR', note: 'sports' },
+```
+
+The declared group replaces whatever the sources published — and outranks the
+unify-by-count rule below — so [`src/m3u/channels.js`](src/m3u/channels.js)
+becomes the single source of truth for the folder layout. This is what keeps
+the two vocabularies apart: one source files `Beyaz TV` under `Undefined`, the
+other under `ULUSAL`, and you decide it is `ULUSAL`. Drop the `group` field and
+that channel falls back to the sources' own label. Setting `"catalog": false`
+drops the declarations along with the selection.
 
 `exclude` always beats `want`, and a pattern that matches nothing is reported
 so a typo cannot silently shorten the playlist.
