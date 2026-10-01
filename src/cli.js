@@ -129,7 +129,7 @@ M3U playlist mode (no EPG, no XMLTV):
                          | keep-first | fail
                          "none" gives every feed of a channel the same name AND
                          the same tvg-id, which is what a name-keyed consumer
-                         (e.g. the Tizen engine) needs.
+                         (e.g. a strict name-keyed player) needs.
   --m3u-strip-quality   comma-separated quality tokens folded when matching
                         (default HD,FHD,UHD,SD; pass an empty value to disable.
                         4K is NOT folded: TRT 4K is a separate simulcast)

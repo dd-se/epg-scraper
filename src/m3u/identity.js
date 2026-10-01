@@ -299,13 +299,13 @@ export const NAMING_STYLES = ['numbered', 'parenthesized', 'none', 'backup', 'so
 
 /**
  * The `tvg-id` a consumer must accept, and the shape a catalog-declared id has
- * to satisfy.  A strict Tizen 5 parser refuses anything else and drops the whole
+ * to satisfy.  A strict parser refuses anything else and drops the whole
  * entry, so an id that fails here is not merely ugly — it is a lost channel.
  *
- * Lowercase ASCII, no spaces, first character alphanumeric.  The 128 cap is the
- * parser's own limit, not an arbitrary one.
+ * Lowercase ASCII, no spaces, first character alphanumeric.  The 128 cap is
+ * the parser's own limit, not an arbitrary one.
  */
-export const TIZEN_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/;
+export const CONSUMER_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/;
 
 /**
  * Reduce any name to a `tvg-id` the strict parser accepts: lowercase, Turkish
@@ -346,7 +346,7 @@ export function toPortableId(value) {
  * | `keep-first` | `ATV` only, rest dropped+reported | same |
  * | `fail`     | run reports the conflict and exits 1 | same |
  *
- * `none` exists for consumers that key on the display name: a Tizen engine
+ * `none` exists for consumers that key on the display name: a name-keyed consumer
  * matches a channel to its XMLTV guide by name, so a `B2`/`(1)` marker in the
  * name strands the copy with no programme data.  Rule 1 of that contract
  * (one `tvg-id` per channel, shared by all its feeds) is the counterpart — the

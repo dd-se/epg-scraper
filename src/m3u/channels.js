@@ -29,7 +29,7 @@ export const CHANNEL_CATALOG = [
   // The source publishes `SHOW TV HD`; the Hürriyet guide spells the channel
   // `SHOW TV`, and a name-keyed consumer only finds the guide under that
   // spelling.  Declared here so the id/name pair stays stable if the source
-  // re-spells it.  See `TIZEN_NAME_CONTRACT` below for the rename contract.
+  // re-spells it.  See `EPG_NAME_CONTRACT` below for the rename contract.
   { pattern: 'Show TV', id: 'showtvhd.tr', name: 'SHOW TV', group: 'ULUSAL', note: 'national general-interest' },
   { pattern: 'FOX', id: 'fox.tr', group: 'ULUSAL', note: 'national general-interest' },
   { pattern: 'NOW TV', id: 'nowtv.tr', name: 'NOW', group: 'DİZİ', note: 'national entertainment; guide spells it NOW' },
@@ -79,7 +79,7 @@ export const CHANNEL_CATALOG = [
 /**
  * The three renames a name-keyed consumer needs, and why.
  *
- * A Tizen engine folds both the playlist name and the XMLTV `<display-name>`
+ * Such a consumer folds both the playlist name and the XMLTV `<display-name>`
  * (lowercase, Turkish-insensitively) and matches on the result, keeping word
  * breaks — so `TV 8` and `TV8` are *different* channels and only one of them
  * has a guide.  Each entry pairs the source's spelling with the guide's.
@@ -88,7 +88,7 @@ export const CHANNEL_CATALOG = [
  * identity for a viewer's selection and must never change once published, while
  * the name is only a label.
  */
-export const TIZEN_NAME_CONTRACT = [
+export const EPG_NAME_CONTRACT = [
   { from: 'NOW TV', to: 'NOW', guide: 'NOW', epgId: 'FOX.tr' },
   { from: 'TV 8', to: 'TV8', guide: 'TV8', epgId: 'TV8.tr' },
   { from: 'SHOW TV HD', to: 'SHOW TV', guide: 'SHOW TV', epgId: 'SHOW.TV.tr' },

@@ -55,8 +55,8 @@ function escapeDisplayName(value) {
 export function validateM3uResult(result, options = {}) {
   // `allowSharedIdentity` is the `none` naming style: one id and one name per
   // CHANNEL, repeated across its alternate feeds.  That is exactly what a
-  // Tizen engine requires (it keys failover off the id), so the duplicate checks
-  // below are suspended rather than weakened — every other rule still applies.
+  // name-keyed consumer requires (it keys failover off the id), so the duplicate
+  // checks below are suspended rather than weakened — every other rule applies.
   const { allowSharedIdentity = false } = options;
   const entries = result && Array.isArray(result.entries) ? result.entries : null;
   if (!entries) throw new Error('generateM3U: result.entries must be an array');

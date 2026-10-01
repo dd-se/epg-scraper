@@ -11,7 +11,7 @@ TV programme-guide sources through pluggable provider adapters and outputs
 **XMLTV** files (optionally gzipped) matching epgshare01's per-country
 references (`epg_ripper_TR1.xml.gz` and `epg_ripper_SE1.xml.gz`).
 
-The product is a build-time CLI tool and library, not a Tizen app or web UI.
+The product is a build-time CLI tool and library, not an app or web UI.
 Development tooling includes a static file server in
 `scripts/scraper-server.js`; it is not required for scraping.
 
@@ -308,7 +308,7 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       which channels a run selects, and optionally declares each one's
       `group-title` (Turkish labels that outrank the sources' own), permanent
       `tvg-id`, and display `name` (pinned to the EPG guide's spelling).  Also
-      exports `TIZEN_NAME_CONTRACT` (the three EPG-matching renames) and
+      exports `EPG_NAME_CONTRACT` (the three EPG-matching renames) and
       `CATALOG_EPG_GAPS` (channels with no programme data).
 16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
@@ -605,7 +605,11 @@ translate Swedish categories into Turkish.
 - One logical change per commit.  Inspect `git status` and `git diff`
   first; stage only the files that belong to the change.
 - Never commit: secrets/API keys, scratch files, or scraper output
-  (`epg_*.xml`, `epg_*.xml.gz` — already gitignored).
+  (`epg_*.xml`, `epg_*.xml.gz`, `m3u-report.json` — already gitignored).
+  `playlist.m3u` is the deliberate exception: it is the published artifact a
+  consuming player reads, so the current snapshot is checked in. Regenerate it
+  with `node bin/epg-scraper.js --m3u m3u.config.json --m3u-out playlist.m3u
+  --m3u-report m3u-report.json` and commit the result when the sources change.
 - Run `npm test` before committing; a red suite means the change is not
   done.
 - Only commit lockfile changes when dependencies actually changed.

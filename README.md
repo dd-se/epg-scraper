@@ -494,12 +494,13 @@ language (Turkish):
 Drop any field and that channel falls back to the sources' own value; setting
 `"catalog": false` drops all three along with the curated selection.
 
-#### Tizen name and id contract
+#### Name and id contract
 
-The published `playlist.m3u` is consumed by a Samsung Tizen 5 app whose parser
-is strict, and which matches a channel to its XMLTV guide **by folded display
-name** (lowercase, Turkish-insensitively, word breaks kept). Three rules follow,
-and the config satisfies them via `"style": "none"` plus the declared ids:
+The published `playlist.m3u` is consumed by a name-keyed player that matches a
+channel to its XMLTV guide **by folded display name** (lowercase,
+Turkish-insensitively, word breaks kept), and whose parser refuses a `tvg-id`
+it does not recognise. Three rules follow, and the config satisfies them via
+`"style": "none"` plus the declared ids:
 
 1. **One `tvg-id` per channel, on every one of its feeds.** Feeds are
    alternates of the same channel, so the id is what tells the app they are
@@ -507,11 +508,11 @@ and the config satisfies them via `"style": "none"` plus the declared ids:
    `none` therefore emits an identical `tvg-id`, `tvg-name`, `group-title` and
    display text on all of a channel's entries, and keeps each channel's feeds
    contiguous and best-feed-first.
-2. **The id must match `^[a-z0-9][a-z0-9._:-]{0,127}$`.** The app *refuses*
-   anything else and drops the whole entry. Every declared catalog id is
-   asserted against this pattern in the test suite.
+2. **The id must match `^[a-z0-9][a-z0-9._:-]{0,127}$`.** Such a player
+   *refuses* anything else and drops the whole entry. Every declared catalog id
+   is asserted against this pattern in the test suite.
 3. **The name must be the guide's own spelling.** Three renames are declared in
-   `channels.js` (`TIZEN_NAME_CONTRACT`): `NOW TV`→`NOW`, `TV 8`→`TV8`,
+   `channels.js` (`EPG_NAME_CONTRACT`): `NOW TV`→`NOW`, `TV 8`→`TV8`,
    `SHOW TV HD`→`SHOW TV`. Each keeps its **original** id slug
    (`nowtv.tr`, `tv8.tr`, `showtvhd.tr`) — the id is the identity, the name is
    only a label.
@@ -543,7 +544,7 @@ folded to ASCII, and a trailing resolution or a quality token (`HD`, `FHD`,
   rest) or `fail` (exit 1 on a conflict);
 * **`none` is the exception**: it gives every feed of a channel the *same*
   name **and** the *same* `tvg-id`, because some consumers key on the display
-  name (see [Tizen](#tizen-name-and-id-contract) below).
+  name (see [Name and id contract](#name-and-id-contract) below).
 * editions stay separate channels by construction — `ATV Alanya`, `Kanal D
   Drama` and `TRT 4K` never fold into their base channel.
 
@@ -1067,7 +1068,10 @@ so the two never write the release at once — and it only (re)places the
 guide workflow's release name, notes and `epg_*.xml.gz` assets untouched. The
 playlist is validated (`#EXTM3U` header plus at least one `#EXTINF`) before it
 can replace the asset, and a build that fails all three attempts leaves
-yesterday's playlist live. Both workflows are also dispatchable by hand from the
+yesterday's playlist live. The current published playlist is also **checked in**
+at [`playlist.m3u`](playlist.m3u), so the file the app consumes is reviewable in
+a diff rather than only in a release asset — it is the one scraper output that
+is committed on purpose. Both workflows are also dispatchable by hand from the
 Actions tab.
 
 ### Using the guide in an IPTV app
