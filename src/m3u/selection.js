@@ -102,6 +102,48 @@ export function applyGroupOverrides(entries, overrides) {
 }
 
 /**
+ * Pin a channel's published `tvg-id` and display name to the catalog's declared
+ * values.
+ *
+ * Runs **after** selection and alongside `applyGroupOverrides`, and for the same
+ * reason: the catalog is the operator's answer to "what is this channel called
+ * and what identity does it keep", so it replaces what the sources published. A
+ * declared id is permanent — it is the value a consumer stores for a viewer's
+ * selection — and a declared name is pinned to the spelling the EPG guide uses.
+ *
+ * The first matching rule wins.  Both fields are optional, so a rule may pin
+ * only the id, only the name, or both.
+ *
+ * @param {object[]} entries
+ * @param {{pattern: string, id?: string, name?: string}[]} overrides
+ * @returns {object[]}
+ */
+export function applyIdentityOverrides(entries, overrides) {
+  const list = Array.isArray(entries) ? entries : [];
+  const rules = (Array.isArray(overrides) ? overrides : [])
+    .filter((rule) => rule && typeof rule.pattern === 'string' && rule.pattern.trim())
+    .filter((rule) => (typeof rule.id === 'string' && rule.id.trim())
+      || (typeof rule.name === 'string' && rule.name.trim()))
+    .map((rule) => ({
+      matcher: globToMatcher(rule.pattern),
+      id: typeof rule.id === 'string' && rule.id.trim() ? rule.id.trim() : null,
+      name: typeof rule.name === 'string' && rule.name.trim() ? rule.name.trim() : null,
+    }));
+  if (rules.length === 0) return list;
+  return list.map((entry) => {
+    const forms = selectionForms(entry);
+    const hit = rules.find((rule) => forms.some((form) => rule.matcher.test(form)));
+    if (!hit) return entry;
+    const next = { ...entry };
+    // The writer reads `tvgId` first and falls back to `id`, so both are set to
+    // keep the emitted attribute and the reported identity in agreement.
+    if (hit.id) { next.tvgId = hit.id; next.id = hit.id; }
+    if (hit.name) { next.name = hit.name; next.tvgName = hit.name; }
+    return next;
+  });
+}
+
+/**
  * Keep only the entries the operator asked for.
  *
  * `exclude` always beats `want`.  An empty `want` keeps everything.  Patterns

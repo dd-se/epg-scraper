@@ -403,7 +403,7 @@ nothing. The committed [`m3u.config.json`](m3u.config.json) is the file the
 | `catalog` | boolean · `true` | Include the curated [`src/m3u/channels.js`](src/m3u/channels.js) selection; `false` selects purely from `want`. | — |
 | `want` | string[] · `[]` | Channel globs added on top of the catalog. | `--m3u-want` |
 | `exclude` | string[] · `[]` | Channel globs to drop (beats `want`). | `--m3u-exclude` |
-| `style` | string · `"backup"` | Copy-naming: `numbered`, `backup`, `source`, `keep-first`, `fail`. | `--m3u-style` |
+| `style` | string · `"backup"` | Copy-naming: `numbered`, `parenthesized`, `none`, `backup`, `source`, `keep-first`, `fail`. | `--m3u-style` |
 | `stripQuality` | string[] · `["HD","FHD","UHD","SD"]` | Quality tokens folded when matching (`[]` disables; `4K` never folds). | `--m3u-strip-quality` |
 | `useYedek` | boolean · `true` | Expand `Yedek*` backup attributes into real copies. | `--m3u-no-yedek` |
 | `dedupeIdenticalUrls` | boolean · `true` | Collapse entries whose normalized URL is the same feed. | — |
@@ -470,23 +470,58 @@ stripped display name and `group-title` — never the raw decorated name:
 --m3u-want "*Undefined*"  # anything in the "Undefined" group
 ```
 
-### Declaring the group in the catalog
+### Declaring the group, id and name in the catalog
 
-Each catalog entry may also declare the group the channel belongs to, written
-in the playlist's own language (Turkish):
+Each catalog entry may declare the group the channel belongs to, the `tvg-id`
+that identifies it, and the display label — written in the playlist's own
+language (Turkish):
 
 ```js
-{ pattern: 'ATV', group: 'ULUSAL', note: 'national general-interest' },
-{ pattern: 'TRT Spor', group: 'SPOR', note: 'sports' },
+{ pattern: 'ATV', id: 'atv.tr', group: 'ULUSAL', note: 'national general-interest' },
+{ pattern: 'TRT Spor', id: 'trtspor.tr', group: 'SPOR', note: 'sports' },
+{ pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'ULUSAL', note: 'guide spells it TV8' },
 ```
 
-The declared group replaces whatever the sources published — and outranks the
-unify-by-count rule below — so [`src/m3u/channels.js`](src/m3u/channels.js)
-becomes the single source of truth for the folder layout. This is what keeps
-the two vocabularies apart: one source files `Beyaz TV` under `Undefined`, the
-other under `ULUSAL`, and you decide it is `ULUSAL`. Drop the `group` field and
-that channel falls back to the sources' own label. Setting `"catalog": false`
-drops the declarations along with the selection.
+- **`group`** replaces whatever the sources published and outranks the
+  unify-by-count rule below. The two source vocabularies disagree — one files
+  `Beyaz TV` under `Undefined`, the other under `ULUSAL` — so you decide it is
+  `ULUSAL`.
+- **`id`** is **permanent**: it is what a consumer stores for a viewer's
+  selection, so it is authored here rather than re-derived from the display name
+  each run. Changing one orphans every saved selection.
+- **`name`** pins the label to the spelling your EPG guide uses (see below).
+
+Drop any field and that channel falls back to the sources' own value; setting
+`"catalog": false` drops all three along with the curated selection.
+
+#### Tizen name and id contract
+
+The published `playlist.m3u` is consumed by a Samsung Tizen 5 app whose parser
+is strict, and which matches a channel to its XMLTV guide **by folded display
+name** (lowercase, Turkish-insensitively, word breaks kept). Three rules follow,
+and the config satisfies them via `"style": "none"` plus the declared ids:
+
+1. **One `tvg-id` per channel, on every one of its feeds.** Feeds are
+   alternates of the same channel, so the id is what tells the app they are
+   failover candidates — and it means the name needs no `B2`/`(1)` marker.
+   `none` therefore emits an identical `tvg-id`, `tvg-name`, `group-title` and
+   display text on all of a channel's entries, and keeps each channel's feeds
+   contiguous and best-feed-first.
+2. **The id must match `^[a-z0-9][a-z0-9._:-]{0,127}$`.** The app *refuses*
+   anything else and drops the whole entry. Every declared catalog id is
+   asserted against this pattern in the test suite.
+3. **The name must be the guide's own spelling.** Three renames are declared in
+   `channels.js` (`TIZEN_NAME_CONTRACT`): `NOW TV`→`NOW`, `TV 8`→`TV8`,
+   `SHOW TV HD`→`SHOW TV`. Each keeps its **original** id slug
+   (`nowtv.tr`, `tv8.tr`, `showtvhd.tr`) — the id is the identity, the name is
+   only a label.
+
+Two channels ship with **no programme data**: `TRT Haber` and `TRT 4K` are in
+neither `epg_hurriyet_TR.xml.gz` nor `epg_sports_merged_TR.xml.gz`, and the
+upstream epgshare01 reference carries no matching id. This is **accepted, not
+fixed** — a viewer picking them gets a channel with no NOW/NEXT. They are
+recorded in `CATALOG_EPG_GAPS` (`channels.js`) so the gap is a decision on
+record rather than a silent omission.
 
 `exclude` always beats `want`, and a pattern that matches nothing is reported
 so a typo cannot silently shorten the playlist.
@@ -503,8 +538,12 @@ folded to ASCII, and a trailing resolution or a quality token (`HD`, `FHD`,
   `.m3u8` suffix, default ports and a cache-busting query). They are never
   renamed, so you never get a phantom third copy;
 * **genuinely different feeds are renamed** by `--m3u-style`:
-  `numbered` (`ATV`, `ATV B2`), `backup` (default: `ATV`, `ATV Backup`),
-  `source`, `keep-first` (drop the rest) or `fail` (exit 1 on a conflict);
+  `numbered` (`ATV`, `ATV B2`), `parenthesized` (`ATV`, `ATV (1)`),
+  `backup` (default: `ATV`, `ATV Backup`), `source`, `keep-first` (drop the
+  rest) or `fail` (exit 1 on a conflict);
+* **`none` is the exception**: it gives every feed of a channel the *same*
+  name **and** the *same* `tvg-id`, because some consumers key on the display
+  name (see [Tizen](#tizen-name-and-id-contract) below).
 * editions stay separate channels by construction — `ATV Alanya`, `Kanal D
   Drama` and `TRT 4K` never fold into their base channel.
 
@@ -559,7 +598,7 @@ run from home) and read `deadEntries` before trusting the drop.
 | `--m3u-out <path>` | output playlist (default `playlist.m3u`, gzip off) |
 | `--m3u-sources <a,b>` | override the config's source list |
 | `--m3u-want` / `--m3u-exclude <pats>` | append to the selection |
-| `--m3u-style <style>` | `numbered` \| `backup` \| `source` \| `keep-first` \| `fail` |
+| `--m3u-style <style>` | `numbered` \| `parenthesized` \| `none` \| `backup` \| `source` \| `keep-first` \| `fail` |
 | `--m3u-strip-quality <list>` | quality tokens to fold (default `HD,FHD,UHD,SD`; empty disables) |
 | `--m3u-keep-scheme` / `--m3u-keep-query` | stricter URL comparison |
 | `--m3u-no-infer-tvg-id` | do not infer a missing `tvg-id` |

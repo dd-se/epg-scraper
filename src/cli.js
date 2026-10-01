@@ -125,7 +125,11 @@ M3U playlist mode (no EPG, no XMLTV):
                         anchored globs: "ATV" is exactly ATV and never ATV
                         Alanya; use "ATV*" for the editions.
   --m3u-exclude <pats>  append exclusion globs (exclude always beats want)
-  --m3u-style <style>   numbered | backup (default) | source | keep-first | fail
+  --m3u-style <style>   numbered | parenthesized | none | backup (default) | source
+                         | keep-first | fail
+                         "none" gives every feed of a channel the same name AND
+                         the same tvg-id, which is what a name-keyed consumer
+                         (e.g. the Tizen engine) needs.
   --m3u-strip-quality   comma-separated quality tokens folded when matching
                         (default HD,FHD,UHD,SD; pass an empty value to disable.
                         4K is NOT folded: TRT 4K is a separate simulcast)
@@ -692,6 +696,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
   const { collectEntries, buildM3uReport } = await import('./m3u/collect.js');
   const { writeM3U } = await import('./m3u/writer.js');
   const { probeEntries } = await import('./m3u/liveness.js');
+  const { NAMING_STYLES } = await import('./m3u/identity.js');
   const path = await import('node:path');
   const fs = await import('node:fs');
 
@@ -716,8 +721,10 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
   if (values['m3u-want'] != null) plan.want = [...plan.want, ...splitList(values['m3u-want'])];
   if (values['m3u-exclude'] != null) plan.exclude = [...plan.exclude, ...splitList(values['m3u-exclude'])];
   if (values['m3u-style'] != null) {
-    if (!['numbered', 'backup', 'source', 'keep-first', 'fail'].includes(values['m3u-style'])) {
-      fail('--m3u-style expects numbered, backup, source, keep-first or fail');
+    // Derived from NAMING_STYLES rather than repeated here, so a new style
+    // cannot be accepted by the config file but rejected by the flag (or worse).
+    if (!NAMING_STYLES.includes(values['m3u-style'])) {
+      fail(`--m3u-style expects one of: ${NAMING_STYLES.join(', ')}`);
       return 1;
     }
     plan.style = values['m3u-style'];
@@ -790,6 +797,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     want: plan.want,
     exclude: plan.exclude,
     groupOverrides: plan.groupOverrides,
+    identityOverrides: plan.identityOverrides,
     style: plan.style,
     stripQuality: plan.stripQuality,
     useYedek: plan.useYedek,
@@ -846,6 +854,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     outputPath,
     gzip: useGzip,
     keepAttributes: plan.keepAttributes,
+    allowSharedIdentity: plan.style === 'none',
   });
   log(`m3u: wrote ${result.entries.length} entries -> ${outputPath}${useGzip ? '.gz' : ''} (${written.bytes} bytes)`);
   if (result.failures.length > 0) {

@@ -22,52 +22,87 @@
 
 export const CHANNEL_CATALOG = [
   // Ulusal genel yayın
-  { pattern: 'ATV', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'TRT 1', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Kanal D', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Star TV', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Show TV', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'FOX', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'NOW TV', group: 'DİZİ', note: 'national entertainment' },
-  { pattern: 'Show Turk', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Show Max', group: 'DİZİ', note: 'national entertainment' },
-  { pattern: '24 TV', group: 'HABER', note: 'news' },
+  { pattern: 'ATV', id: 'atv.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'TRT 1', id: 'trt1.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'Kanal D', id: 'kanald.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'Star TV', id: 'startv.tr', group: 'ULUSAL', note: 'national general-interest' },
+  // The source publishes `SHOW TV HD`; the Hürriyet guide spells the channel
+  // `SHOW TV`, and a name-keyed consumer only finds the guide under that
+  // spelling.  Declared here so the id/name pair stays stable if the source
+  // re-spells it.  See `TIZEN_NAME_CONTRACT` below for the rename contract.
+  { pattern: 'Show TV', id: 'showtvhd.tr', name: 'SHOW TV', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'FOX', id: 'fox.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'NOW TV', id: 'nowtv.tr', name: 'NOW', group: 'DİZİ', note: 'national entertainment; guide spells it NOW' },
+  { pattern: 'Show Turk', id: 'showturk.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'Show Max', id: 'showmax.tr', group: 'DİZİ', note: 'national entertainment' },
+  { pattern: '24 TV', id: '24tv.tr', group: 'HABER', note: 'news' },
 
   // Haber
-  { pattern: 'CNN Turk', group: 'HABER', note: 'news' },
-  { pattern: 'NTV', group: 'HABER', note: 'news' },
-  { pattern: 'A Haber', group: 'HABER', note: 'news' },
-  { pattern: 'TRT Haber', group: 'HABER', note: 'news' },
-  { pattern: 'TV8 Haber', group: 'HABER', note: 'news' },
-  { pattern: 'Bloomberg HT', group: 'HABER', note: 'news' },
+  { pattern: 'CNN Turk', id: 'cnnturk.tr', name: 'CNN TURK', group: 'HABER', note: 'news; ASCII id/name, guide spells it CNN TÜRK' },
+  { pattern: 'NTV', id: 'ntv.tr', group: 'HABER', note: 'news' },
+  { pattern: 'A Haber', id: 'ahaber.tr', group: 'HABER', note: 'news' },
+  { pattern: 'TRT Haber', id: 'trthaber.tr', group: 'HABER', note: 'news' },
+  { pattern: 'TV8 Haber', id: 'tv8haber.tr', group: 'HABER', note: 'news' },
+  { pattern: 'Bloomberg HT', id: 'bloomberght.tr', group: 'HABER', note: 'news' },
 
   // Spor
-  { pattern: 'TRT Spor', group: 'SPOR', note: 'sports' },
-  { pattern: 'A Spor', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 1', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 2', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 3', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 4', group: 'SPOR', note: 'sports' },
-  { pattern: 'tabii spor 1', group: 'SPOR', note: 'sports' },
-  { pattern: 'S Sport 1', group: 'SPOR', note: 'sports' },
-  { pattern: 'Eurosport 1', group: 'SPOR', note: 'sports' },
+  { pattern: 'TRT Spor', id: 'trtspor.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'A Spor', id: 'aspor.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'beIN Sports 1', id: 'beinsports1.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'beIN Sports 2', id: 'beinsports2.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'beIN Sports 3', id: 'beinsports3.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'beIN Sports 4', id: 'beinsports4.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'tabii spor 1', id: 'tabiispor1.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'S Sport 1', id: 'ssport1.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'Eurosport 1', id: 'eurosport1.tr', group: 'SPOR', note: 'sports' },
 
   // Eğlence / çocuk
-  { pattern: 'TRT 4K', group: 'ULUSAL', note: '4K simulcast (E1: separate from TRT 1)' },
-  { pattern: 'TRT Çocuk', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Minik Go', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Baby TV', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Cartoon Network', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Nickelodeon', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Disney Channel', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'TV 8', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Kanal 7', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Beyaz TV', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Flash TV', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Investigation', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'National Geographic', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'Discovery Channel', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'History', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'TRT 4K', id: 'trt4k.tr', group: 'ULUSAL', note: '4K simulcast (E1: separate from TRT 1)' },
+  { pattern: 'TRT Çocuk', id: 'trtcocuk.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Minik Go', id: 'minikgo.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Baby TV', id: 'babytv.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Cartoon Network', id: 'cartoonnetwork.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Nickelodeon', id: 'nickelodeon.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Disney Channel', id: 'disneychannel.tr', group: 'ÇOCUK', note: 'children' },
+  // The source publishes `TV 8`; the Hürriyet guide spells it `TV8`, and the
+  // space would also be illegal in a strict tvg-id.
+  { pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'ULUSAL', note: 'general-interest; guide spells it TV8' },
+  { pattern: 'Kanal 7', id: 'kanal7.tr', group: 'ULUSAL', note: 'general-interest' },
+  { pattern: 'Beyaz TV', id: 'beyaztv.tr', group: 'ULUSAL', note: 'general-interest' },
+  { pattern: 'Flash TV', id: 'flashtv.tr', group: 'ULUSAL', note: 'general-interest' },
+  { pattern: 'Investigation', id: 'investigation.tr', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'National Geographic', id: 'nationalgeographic.tr', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'Discovery Channel', id: 'discoverychannel.tr', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'History', id: 'history.tr', group: 'BELGESEL', note: 'documentary' },
+];
+
+/**
+ * The three renames a name-keyed consumer needs, and why.
+ *
+ * A Tizen engine folds both the playlist name and the XMLTV `<display-name>`
+ * (lowercase, Turkish-insensitively) and matches on the result, keeping word
+ * breaks — so `TV 8` and `TV8` are *different* channels and only one of them
+ * has a guide.  Each entry pairs the source's spelling with the guide's.
+ *
+ * The `tvg-id` deliberately keeps its ORIGINAL slug: the id is the stored
+ * identity for a viewer's selection and must never change once published, while
+ * the name is only a label.
+ */
+export const TIZEN_NAME_CONTRACT = [
+  { from: 'NOW TV', to: 'NOW', guide: 'NOW', epgId: 'FOX.tr' },
+  { from: 'TV 8', to: 'TV8', guide: 'TV8', epgId: 'TV8.tr' },
+  { from: 'SHOW TV HD', to: 'SHOW TV', guide: 'SHOW TV', epgId: 'SHOW.TV.tr' },
+];
+
+/**
+ * Channels that ship in the playlist but carry no programme data in either
+ * published EPG feed, so a viewer picking them gets a channel with no
+ * NOW/NEXT.  Kept beside the catalog so the gap is a decision on record rather
+ * than a silent omission.
+ */
+export const CATALOG_EPG_GAPS = [
+  { name: 'TRT Haber', reason: 'in neither epg_hurriyet_TR.xml.gz nor epg_sports_merged_TR.xml.gz; upstream epgshare01 reference carries no TRT Haber id' },
+  { name: 'TRT 4K', reason: 'in neither epg_hurriyet_TR.xml.gz nor epg_sports_merged_TR.xml.gz; upstream reference carries no 4K id' },
 ];
 
 /** The catalog as plain `want` patterns. */
@@ -89,6 +124,33 @@ export function catalogGroupOverrides(catalog = CHANNEL_CATALOG) {
     .filter((item) => item && typeof item.pattern === 'string' && item.pattern.trim())
     .filter((item) => typeof item.group === 'string' && item.group.trim())
     .map((item) => ({ pattern: item.pattern.trim(), group: item.group.trim() }));
+}
+
+/**
+ * The catalog's declared identity as `{ pattern, id, name }` rules.
+ *
+ * A declared `id` is **permanent**: it is what a consumer stores for a viewer's
+ * selection, so it is authored here rather than derived from whatever the source
+ * happens to publish this week.  A declared `name` pins the display label to
+ * the spelling the EPG guide uses.
+ *
+ * Entries without a field are skipped rather than defaulted, so a partially
+ * annotated catalog is valid: an undeclared id is derived as before, and an
+ * undeclared name keeps the source's own spelling.
+ *
+ * @param {object[]} [catalog]
+ * @returns {{pattern: string, id?: string, name?: string}[]}
+ */
+export function catalogIdentityOverrides(catalog = CHANNEL_CATALOG) {
+  return (Array.isArray(catalog) ? catalog : [])
+    .filter((item) => item && typeof item.pattern === 'string' && item.pattern.trim())
+    .map((item) => {
+      const rule = { pattern: item.pattern.trim() };
+      if (typeof item.id === 'string' && item.id.trim()) rule.id = item.id.trim();
+      if (typeof item.name === 'string' && item.name.trim()) rule.name = item.name.trim();
+      return rule;
+    })
+    .filter((rule) => rule.id || rule.name);
 }
 
 /**

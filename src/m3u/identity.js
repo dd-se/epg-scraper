@@ -295,7 +295,40 @@ export function collapseIdenticalFeeds(groups, options = {}) {
   return { groups: out, collapsedDuplicates };
 }
 
-export const NAMING_STYLES = ['numbered', 'backup', 'source', 'keep-first', 'fail'];
+export const NAMING_STYLES = ['numbered', 'parenthesized', 'none', 'backup', 'source', 'keep-first', 'fail'];
+
+/**
+ * The `tvg-id` a consumer must accept, and the shape a catalog-declared id has
+ * to satisfy.  A strict Tizen 5 parser refuses anything else and drops the whole
+ * entry, so an id that fails here is not merely ugly — it is a lost channel.
+ *
+ * Lowercase ASCII, no spaces, first character alphanumeric.  The 128 cap is the
+ * parser's own limit, not an arbitrary one.
+ */
+export const TIZEN_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/;
+
+/**
+ * Reduce any name to a `tvg-id` the strict parser accepts: lowercase, Turkish
+ * diacritics transliterated to ASCII, every other run collapsed to a dot.
+ * `24 TV HD` -> `24-tv-hd`, `CNN TÜRK` -> `cnn-turk`.
+ */
+export function toPortableId(value) {
+  const ascii = String(value == null ? '' : value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')       // drop the combining marks NFKD split off
+    .replace(/İ/g, 'I').replace(/I/g, 'I').replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+    .replace(/ş/g, 's').replace(/Ş/g, 'S')
+    .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '.')
+    .replace(/^[._:-]+/, '')
+    .replace(/[._:-]+$/, '')
+    .replace(/\.{2,}/g, '.');
+  return ascii.slice(0, 128);
+}
 
 /**
  * Assign display names and ids to the copies of each channel.
@@ -306,10 +339,19 @@ export const NAMING_STYLES = ['numbered', 'backup', 'source', 'keep-first', 'fai
  * | Style | 2 copies | 3 copies |
  * | --- | --- | --- |
  * | `numbered` | `ATV`, `ATV B2` | `ATV`, `ATV B2`, `ATV B3` |
+ * | `parenthesized` | `ATV`, `ATV (1)` | `ATV`, `ATV (1)`, `ATV (2)` |
+ * | `none` | `ATV`, `ATV` | `ATV`, `ATV`, `ATV` |
  * | `backup`   | `ATV`, `ATV Backup` | `ATV`, `ATV Backup`, `ATV Backup 2` |
  * | `source`   | `ATV`, `ATV (hayati-tr)` | …one per source id |
  * | `keep-first` | `ATV` only, rest dropped+reported | same |
  * | `fail`     | run reports the conflict and exits 1 | same |
+ *
+ * `none` exists for consumers that key on the display name: a Tizen engine
+ * matches a channel to its XMLTV guide by name, so a `B2`/`(1)` marker in the
+ * name strands the copy with no programme data.  Rule 1 of that contract
+ * (one `tvg-id` per channel, shared by all its feeds) is the counterpart — the
+ * id is what encodes "these are alternative feeds", so the name does not need
+ * to.  `numbered` cannot express that, which is why `none` is separate.
  *
  * `source` shows the id of the *kept* copy, which is why a channel can be
  * renamed after a source it did not come from; full provenance stays in the run
@@ -376,22 +418,78 @@ export function applyNamingStyle(groups, style = 'numbered', options = {}) {
       copies = ranked.slice(0, 1);
     }
 
+    // One id for the whole channel, allocated up front so every copy can share
+    // it.  `uniqueId` is still consulted, so a second channel that slugifies to
+    // the same string takes the next free ordinal instead of colliding.
+    //
+    // A catalog-declared `tvgId` (stamped by applyIdentityOverrides) wins: it
+    // is the permanent identity, and re-deriving it from the display name would
+    // silently change a value consumers have already stored.
+    //
+    // It is read from the first copy that CARRIES one, not from `ranked[0]`:
+    // ranking decides which feed is preferred, and the preferred feed is not
+    // necessarily the one the catalog matched (its source may have published no
+    // `tvg-id` at all).  A source id like `24 HD.tr` would otherwise win over
+    // the declared `24tv.tr`.
+    const declaredId = ranked
+      .map((e) => String((e && e.tvgId) || '').trim())
+      .find(Boolean) || '';
+    const sharedId = style === 'none'
+      ? uniqueId(declaredId || channelIdFromName(base, idSuffix))
+      : null;
+
     copies.forEach((entry, index) => {
       let name;
-      if (style === 'keep-first' || index === 0) {
+      if (style === 'keep-first' || style === 'none' || index === 0) {
         name = base;
       } else if (style === 'backup') {
         name = index === 1 ? `${base} Backup` : `${base} Backup ${index}`;
+      } else if (style === 'parenthesized') {
+        name = `${base} (${index})`;
       } else if (style === 'source') {
         name = `${base} (${entry.sourceId || 'unknown'})`;
       } else {
         name = `${base} B${index + 1}`;
       }
+
+      // `none` gives every copy the SAME name *and* the SAME id: the id is what
+      // tells a consumer the entries are alternative feeds of one channel, so
+      // the name needs no marker.  Every other style renames the copy, and so
+      // must give it its own id to stay unique.
+      if (style === 'none') {
+        channels.push({
+          ...entry,
+          name: base,
+          id: sharedId,
+          // The writer prefers `tvgId` over `id`, so the shared id has to be
+          // stamped on both or the copy keeps the source's own id.
+          tvgId: sharedId,
+          // Rule 3 of the name-keyed contract: every feed of a channel carries the
+          // SAME `tvg-name` as the display text.  The sources spell a channel's
+          // copies inconsistently (`A Spor` vs `A SPOR`) and often omit
+          // `tvg-name` altogether, so it is stamped from the channel's base name
+          // instead of being copied per feed.
+          tvgName: base,
+          baseName: base,
+          copyIndex: index,
+          identityKeys: group.keys || [],
+        });
+        return;
+      }
+
       const finalName = uniqueName(name);
+      // A declared id is permanent, so the FIRST copy keeps it verbatim. Later
+      // copies are distinct channels in the eyes of every other style, so they
+      // take a derived (uniquified) id instead — which keeps `24tv.tr` and
+      // `24tv.2.tr` in one readable family rather than orphaning the copies
+      // under an unrelated name-derived slug.
+      const copyId = index === 0 && declaredId
+        ? declaredId
+        : uniqueId(channelIdFromName(finalName, idSuffix));
       channels.push({
         ...entry,
         name: finalName,
-        id: uniqueId(channelIdFromName(finalName, idSuffix)),
+        id: copyId,
         baseName: base,
         copyIndex: index,
         // `identityKeys`, NOT `group`: `entry.group` is the playlist's own

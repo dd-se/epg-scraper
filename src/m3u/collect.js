@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fetchText, createPoliteFetch, redactUrl } from '../http.js';
 import { parseM3U } from './parser.js';
-import { selectEntries, applyGroupOverrides } from './selection.js';
+import { selectEntries, applyGroupOverrides, applyIdentityOverrides } from './selection.js';
 import {
   groupEntries,
   collapseIdenticalFeeds,
@@ -60,6 +60,7 @@ export async function collectEntries(options = {}) {
     want = [],
     exclude = [],
     groupOverrides = [],
+    identityOverrides = [],
     style = 'backup',
     stripQuality = ['HD', 'FHD', 'UHD', 'SD'],
     useYedek = true,
@@ -115,11 +116,12 @@ export async function collectEntries(options = {}) {
   const { kept, unmatchedPatterns } = selectEntries(all, { want, exclude });
   for (const pattern of unmatchedPatterns) log(`warn: pattern "${pattern}" matched no channel`);
 
-  // The catalog's declared groups land here — after selection, so they can only
-  // relabel entries that were already kept, never pull new ones in.
+  // The catalog's declared groups and identity land here — after selection, so
+  // they can only relabel entries that were already kept, never pull new ones in.
   const labeled = applyGroupOverrides(kept, groupOverrides);
+  const identified = applyIdentityOverrides(labeled, identityOverrides);
 
-  const { entries: expanded, yedekFound } = expandYedek(labeled, { enabled: useYedek });
+  const { entries: expanded, yedekFound } = expandYedek(identified, { enabled: useYedek });
   const groups = groupEntries(expanded, { stripQuality });
   const { groups: collapsed, collapsedDuplicates } = collapseIdenticalFeeds(groups, {
     unifyScheme, keepQuery, dedupeIdenticalUrls,
@@ -167,6 +169,7 @@ export async function collectEntries(options = {}) {
     duplicateUrlDropped,
     collapsedDuplicates,
     yedekFound,
+    allowSharedIdentity: style === 'none',
     parsed: parsedTotal,
     groups: groups.length,
     selected: kept.length,
@@ -178,7 +181,7 @@ export async function collectEntries(options = {}) {
  * never emit the `ext` sentinel or an empty id, infer a missing id from the
  * channel's base name, and disambiguate repeats with an ordinal.
  */
-function finalizeEntry(entry, seenIds, { inferTvgId = true } = {}) {
+function finalizeEntry(entry, seenIds, { inferTvgId = true, allowSharedIdentity = false } = {}) {
   const rawId = String(entry.tvgId == null ? '' : entry.tvgId).trim();
   let tvgId = rawId && rawId.toLowerCase() !== 'ext' ? rawId : '';
 
@@ -194,9 +197,15 @@ function finalizeEntry(entry, seenIds, { inferTvgId = true } = {}) {
     ).trim();
   }
 
-  if (tvgId) {
-    // A repeated id makes the id useless for joining against an EPG guide
-    // later, so repeats get an ordinal: `KANAL D HD.tr`, `KANAL D HD.2.tr`.
+  // A repeated id normally makes the id useless for joining against an EPG
+  // guide, so repeats get an ordinal: `KANAL D HD.tr`, `KANAL D HD.2.tr`.
+  //
+  // Under `style: none` the repeat IS the contract — one id per channel, shared
+  // by every alternate feed, which is how a consumer knows the entries are
+  // failover candidates for one channel rather than separate channels.  The
+  // writer's duplicate-id check is suspended for the same style, so the shared
+  // id has to survive all the way to the output.
+  if (tvgId && !allowSharedIdentity) {
     const key = tvgId.toLowerCase();
     const count = (seenIds.get(key) || 0) + 1;
     seenIds.set(key, count);
@@ -209,6 +218,8 @@ function finalizeEntry(entry, seenIds, { inferTvgId = true } = {}) {
         ? tvgId.replace(/(\.[a-z]{2})$/i, `.${count}$1`)
         : `${tvgId}.${count}`;
     }
+  } else if (tvgId) {
+    seenIds.set(tvgId.toLowerCase(), (seenIds.get(tvgId.toLowerCase()) || 0) + 1);
   }
 
   return {

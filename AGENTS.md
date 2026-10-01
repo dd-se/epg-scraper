@@ -306,7 +306,10 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
     - `config.js` — `loadM3uConfig()`, strict validation + `${ENV_VAR}`.
     - `channels.js` — the curated, data-driven `CHANNEL_CATALOG` that decides
       which channels a run selects, and optionally declares each one's
-      `group-title` (Turkish labels that outrank the sources' own).
+      `group-title` (Turkish labels that outrank the sources' own), permanent
+      `tvg-id`, and display `name` (pinned to the EPG guide's spelling).  Also
+      exports `TIZEN_NAME_CONTRACT` (the three EPG-matching renames) and
+      `CATALOG_EPG_GAPS` (channels with no programme data).
 16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that

@@ -52,7 +52,12 @@ function escapeDisplayName(value) {
  * cannot write a malformed playlist.  On any violation this throws with a
  * precise message instead of producing a file that silently corrupts.
  */
-export function validateM3uResult(result) {
+export function validateM3uResult(result, options = {}) {
+  // `allowSharedIdentity` is the `none` naming style: one id and one name per
+  // CHANNEL, repeated across its alternate feeds.  That is exactly what a
+  // Tizen engine requires (it keys failover off the id), so the duplicate checks
+  // below are suspended rather than weakened — every other rule still applies.
+  const { allowSharedIdentity = false } = options;
   const entries = result && Array.isArray(result.entries) ? result.entries : null;
   if (!entries) throw new Error('generateM3U: result.entries must be an array');
 
@@ -66,17 +71,21 @@ export function validateM3uResult(result) {
     if (!name) throw new Error(`generateM3U: ${at} has an empty display name`);
 
     const lowerName = name.toLowerCase();
-    if (names.has(lowerName)) throw new Error(`generateM3U: duplicate display name "${name}"`);
+    if (!allowSharedIdentity && names.has(lowerName)) {
+      throw new Error(`generateM3U: duplicate display name "${name}"`);
+    }
     names.add(lowerName);
 
     const id = escapeAttributeValue(entry.tvgId != null ? entry.tvgId : entry.id);
     if (id.toLowerCase() === 'ext') {
       throw new Error(`generateM3U: ${at} ("${name}") carries the "ext" placeholder as its id`);
     }
-    if (id) {
+    if (id && !allowSharedIdentity) {
       const lowerId = id.toLowerCase();
       if (ids.has(lowerId)) throw new Error(`generateM3U: duplicate tvg-id "${id}"`);
       ids.add(lowerId);
+    } else if (id) {
+      ids.add(id.toLowerCase());
     }
 
     const url = String((entry && entry.url) || '').trim();
@@ -105,8 +114,8 @@ export function validateM3uResult(result) {
  * reference playlists.
  */
 export function generateM3U(result, options = {}) {
-  const { keepAttributes = DEFAULT_KEEP_ATTRIBUTES } = options;
-  const entries = validateM3uResult(result);
+  const { keepAttributes = DEFAULT_KEEP_ATTRIBUTES, allowSharedIdentity = false } = options;
+  const entries = validateM3uResult(result, { allowSharedIdentity });
 
   const lines = ['#EXTM3U'];
   for (const entry of entries) {
@@ -143,9 +152,9 @@ export function generateM3U(result, options = {}) {
  * `node:zlib` level 9 via `pipeline()`.
  */
 export async function writeM3U(result, options = {}) {
-  const { outputPath, gzip = false, keepAttributes } = options;
+  const { outputPath, gzip = false, keepAttributes, allowSharedIdentity } = options;
   if (!outputPath) throw new Error('writeM3U: outputPath is required');
-  const text = generateM3U(result, { keepAttributes });
+  const text = generateM3U(result, { keepAttributes, allowSharedIdentity });
   const fs = await import('node:fs');
   const out = fs.createWriteStream(outputPath);
   const source = Readable.from([text]);
