@@ -22,6 +22,8 @@
 # - The playlist is validated (#EXTM3U header plus at least one #EXTINF) before
 #   it can replace the release asset, so a truncated fetch never overwrites
 #   yesterday's good playlist.
+# - The committed config enables the liveness probe (3 retries with linear
+#   backoff), so streams that don't answer are dropped before publish.
 # - A failed build leaves the previous release asset untouched.
 
 name: m3u-scraper

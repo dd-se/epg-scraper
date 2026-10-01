@@ -12,5 +12,6 @@
     }
   ],
   "style": "backup",
+  "live": { "enabled": true, "retries": 3 },
   "output": { "path": "playlist.m3u", "gzip": false }
 }

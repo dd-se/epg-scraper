@@ -426,7 +426,7 @@ nothing. The committed [`m3u.config.json`](m3u.config.json) is the file the
 | `url` | string · required | `http(s)://`, `file://`, or a relative path; `${ENV_VAR}` is expanded from the environment (and never printed). |
 | `weight` | number · `0` | Higher wins when a channel has several feeds — which source's copy keeps the base name. |
 
-**`live`** (probe each stream once, then drop or report the dead ones)
+**`live`** (probe each stream once, then drop or report the dead ones — **enabled** in the committed config)
 
 | Field | Type · default | Meaning | CLI override |
 | --- | --- | --- | --- |
@@ -496,21 +496,28 @@ Declared backup attributes (`Yedek="…"`, `Yedek2="…"`) are expanded into rea
 copies by default; `--m3u-no-yedek` turns that off, and `--m3u-max-copies N`
 (default 6) trims the resulting long tail.
 
-### Liveness checking (opt-in, off by default)
+### Liveness checking (opt-in)
 
-```bash
-node bin/epg-scraper.js --m3u m3u.config.json --m3u-live
+```json
+"live": { "enabled": true, "retries": 3 }
 ```
 
-`--m3u-live` fetches each stream once (manifest only, `--m3u-live-depth 1`)
-and keeps an entry only if the response is 2xx **and** the body starts with
-`#EXTM3U` — so a `200` serving an HTML block page is treated as dead. Failed
-entries are dropped and listed in `report.deadEntries`; `--m3u-live-keep`
-reports them without dropping.
+With `live.enabled`, each stream is fetched once (manifest only, `depth: 1`) and
+kept only if the response is 2xx **and** the body starts with `#EXTM3U` — so a
+`200` serving an HTML block page counts as dead. A **retryable** failure (a
+timeout, connection reset, `429` or `5xx`) is retried up to `live.retries` times
+with linear backoff (`retryDelayMs × attempt`; the workflow sets
+`--retry-delay-ms 1000`, so 1s/2s/3s). Deterministic failures (`403`, `404`,
+`410`, TLS/DNS) are never retried. Dead entries are dropped and listed in the
+report's `deadEntries`; set `live.keepFailed` (or `--m3u-live-keep`) to report
+them without dropping.
 
-Probing happens from wherever the tool runs, and a `403` is usually a
-region-locked or CDN-blocked link rather than a dead one — run it from home,
-not from CI, or you will over-drop.
+The committed `m3u.config.json` enables this (`retries: 3`), so the
+`m3u-scraper` workflow ships only streams that answered. Caveat: probing runs
+from wherever the tool executes, and a `403` is usually a region-locked or
+CDN-blocked link rather than a dead one — a datacenter runner will therefore
+over-drop. If the playlist suddenly shrinks, run `--m3u-live-keep` (or a local
+run from home) and read `deadEntries` before trusting the drop.
 
 ### Flags
 
@@ -979,8 +986,9 @@ and a run with zero valid guides leaves the previous release untouched.
 
 `.github/workflows/m3u-scraper.yml` is the playlist counterpart: it builds the
 merged IPTV playlist from the committed `m3u.config.json` every third-ish day
-(06:20 UTC — a deliberately different clock from the guide scrape's 00:30 UTC)
-and publishes it to the **same** rolling `latest` release, so
+(06:20 UTC, a deliberately different clock from the guide scrape's 00:30 UTC),
+drops streams that fail the config's liveness probe, and publishes the result to
+the **same** rolling `latest` release, so
 `releases/latest/download/playlist.m3u` is a stable URL beside the guides. It
 runs on its own schedule and concurrency group, ~6 h clear of the guide scrape,
 so the two never write the release at once — and it only (re)places the
