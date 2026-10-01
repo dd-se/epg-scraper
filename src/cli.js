@@ -107,7 +107,50 @@ Merge mode:
   --from, no server is hit at all: already-scraped guides are merged
   offline (file order sets the precedence):
 
-    node bin/epg-scraper.js --merge --from guides/a.xml.gz,guides/b.xml.gz --out epg_merged_TR.xml.gz`;
+    node bin/epg-scraper.js --merge --from guides/a.xml.gz,guides/b.xml.gz --out epg_merged_TR.xml.gz
+
+M3U playlist mode (no EPG, no XMLTV):
+  --m3u <config.json>   build a merged IPTV playlist from several M3U sources.
+                        Independent of the guide pipeline: it never launches a
+                        browser and cannot be combined with --provider,
+                        --merge, --compare, --from, --browser, --stealth,
+                        --alias-map, --date or --max-channels.  Output defaults
+                        to playlist.m3u (gzip off by default; set the
+                        config's output.gzip to true to compress it).
+  --m3u-out <path>      output playlist (default: the config's output.path)
+  --m3u-sources <urls>  comma-separated source URLs/paths, overriding the config
+  --m3u-want <patterns> append channel globs to the config's want list.  The
+                        curated catalog (src/m3u/channels.js) is the baseline,
+                        so most runs need no --m3u-want at all.  Patterns are
+                        anchored globs: "ATV" is exactly ATV and never ATV
+                        Alanya; use "ATV*" for the editions.
+  --m3u-exclude <pats>  append exclusion globs (exclude always beats want)
+  --m3u-style <style>   numbered | backup (default) | source | keep-first | fail
+  --m3u-strip-quality   comma-separated quality tokens folded when matching
+                        (default HD,FHD,UHD,SD; pass an empty value to disable.
+                        4K is NOT folded: TRT 4K is a separate simulcast)
+  --m3u-keep-scheme     do not unify http/https when comparing stream URLs
+  --m3u-keep-query      do not ignore the query string when comparing URLs
+  --m3u-no-infer-tvg-id do not infer a missing tvg-id from the channel name
+  --m3u-no-yedek        do not expand Yedek* backup attributes (on by default)
+  --m3u-max-copies N    cap copies kept per channel (default 6; 0 = unlimited)
+  --m3u-max-bytes N     refuse a source larger than N bytes (default 16 MiB)
+  --m3u-report <path>   write the JSON run report (URLs are redacted)
+  --m3u-dry-run         resolve and print the plan; fetch nothing, write nothing
+  --m3u-list            print the resolved plan's sources and want list
+  --m3u-live            probe each stream and DROP the dead ones.  A pass needs
+                        both a 2xx and "#EXTM3U" in the first bytes, so a 200
+                        serving an HTML block page counts as dead.  Run it from
+                        home, not CI: a 403 is usually region-locked rather than
+                        dead, and every drop is listed in the report
+  --m3u-live-keep       probe but KEEP failures, reporting them instead
+  --m3u-live-depth N    1 (default) = manifest only, 2 = also the first segment
+  --m3u-live-timeout-ms N   per-probe timeout (default 6000)
+  --m3u-live-concurrency N  parallel probes (default 4, max 8)
+  --m3u-live-retry N    retries for a retryable probe failure (default 1)
+
+    node bin/epg-scraper.js --m3u m3u.config.json --m3u-list
+    node bin/epg-scraper.js --m3u m3u.config.json --m3u-out playlist.m3u`;
 
 export async function runCli({
   argv = process.argv.slice(2),
@@ -146,6 +189,30 @@ export async function runCli({
         // `--env-file-if-exists`) anywhere in argv — even after the script
         // path — so a flag with that name never reaches this parser.
         dotenv: { type: 'string' },
+        // --m3u playlist mode.  `--m3u` takes a config path; the `--m3u-*`
+        // flags are overrides that are applied after the config is loaded.
+        m3u: { type: 'string' },
+        'm3u-out': { type: 'string' },
+        'm3u-sources': { type: 'string' },
+        'm3u-want': { type: 'string' },
+        'm3u-exclude': { type: 'string' },
+        'm3u-style': { type: 'string' },
+        'm3u-strip-quality': { type: 'string' },
+        'm3u-keep-scheme': { type: 'boolean', default: false },
+        'm3u-keep-query': { type: 'boolean', default: false },
+        'm3u-no-infer-tvg-id': { type: 'boolean', default: false },
+        'm3u-no-yedek': { type: 'boolean', default: false },
+        'm3u-max-copies': { type: 'string' },
+        'm3u-max-bytes': { type: 'string' },
+        'm3u-report': { type: 'string' },
+        'm3u-dry-run': { type: 'boolean', default: false },
+        'm3u-list': { type: 'boolean', default: false },
+        'm3u-live': { type: 'boolean', default: false },
+        'm3u-live-keep': { type: 'boolean', default: false },
+        'm3u-live-timeout-ms': { type: 'string' },
+        'm3u-live-concurrency': { type: 'string' },
+        'm3u-live-depth': { type: 'string' },
+        'm3u-live-retry': { type: 'string' },
         quiet: { type: 'boolean', default: false },
         'list-providers': { type: 'boolean', default: false },
         help: { type: 'boolean', default: false },
@@ -248,11 +315,13 @@ export async function runCli({
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-  if (values.from != null && !values.merge) {
+  // `--m3u` reports every mutually exclusive flag in one line further down, so
+  // defer to it here rather than emitting a second, narrower complaint first.
+  if (values.from != null && !values.merge && values.m3u == null) {
     fail('--from requires --merge (it merges already-scraped XMLTV files)');
     return 1;
   }
-  if (values.from != null && fromFiles.length === 0) {
+  if (values.from != null && values.m3u == null && fromFiles.length === 0) {
     fail('--from expects at least one file path');
     return 1;
   }
@@ -297,6 +366,36 @@ export async function runCli({
         transportOptions.timeoutMs ?? 'default'
       }ms retry-delay=${transportOptions.retryDelayMs ?? 'default'}ms`
     );
+  }
+
+  // The M3U playlist builder is a separate capability with its own result
+  // type.  It is dispatched *before* provider resolution so it never touches
+  // the guide registry, never enters the browser lifecycle, and cannot be
+  // perturbed by a provider id.  It does reuse the delay/transport/quiet
+  // plumbing parsed just above.
+  if (values.m3u != null) {
+    // `provider` has a parser default of "hurriyet", so a *value* comparison
+    // cannot tell an explicit `--provider hurriyet` from the default. Scan argv
+    // for the flag itself so passing it is still rejected as exclusive.
+    const providerFlagPassed = argv.includes('--provider') || argv.some((a) => a.startsWith('--provider='));
+    const exclusive = [
+      ['--provider', providerFlagPassed],
+      ['--merge', values.merge],
+      ['--compare', values.compare],
+      ['--from', values.from != null],
+      ['--browser', values.browser],
+      ['--stealth', values.stealth],
+      ['--alias-map', values['alias-map'] != null],
+      ['--date', values.date != null],
+      ['--max-channels', values['max-channels'] != null],
+    ].filter(([, present]) => present).map(([name]) => name);
+
+    if (exclusive.length > 0) {
+      fail(`--m3u cannot be combined with ${exclusive.join(', ')} (it builds a playlist, not a guide)`);
+      return 1;
+    }
+
+    return runM3uMode({ values, cwd, log, fail, delayMs, transportOptions });
   }
 
   // Optional channel-id alias map: canonicalize ids before compare/merge so
@@ -577,6 +676,186 @@ async function writeComparisonSides(context, sides) {
     wroteAny = true;
   }
   return wroteAny;
+}
+
+/**
+ * The `--m3u` playlist mode.
+ *
+ * Reads the config, applies the `--m3u-*` overrides on top of it, collects and
+ * merges the sources, optionally probes liveness, and writes one playlist plus
+ * (on request) a JSON report.  Exit codes follow the degradation table: 0 on
+ * success, 1 on a validation error, all-sources-failed, nothing-matched, or a
+ * `style: fail` conflict.
+ */
+async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions }) {
+  const { loadM3uConfig, ConfigError } = await import('./m3u/config.js');
+  const { collectEntries, buildM3uReport } = await import('./m3u/collect.js');
+  const { writeM3U } = await import('./m3u/writer.js');
+  const { probeEntries } = await import('./m3u/liveness.js');
+  const path = await import('node:path');
+  const fs = await import('node:fs');
+
+  let plan;
+  try {
+    plan = loadM3uConfig(values.m3u, { cwd, env: process.env });
+  } catch (error) {
+    fail(error instanceof ConfigError ? error.message : errorMessage(error));
+    return 1;
+  }
+
+  // CLI overrides are applied last, so a flag always beats the config file.
+  const splitList = (raw) => String(raw || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (values['m3u-sources'] != null) {
+    plan.sources = splitList(values['m3u-sources']).map((url, index) => ({
+      id: `source-${index + 1}`,
+      name: `source-${index + 1}`,
+      url,
+      weight: 0,
+    }));
+  }
+  if (values['m3u-want'] != null) plan.want = [...plan.want, ...splitList(values['m3u-want'])];
+  if (values['m3u-exclude'] != null) plan.exclude = [...plan.exclude, ...splitList(values['m3u-exclude'])];
+  if (values['m3u-style'] != null) {
+    if (!['numbered', 'backup', 'source', 'keep-first', 'fail'].includes(values['m3u-style'])) {
+      fail('--m3u-style expects numbered, backup, source, keep-first or fail');
+      return 1;
+    }
+    plan.style = values['m3u-style'];
+  }
+  if (values['m3u-strip-quality'] != null) plan.stripQuality = splitList(values['m3u-strip-quality']);
+  if (values['m3u-keep-scheme']) plan.unifyScheme = false;
+  if (values['m3u-keep-query']) plan.keepQuery = true;
+  if (values['m3u-no-infer-tvg-id']) plan.inferTvgId = false;
+  if (values['m3u-no-yedek']) plan.useYedek = false;
+
+  const intFlag = (raw, name, { min, max }) => {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < min || n > max) {
+      fail(`${name} expects an integer between ${min} and ${max}`);
+      return null;
+    }
+    return n;
+  };
+  if (values['m3u-max-copies'] != null) {
+    const n = intFlag(values['m3u-max-copies'], '--m3u-max-copies', { min: 0, max: 1000 });
+    if (n === null) return 1;
+    plan.maxCopies = n;
+  }
+  if (values['m3u-max-bytes'] != null) {
+    const n = intFlag(values['m3u-max-bytes'], '--m3u-max-bytes', { min: 1024, max: 256 * 1024 * 1024 });
+    if (n === null) return 1;
+    plan.maxBytes = n;
+  }
+
+  if (values['m3u-live']) plan.live.enabled = true;
+  if (values['m3u-live-keep']) {
+    plan.live.enabled = true;
+    plan.live.keepFailed = true;
+  }
+  const liveInt = [
+    ['m3u-live-timeout-ms', 'timeoutMs', 100, 120000],
+    ['m3u-live-concurrency', 'concurrency', 1, 8],
+    ['m3u-live-depth', 'depth', 1, 2],
+    ['m3u-live-retry', 'retries', 0, 5],
+  ];
+  for (const [flag, key, min, max] of liveInt) {
+    if (values[flag] == null) continue;
+    const n = intFlag(values[flag], `--${flag}`, { min, max });
+    if (n === null) return 1;
+    plan.live[key] = n;
+  }
+
+  const outputPath = path.resolve(cwd, values['m3u-out'] || plan.output.path);
+  // Gzip defaults OFF for this mode: a playlist is normally handed to a player
+  // or a local app, which reads plain text.  The config's output.gzip opts in.
+  const useGzip = plan.output.gzip === true;
+
+  log(`m3u: ${plan.sources.length} source(s), ${plan.want.length} want pattern(s), style=${plan.style}`);
+
+  // --m3u-list / --m3u-dry-run: resolve and report, but touch no network and
+  // write no file.
+  if (values['m3u-list'] || values['m3u-dry-run']) {
+    for (const source of plan.sources) log(`  source ${source.id}: ${source.url}`);
+    log(`  output: ${outputPath}`);
+    if (values['m3u-list']) log(`  want: ${plan.want.join(', ') || '(all channels)'}`);
+    log(values['m3u-dry-run'] ? 'm3u: dry run — nothing fetched, nothing written' : 'm3u: plan resolved');
+    return 0;
+  }
+
+  const result = await collectEntries({
+    sources: plan.sources,
+    log,
+    politenessDelayMs: delayMs || 0,
+    transportOptions,
+    want: plan.want,
+    exclude: plan.exclude,
+    style: plan.style,
+    stripQuality: plan.stripQuality,
+    useYedek: plan.useYedek,
+    dedupeIdenticalUrls: plan.dedupeIdenticalUrls,
+    unifyScheme: plan.unifyScheme,
+    keepQuery: plan.keepQuery,
+    inferTvgId: plan.inferTvgId,
+    idSuffix: plan.idSuffix,
+    maxCopies: plan.maxCopies,
+    maxBytes: plan.maxBytes,
+    cwd,
+  });
+
+  if (result.failures.length > 0 && result.failures.length === plan.sources.length) {
+    fail(`all ${plan.sources.length} source(s) failed`);
+    return 1;
+  }
+  if (result.conflicts.length > 0) {
+    fail(`duplicate channels under style "fail": ${result.conflicts.join(', ')}`);
+    return 1;
+  }
+
+  if (plan.live.enabled && result.entries.length > 0) {
+    const { kept, dead } = await probeEntries(result.entries, {
+      concurrency: plan.live.concurrency,
+      timeoutMs: plan.live.timeoutMs,
+      depth: plan.live.depth,
+      retries: plan.live.retries,
+      retryDelayMs: transportOptions.retryDelayMs,
+    });
+    // Either drop the failures or keep them and only report, depending on
+    // --m3u-live vs --m3u-live-keep.  Both list every dead entry in the report,
+    // so nothing ever disappears silently.
+    result.deadEntries = dead;
+    if (plan.live.keepFailed) {
+      log(`live: ${dead.length} dead of ${result.entries.length} reported (kept in the playlist)`);
+    } else {
+      log(`live: ${dead.length} dead of ${result.entries.length} dropped`);
+      result.entries = kept;
+    }
+  }
+
+  if (result.entries.length === 0) {
+    fail(
+      result.unmatchedPatterns.length > 0
+        ? `no channel matched: ${result.unmatchedPatterns.join(', ')}`
+        : 'no channel matched'
+    );
+    return 1;
+  }
+
+  const written = await writeM3U(result, {
+    outputPath,
+    gzip: useGzip,
+    keepAttributes: plan.keepAttributes,
+  });
+  log(`m3u: wrote ${result.entries.length} entries -> ${outputPath}${useGzip ? '.gz' : ''} (${written.bytes} bytes)`);
+  if (result.failures.length > 0) {
+    log(`m3u: ${result.failures.length} source(s) failed during the run`);
+  }
+
+  if (values['m3u-report'] != null) {
+    const reportPath = path.resolve(cwd, values['m3u-report']);
+    fs.writeFileSync(reportPath, JSON.stringify(buildM3uReport(result), null, 2) + '\n');
+    log(`m3u: report -> ${reportPath}`);
+  }
+  return 0;
 }
 
 async function runSingleMode(context) {

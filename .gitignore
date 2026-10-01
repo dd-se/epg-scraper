@@ -5,6 +5,11 @@ node_modules/
 epg_*.xml
 epg_*.xml.gz
 
+# m3u playlist output
+playlist.m3u
+playlist.m3u.gz
+m3u-report.json
+
 # local scratch / fetched reference files
 .tmp/
 

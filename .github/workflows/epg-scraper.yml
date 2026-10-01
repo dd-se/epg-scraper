@@ -17,7 +17,7 @@
 # do. The URLs start working after the first successful run.)
 #
 # Outputs are gitignored (`epg_*.xml*`), so nothing is committed.
-# Manual runs: Actions tab → "Daily EPG scrape" → "Run workflow".
+# Manual runs: Actions tab → "epg-scraper" → "Run workflow".
 #
 # Resilience model (partial failures are expected — sources flap, datacenter
 # IPs get throttled, a site rolls its week over early):
@@ -31,7 +31,7 @@
 #   guides exist. Yesterday's release assets stay live for providers that
 #   failed today (replacesArtifacts only replaces uploaded files).
 
-name: Daily EPG scrape
+name: epg-scraper
 
 on:
   schedule:

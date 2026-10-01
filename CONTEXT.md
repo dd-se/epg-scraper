@@ -43,3 +43,35 @@ _Avoid_: Locale setting, country code
 **Provider Inventory**:
 The authoritative lineup of provider registrations, reference coverage, scheduled jobs, and guide merge profiles.
 _Avoid_: Provider list, CI matrix
+
+## Playlist language (`--m3u`)
+
+**Playlist Entry**:
+One `#EXTINF` line plus its stream URL as published by an M3U source. An entry
+is *not* a channel: the same channel is usually published by several sources and
+under several decorated names.
+_Avoid_: Channel, programme
+
+**Channel Group**:
+The set of playlist entries recognized as one channel, formed by union-find
+over the union of their normalized attribute keys (`tvg-id`, `tvg-name`, the
+resolution-stripped display name, the quality-stripped display name).
+_Avoid_: Playlist entry, dedupe group
+
+**Feed Identity**:
+The normalized stream URL that decides whether two entries in one channel group
+are the *same* feed (and must therefore collapse) or genuinely different
+alternates (and must therefore be renamed).
+_Avoid_: URL, channel id
+
+**Naming Style**:
+The rule that gives a channel's first copy its base name and its further copies
+distinguishable suffixes — `numbered` (`ATV B2`), `backup` (`ATV Backup`,
+default), `source`, `keep-first`, `fail`.
+_Avoid_: Suffix scheme, rename policy
+
+**Edition**:
+A distinct channel that shares a base name with another (`ATV Alanya` vs `ATV`,
+`TRT 4K` vs `TRT 1`). Editions are never folded into their base channel and
+never pulled in by a base-channel request.
+_Avoid_: Variant, regional copy

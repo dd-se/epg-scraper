@@ -1,0 +1,238 @@
+# M3U playlist scrape — builds the merged IPTV playlist on a schedule and
+# publishes it to the same rolling "latest" GitHub Release the EPG guides use,
+# so players fetch it from a stable URL:
+#
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/playlist.m3u
+#
+# (Replace OWNER/REPO with this repository's path. The repo must be public —
+# release assets on private repos need authentication, which players can't do.
+# The URL starts working after the first successful run.)
+#
+# The playlist is a separate capability from the EPG guides (its own result
+# shape, writer and config: `src/m3u/`, reached with `--m3u`), but it publishes
+# to the same release so one base URL serves both products. This workflow never
+# touches the release metadata (omitNameDuringUpdate / omitBodyDuringUpdate):
+# epg-scraper owns the release name and body; this job only (re)places the
+# playlist asset. The two never overlap — the guide scrape runs at 00:30 UTC,
+# this one at 06:20 UTC — so the release is never written by both at once.
+#
+# Resilience model (a source flaps, a CDN throttles a datacenter IP):
+# - The build is retried (3 attempts with backoff) and runs with hardened
+#   transport flags (--retries/--timeout-ms/--retry-delay-ms).
+# - The playlist is validated (#EXTM3U header plus at least one #EXTINF) before
+#   it can replace the release asset, so a truncated fetch never overwrites
+#   yesterday's good playlist.
+# - A failed build leaves the previous release asset untouched.
+
+name: m3u-scraper
+
+on:
+  schedule:
+    # Every third-ish day (06:20 UTC) — `*/3` fires on the 1st, 4th, 7th, … of
+    # each month. The exact cadence doesn't matter; the clock does: the guide
+    # scrape runs daily at 00:30 UTC, this one at 06:20 UTC, so the two never
+    # touch the shared "latest" release at the same time. (A run on the 31st is
+    # followed by the 1st, briefly shortening the gap — it only re-publishes a
+    # fresh playlist.)
+    - cron: '20 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deliberately a different group from `daily-scrape`: this build must never be
+# cancelled by (or cancel) the nightly guide scrape.
+concurrency:
+  group: m3u-scrape
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same resilience model as the guide scrape: transient source flap is the
+      # norm (5xx/429/TCP reset from datacenter IPs). The CLI already retries
+      # per request; this loop additionally retries the whole build so one bad
+      # minute doesn't lose the playlist. The job still exits non-zero after 3
+      # failed attempts so the failure stays visible — the publish job refuses
+      # to touch the release when the build failed.
+      - name: Build playlist (with retries)
+        id: build
+        run: |
+          attempt=1
+          max_attempts=3
+          code=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "Attempt $attempt/$max_attempts: build playlist"
+            # Hardened transport: more per-request retries and a generous hard
+            # timeout for slow datacenter links; linear backoff between
+            # attempts. The report keeps URLs redacted.
+            if node bin/epg-scraper.js --m3u m3u.config.json \
+              --m3u-report m3u-report.json \
+              --retries 4 --timeout-ms 30000 --retry-delay-ms 1000; then
+              code=0
+              break
+            fi
+            code=$?
+            echo "::warning::Playlist build attempt $attempt/$max_attempts failed (exit $code)"
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              sleep $((attempt * 20))
+            fi
+            attempt=$((attempt + 1))
+          done
+          if [ "$code" -ne 0 ]; then
+            echo "::error::Playlist build failed after $max_attempts attempts"
+          fi
+          exit "$code"
+
+      - name: List output
+        if: always()
+        run: ls -la playlist.m3u m3u-report.json 2>/dev/null || echo "::warning::No playlist produced"
+
+      # A truncated or half-parsed playlist must never overwrite yesterday's
+      # good asset: require a plausible size, the #EXTM3U header and at least
+      # one #EXTINF entry before the artifact is uploaded.
+      - name: Validate playlist
+        if: always()
+        run: |
+          if [ ! -f playlist.m3u ]; then
+            echo "::error::No playlist produced — refusing to publish"
+            exit 1
+          fi
+          size=$(stat -c%s playlist.m3u)
+          echo "playlist.m3u: ${size} bytes"
+          if [ "$size" -lt 1024 ]; then
+            echo "::error::playlist.m3u is suspiciously small (${size} bytes)"
+            exit 1
+          fi
+          if ! head -c 4096 playlist.m3u | grep -q '#EXTM3U'; then
+            echo "::error::playlist.m3u has no #EXTM3U header"
+            exit 1
+          fi
+          entries=$(grep -c '^#EXTINF' playlist.m3u || true)
+          echo "Entries: $entries"
+          if [ "$entries" -eq 0 ]; then
+            echo "::error::playlist.m3u has no #EXTINF entries"
+            exit 1
+          fi
+
+      # A quick health readout so a shrinking playlist (a source dropping, a
+      # rename breaking a glob) is visible without opening the artifact.
+      - name: Report run summary
+        if: always()
+        run: |
+          {
+            echo "### M3U playlist build"
+            echo ""
+            if [ -f m3u-report.json ]; then
+              node -e '
+                const r = require("./m3u-report.json");
+                const s = r.stats || {};
+                console.log("| metric | value |");
+                console.log("| --- | --- |");
+                console.log(`| entries written | ${s.written} |`);
+                console.log(`| parsed | ${s.parsed} |`);
+                console.log(`| selected | ${s.selected} |`);
+                console.log(`| collapsed duplicates | ${s.collapsedDuplicates} |`);
+                console.log(`| sources failed | ${(r.failures || []).length} |`);
+                console.log(`| unmatched patterns | ${(r.unmatchedPatterns || []).length} |`);
+              ' || echo "report unreadable"
+            else
+              echo "No report produced."
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload playlist
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playlist
+          path: |
+            playlist.m3u
+            m3u-report.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  # (Re)publish the playlist as an asset on the same rolling "latest" release
+  # the guide workflow uses. Runs even when the build failed so the downloaded
+  # artifact is re-validated — a failed build simply cannot replace the asset.
+  publish:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Download playlist
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          name: playlist
+          path: dist
+
+      - name: List playlist
+        if: always()
+        run: ls -la dist/ 2>/dev/null || echo "::warning::No playlist artifact downloaded"
+
+      # Re-validate the downloaded copy before it can reach the release: a bad
+      # asset must never overwrite yesterday's good playlist.
+      - name: Validate downloaded playlist
+        run: |
+          f=dist/playlist.m3u
+          if [ ! -f "$f" ]; then
+            echo "::error::No playlist artifact to publish — refusing to touch the release"
+            exit 1
+          fi
+          size=$(stat -c%s "$f")
+          echo "$f: ${size} bytes"
+          if [ "$size" -lt 1024 ]; then
+            echo "::error::$f too small (${size} bytes) — refusing to touch the release"
+            exit 1
+          fi
+          if ! head -c 4096 "$f" | grep -q '#EXTM3U'; then
+            echo "::error::$f has no #EXTM3U header — refusing to touch the release"
+            exit 1
+          fi
+          entries=$(grep -c '^#EXTINF' "$f" || true)
+          echo "Entries: $entries"
+          if [ "$entries" -eq 0 ]; then
+            echo "::error::$f has no #EXTINF entries — refusing to touch the release"
+            exit 1
+          fi
+
+      # omitNameDuringUpdate / omitBodyDuringUpdate keep epg-scraper's release
+      # name and provider notes intact; replacesArtifacts only swaps the
+      # playlist asset (the XMLTV assets are left alone). The name is a
+      # create-time fallback used only if this workflow ever creates the
+      # release first.
+      - name: Publish to "latest" release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest
+          commit: main
+          name: Latest EPG guides
+          makeLatest: true
+          allowUpdates: true
+          replacesArtifacts: true
+          omitNameDuringUpdate: true
+          omitBodyDuringUpdate: true
+          artifacts: dist/playlist.m3u

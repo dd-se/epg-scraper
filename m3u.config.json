@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "id": "dearbulut-tr",
+      "name": "dearbulut (TR)",
+      "url": "https://dearbulut.github.io/iptv/playlists/country/tr.m3u"
+    },
+    {
+      "id": "hayati-tr",
+      "name": "hayatiptv (TR)",
+      "url": "https://raw.githubusercontent.com/hayatiptv/iptv/refs/heads/master/BDNLTR.m3u"
+    }
+  ],
+  "style": "backup",
+  "output": { "path": "playlist.m3u", "gzip": false }
+}

@@ -16,8 +16,11 @@
 // that upstream does not carry yet, with reasons) is preserved across
 // refreshes.
 //
-// Run this at least weekly — the test suite fails when a snapshot is older
-// than 7 days, so a stale reference can never silently drift.
+// The test suite (test/reference.test.mjs) re-vendors a stale snapshot through
+// this same `refresh()` export, so a plain `npm test` normally keeps the
+// snapshots current. Run this script when you want to *see* the id diff before
+// committing, or with --dry-run-style intent via EPG_REFERENCE_NO_REFRESH=1 on
+// the test side.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -49,10 +52,12 @@ export function extractChannels(xml) {
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-async function refresh({ country, file, url }) {
+export async function refresh({ country, file, url }, options = {}) {
+  const { fetchImpl, log = console.log } = options;
   const outPath = path.join(root, 'test', 'fixtures', 'epgshare01', file);
 
-  const response = await fetch(url);
+  const doFetch = fetchImpl || globalThis.fetch;
+  const response = await doFetch(url);
   if (!response.ok) {
     throw new Error(`reference download failed: HTTP ${response.status} (${url})`);
   }
@@ -91,15 +96,18 @@ async function refresh({ country, file, url }) {
     ) + '\n'
   );
 
-  console.log(`[${country}] reference: ${channels.length} channel ids from ${url}`);
-  console.log(`[${country}] snapshot:  ${outPath} (updated: ${today})`);
-  if (added.length > 0) console.log(`[${country}] added upstream (${added.length}): ${added.join(', ')}`);
-  if (removed.length > 0) console.log(`[${country}] removed upstream (${removed.length}): ${removed.join(', ')}`);
+  log(`[${country}] reference: ${channels.length} channel ids from ${url}`);
+  log(`[${country}] snapshot:  ${outPath} (updated: ${today})`);
+  if (added.length > 0) log(`[${country}] added upstream (${added.length}): ${added.join(', ')}`);
+  if (removed.length > 0) log(`[${country}] removed upstream (${removed.length}): ${removed.join(', ')}`);
   if (gapsNowCovered.length > 0) {
-    console.log(
+    log(
       `[${country}] known gaps now covered upstream — drop them from knownGaps: ${gapsNowCovered.join(', ')}`
     );
   }
+
+  // Report what the caller needs to act on a refresh it did not ask for.
+  return { country, file, added, removed, gapsNowCovered, channelCount: channels.length };
 }
 
 // Only download when run as a script (npm run update:reference); importing it

@@ -280,7 +280,33 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
     providers), programmes
     unioned + deduped, conflicting slots resolved first-provider-wins (the
     order in `--provider a,b,c` sets the precedence).
-15. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
+15. `src/m3u/` — the `--m3u` playlist builder: a **standalone** module tree
+    with its own result shape, writer and tests. It imports **nothing** from
+    `model.js`, `xmltv.js`, `merge.js`, `compare.js`, `providers/` or
+    `cli.js` (test-enforced in `test/m3u.test.mjs`); it reuses only
+    `fetchText`/`createPoliteFetch`/`redactUrl` from `src/http.js` and
+    `channelIdFromName` from `src/slug.js`. Modules:
+    - `parser.js` — `parseM3U()` (pure) and `parseAttributes()`. The attribute
+      scanner is `indexOf`-anchored and **linear**; the obvious
+      `/([A-Za-z0-9_-]+)="([^"]*)"/g` is quadratic on quote-free input (a 100 KB
+      junk line measured **11.9 s** — a remote DoS), so it is banned here and
+      pinned by a timing regression test.
+    - `identity.js` — `normalizeName()` (folds Turkish diacritics to ASCII),
+      `channelKeys()`, `groupEntries()` (union-find), `normalizeStreamUrl()`,
+      `collapseIdenticalFeeds()`, `applyNamingStyle()`, `expandYedek()`,
+      `applyMaxCopies()`, `baseDisplayName()`.
+    - `selection.js` — `globToMatcher()` (anchored `*`/`?` only, no user
+      regex), `selectionForms()`, `selectEntries()`.
+    - `writer.js` — `generateM3U()`/`writeM3U()`, mirroring `src/xmltv.js`.
+      M3U has no escape syntax, so the writer *removes* a comma from a display
+      name (it would re-read as the separator), a quote, and any CR/LF — while
+      preserving commas inside attribute values.
+    - `collect.js` — `collectEntries()`, `buildM3uReport()`.
+    - `liveness.js` — `probeEntries()` (opt-in, manifest-only by default).
+    - `config.js` — `loadM3uConfig()`, strict validation + `${ENV_VAR}`.
+    - `channels.js` — the curated, data-driven `CHANNEL_CATALOG` that decides
+      which channels a run selects.
+16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
     differ between providers line up.  Resolution is transitive (alias
@@ -324,6 +350,18 @@ the dependency chain flows upward: providers → catalog/registry/http/xmltv/mod
   intercepts that name in argv; Node's own `node --env-file=<path>
   bin/epg-scraper.js` still works and takes precedence over `./.env`. Used for
   live `sporekraniapi` testing without exporting anything by hand.
+
+- **Playlist (`--m3u <config.json>`)** — a separate capability with its own
+  result type (`{ entries, failures, sources, stats }`), reached through its own
+  flag and never mixed with a guide flag. It gathers channel entries from
+  several M3U sources, keeps only the requested channels, groups the same
+  channel across sources, renames the extra copies and writes one playlist
+  (`playlist.m3u`, gzip off). The requested channels come from the curated,
+  **data-driven** `CHANNEL_CATALOG` in `src/m3u/channels.js` (the config's
+  `want` and `--m3u-want` append to it; `"catalog": false` disables it),
+  mirroring how the EPG side keeps its curated channel ids in each adapter's
+  `CHANNEL_ID_MAP`. It never enters the browser lifecycle and imports nothing
+  from the guide pipeline.
 
 `--compare` and `--merge` are mutually exclusive; `--compare` supports at
 most two providers; multiple providers without either flag is an error.
@@ -467,6 +505,12 @@ node bin/epg-scraper.js --list-providers
   `--env-file` wiring, including value precedence and the never-log-values
   rule; `test/sporekraniapi.test.mjs` — Spor Ekranı v3 API parser, scrape,
   and CLI integration;
+  `test/m3u.test.mjs` — the `--m3u` playlist builder: the isolation guard,
+  the parser (fixtures + a 24-case adversarial table + ReDoS/scale timing
+  bounds), identity/grouping/naming/selection/Yedek, the writer's format and
+  sanitization rules, source collection, config validation, liveness probing,
+  and `runCli()` integration; `test/fixtures/m3u/` holds the two trimmed
+  reference playlists.
   `test/reference.test.mjs` — provider id normalization against
   the vendored per-country epgshare01 snapshots (TR + SE; no network — see
   below).
@@ -480,8 +524,13 @@ Turkish providers to `epg_ripper_TR1.xml.gz`, the Swedish `tvnu` provider to
 `test/fixtures/epgshare01/reference-se.json` (SE)
 (`{ source, country, updated: "YYYY-MM-DD", channelCount, knownGaps, channels }`)
 and enforced by `test/reference.test.mjs`: every curated provider id must
-exist upstream (or sit in that snapshot's `knownGaps` with a reason), and the
-suite **fails when a snapshot's `updated` is older than 7 days**. Provider
+exist upstream (or sit in that snapshot's `knownGaps` with a reason).  A
+snapshot older than 7 days is **re-vendored by the test itself** (it reuses
+`refresh()` from `scripts/update-reference-ids.js` and then re-checks the ids
+against the fresh data), because we do not control when upstream publishes and a
+date-based hard failure only ever resurfaces on a schedule nobody chose.  Set
+`EPG_REFERENCE_NO_REFRESH=1` to turn staleness back into a hard failure (e.g.
+offline runs); a failed download degrades to a clear message, never a crash. Provider
 membership is derived from `src/provider-catalog.js`; curated ids are read
 from each adapter's `CHANNEL_ID_MAP`. Refresh weekly:
 
@@ -489,6 +538,10 @@ from each adapter's `CHANNEL_ID_MAP`. Refresh weekly:
 npm run update:reference   # re-downloads, re-extracts, stamps today's date
 npm test                    # must stay green
 ```
+
+`npm test` also refreshes a stale snapshot by itself, so running the suite is
+normally enough; `update:reference` is for inspecting the id diff before
+committing.
 
 `scripts/update-reference-ids.js` refreshes **both** snapshots (TR + SE),
 preserves each file's `knownGaps`, and reports ids

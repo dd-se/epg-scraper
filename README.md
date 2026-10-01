@@ -354,6 +354,188 @@ node scripts/dev-tools.js status browser     # check CDP endpoint
 - `CHROME_CACHE_DIR` — browser binary cache (default `~/.cache/ms-playwright`)
 - `SERVER_PORT` / `SERVER_ROOT` — static server config (default `8080`, project root)
 
+## Playlist mode (`--m3u`)
+
+Build one merged IPTV playlist out of several M3U sources. This is a
+**separate capability** from EPG scraping: it shares no guide model, no XMLTV
+writer and no provider code with it, and it is reached with a separate
+`--m3u` flag.
+
+```bash
+# See what a config resolves to — fetches nothing, writes nothing
+node bin/epg-scraper.js --m3u m3u.config.json --m3u-list
+
+# Build the playlist
+node bin/epg-scraper.js --m3u m3u.config.json
+```
+
+Config (`m3u.config.json`):
+
+```json
+{
+  "sources": [
+    { "id": "dearbulut-tr", "url": "https://dearbulut.github.io/iptv/playlists/country/tr.m3u" },
+    { "id": "hayati-tr",   "url": "https://raw.githubusercontent.com/hayatiptv/iptv/refs/heads/master/BDNLTR.m3u" }
+  ],
+  "exclude": ["* Alanya *", "* Avrupa *"],
+  "style": "backup",
+  "output": { "path": "playlist.m3u", "gzip": false }
+}
+```
+
+`url` may be `http(s)://`, a `file://` URL, or a relative path — the last two
+make offline runs against fixtures work. `${ENV_VAR}` in a source URL is
+expanded from the environment (the `.env` the CLI already loads counts), and
+the value is never printed.
+
+### Config reference (`m3u.config.json`)
+
+Unknown keys are **rejected** — a typo fails the run instead of silently doing
+nothing. The committed [`m3u.config.json`](m3u.config.json) is the file the
+`m3u-scraper` workflow builds from. Each CLI flag overrides the matching key
+(see [Flags](#flags)).
+
+**Top level**
+
+| Key | Type · default | Meaning | CLI override |
+| --- | --- | --- | --- |
+| `sources` | array · required (1–50) | Playlist sources to fetch — see below. | `--m3u-sources a,b` |
+| `catalog` | boolean · `true` | Include the curated [`src/m3u/channels.js`](src/m3u/channels.js) selection; `false` selects purely from `want`. | — |
+| `want` | string[] · `[]` | Channel globs added on top of the catalog. | `--m3u-want` |
+| `exclude` | string[] · `[]` | Channel globs to drop (beats `want`). | `--m3u-exclude` |
+| `style` | string · `"backup"` | Copy-naming: `numbered`, `backup`, `source`, `keep-first`, `fail`. | `--m3u-style` |
+| `stripQuality` | string[] · `["HD","FHD","UHD","SD"]` | Quality tokens folded when matching (`[]` disables; `4K` never folds). | `--m3u-strip-quality` |
+| `useYedek` | boolean · `true` | Expand `Yedek*` backup attributes into real copies. | `--m3u-no-yedek` |
+| `dedupeIdenticalUrls` | boolean · `true` | Collapse entries whose normalized URL is the same feed. | — |
+| `unifyScheme` | boolean · `true` | Treat `http`/`https` as one when comparing URLs. | `--m3u-keep-scheme` |
+| `keepQuery` | boolean · `false` | Keep the query string when comparing URLs. | `--m3u-keep-query` |
+| `inferTvgId` | boolean · `true` | Infer a missing `tvg-id` from the channel name. | `--m3u-no-infer-tvg-id` |
+| `idSuffix` | string · `"tr"` | Country suffix for generated channel ids (`ATV.tr`). | — |
+| `keepAttributes` | string[] · `["tvg-id","tvg-name","tvg-logo","group-title"]` | `#EXTINF` attributes copied to the output. | — |
+| `maxCopies` | integer 0–1000 · `6` | Cap copies kept per channel (`0` = unlimited). | `--m3u-max-copies` |
+| `maxBytes` | integer · `16777216` (16 MiB) | Refuse a source larger than this (1024 … 256 MiB). | `--m3u-max-bytes` |
+| `live` | object · see below | Stream probing (opt-in). | `--m3u-live*` |
+| `output` | object · see below | Where the playlist is written. | `--m3u-out` |
+
+**`sources[]`** — each item is `{ id, name?, url, weight? }`.
+
+| Field | Type · default | Meaning |
+| --- | --- | --- |
+| `id` | string · `source-N` | Source tag used in logs, the report, and `style: "source"` names. |
+| `name` | string · falls back to `id` | Human label. |
+| `url` | string · required | `http(s)://`, `file://`, or a relative path; `${ENV_VAR}` is expanded from the environment (and never printed). |
+| `weight` | number · `0` | Higher wins when a channel has several feeds — which source's copy keeps the base name. |
+
+**`live`** (probe each stream once, then drop or report the dead ones)
+
+| Field | Type · default | Meaning | CLI override |
+| --- | --- | --- | --- |
+| `enabled` | boolean · `false` | Probe and drop dead streams. | `--m3u-live` |
+| `keepFailed` | boolean · `false` | Probe but keep failures (report only). | `--m3u-live-keep` |
+| `depth` | integer 1–2 · `1` | `1` = manifest only; `2` also fetches the first segment. | `--m3u-live-depth` |
+| `timeoutMs` | integer 100–120000 · `6000` | Per-probe timeout. | `--m3u-live-timeout-ms` |
+| `concurrency` | integer 1–8 · `4` | Parallel probes. | `--m3u-live-concurrency` |
+| `retries` | integer 0–5 · `1` | Retries for a retryable probe failure. | `--m3u-live-retry` |
+
+**`output`**
+
+| Field | Type · default | Meaning | CLI override |
+| --- | --- | --- | --- |
+| `path` | string · `playlist.m3u` | Output file. | `--m3u-out` |
+| `gzip` | boolean · `false` | Write `path + ".gz"` (`node:zlib` level 9). | — |
+
+`--m3u-report`, `--m3u-dry-run`, `--m3u-list` and `--m3u-live-*` are CLI-only;
+they have no config key. Run `--m3u <config> --m3u-list` to print the resolved
+sources, `want` list and output path without fetching anything.
+
+### Which channels you get
+
+The channel selection is **data-driven**: the curated catalog in
+[`src/m3u/channels.js`](src/m3u/channels.js) is the baseline, so a config with
+no `want` at all already selects the common Turkish channels. Edit that file to
+change the selection, or add to it per config/CLI:
+
+```bash
+node bin/epg-scraper.js --m3u m3u.config.json --m3u-want "ATV*,Show Turk"
+```
+
+Patterns are **anchored globs** (`*`, `?`, case-insensitive), matched against
+four normalized forms of a channel — its `tvg-id`, `tvg-name`, resolution-
+stripped display name and `group-title` — never the raw decorated name:
+
+```bash
+--m3u-want "ATV"          # exactly ATV — never ATV Alanya / ATV Avrupa
+--m3u-want "ATV*"         # ATV and its editions, as separate channels
+--m3u-want "*Undefined*"  # anything in the "Undefined" group
+```
+
+`exclude` always beats `want`, and a pattern that matches nothing is reported
+so a typo cannot silently shorten the playlist.
+
+### What the mode does to duplicates
+
+The same channel often appears in both sources, and the two spellings are not
+identical (`ATV (360p)` vs `ATV FHD`, or `BİR TV` vs `BIR TV`). The builder
+groups channels by the **union** of those attributes — Turkish diacritics are
+folded to ASCII, and a trailing resolution or a quality token (`HD`, `FHD`,
+`UHD`, `SD`) is folded — then:
+
+* **identical feeds collapse** (the same URL modulo `http`/`https`, a
+  `.m3u8` suffix, default ports and a cache-busting query). They are never
+  renamed, so you never get a phantom third copy;
+* **genuinely different feeds are renamed** by `--m3u-style`:
+  `numbered` (`ATV`, `ATV B2`), `backup` (default: `ATV`, `ATV Backup`),
+  `source`, `keep-first` (drop the rest) or `fail` (exit 1 on a conflict);
+* editions stay separate channels by construction — `ATV Alanya`, `Kanal D
+  Drama` and `TRT 4K` never fold into their base channel.
+
+A channel's display name is cleaned, not copied: the emitted channel is `ATV`,
+never `ATV (360p)`.
+
+Declared backup attributes (`Yedek="…"`, `Yedek2="…"`) are expanded into real
+copies by default; `--m3u-no-yedek` turns that off, and `--m3u-max-copies N`
+(default 6) trims the resulting long tail.
+
+### Liveness checking (opt-in, off by default)
+
+```bash
+node bin/epg-scraper.js --m3u m3u.config.json --m3u-live
+```
+
+`--m3u-live` fetches each stream once (manifest only, `--m3u-live-depth 1`)
+and keeps an entry only if the response is 2xx **and** the body starts with
+`#EXTM3U` — so a `200` serving an HTML block page is treated as dead. Failed
+entries are dropped and listed in `report.deadEntries`; `--m3u-live-keep`
+reports them without dropping.
+
+Probing happens from wherever the tool runs, and a `403` is usually a
+region-locked or CDN-blocked link rather than a dead one — run it from home,
+not from CI, or you will over-drop.
+
+### Flags
+
+| Flag | Meaning |
+| --- | --- |
+| `--m3u <config.json>` | enter playlist mode (required) |
+| `--m3u-out <path>` | output playlist (default `playlist.m3u`, gzip off) |
+| `--m3u-sources <a,b>` | override the config's source list |
+| `--m3u-want` / `--m3u-exclude <pats>` | append to the selection |
+| `--m3u-style <style>` | `numbered` \| `backup` \| `source` \| `keep-first` \| `fail` |
+| `--m3u-strip-quality <list>` | quality tokens to fold (default `HD,FHD,UHD,SD`; empty disables) |
+| `--m3u-keep-scheme` / `--m3u-keep-query` | stricter URL comparison |
+| `--m3u-no-infer-tvg-id` | do not infer a missing `tvg-id` |
+| `--m3u-no-yedek` | do not expand `Yedek*` attributes |
+| `--m3u-max-copies N` | cap copies per channel (default 6, `0` = unlimited) |
+| `--m3u-max-bytes N` | refuse a source larger than N bytes (default 16 MiB) |
+| `--m3u-report <path>` | write the JSON run report (URLs are redacted) |
+| `--m3u-dry-run` / `--m3u-list` | resolve and print the plan; fetch/write nothing |
+| `--m3u-live` / `--m3u-live-keep` | probe and drop / probe and report |
+| `--m3u-live-depth`, `--m3u-live-timeout-ms`, `--m3u-live-concurrency`, `--m3u-live-retry` | probe tuning |
+
+`--m3u` is rejected together with the guide flags (`--provider`, `--merge`,
+`--compare`, `--from`, `--browser`, `--stealth`, `--alias-map`, `--date`,
+`--max-channels`); it never launches a browser.
+
 ## Adding a provider
 
 1. Create `src/providers/<id>.js` exporting:
@@ -770,7 +952,7 @@ adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
 
 ## Scheduled scrapes (GitHub Actions)
 
-`.github/workflows/scrape.yml` builds its matrix and sports-merge inputs
+`.github/workflows/epg-scraper.yml` builds its matrix and sports-merge inputs
 from `src/provider-catalog.js`, then runs the configured providers daily at
 00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets on a rolling
 `latest` GitHub Release. The matrix excludes beinsports because
@@ -795,6 +977,20 @@ merge and publish whatever guides survived — guides are validated
 (size, gzip integrity, `<tv>` root) before they can overwrite the release,
 and a run with zero valid guides leaves the previous release untouched.
 
+`.github/workflows/m3u-scraper.yml` is the playlist counterpart: it builds the
+merged IPTV playlist from the committed `m3u.config.json` every third-ish day
+(06:20 UTC — a deliberately different clock from the guide scrape's 00:30 UTC)
+and publishes it to the **same** rolling `latest` release, so
+`releases/latest/download/playlist.m3u` is a stable URL beside the guides. It
+runs on its own schedule and concurrency group, ~6 h clear of the guide scrape,
+so the two never write the release at once — and it only (re)places the
+`playlist.m3u` asset (`omitNameDuringUpdate`/`omitBodyDuringUpdate`), leaving the
+guide workflow's release name, notes and `epg_*.xml.gz` assets untouched. The
+playlist is validated (`#EXTM3U` header plus at least one `#EXTINF`) before it
+can replace the asset, and a build that fails all three attempts leaves
+yesterday's playlist live. Both workflows are also dispatchable by hand from the
+Actions tab.
+
 ### Using the guide in an IPTV app
 
 Paste one of these stable URLs into your app's XMLTV/EPG source field
@@ -806,6 +1002,13 @@ after the first successful workflow run, which you can trigger manually via
 https://github.com/OWNER/REPO/releases/latest/download/epg_hurriyet_TR.xml.gz
 https://github.com/OWNER/REPO/releases/latest/download/epg_mynet_TR.xml.gz
 https://github.com/OWNER/REPO/releases/latest/download/epg_tvnu_SE.xml.gz
+```
+
+The playlist workflow publishes its playlist to the same release, so use this
+URL in an IPTV player's M3U/playlist field:
+
+```
+https://github.com/OWNER/REPO/releases/latest/download/playlist.m3u
 ```
 
 The repository must be **public** — release assets on private repos require
@@ -857,9 +1060,13 @@ vendored as `test/fixtures/epgshare01/reference.json`
 (`epg_ripper_TR1.xml.gz`, the Turkish providers) and
 `test/fixtures/epgshare01/reference-se.json` (`epg_ripper_SE1.xml.gz`, the
 Swedish `tvnu` provider), and enforced by `test/reference.test.mjs`, which
-fails if a snapshot is older than 7 days — refresh both weekly with
-`npm run update:reference` (re-downloads the upstream files, preserves each
-snapshot's `knownGaps`, reports added/removed ids).
+re-vendors a snapshot older than 7 days before re-checking the provider ids
+(set `EPG_REFERENCE_NO_REFRESH=1` to make staleness a hard failure instead).
+Refresh both explicitly with `npm run update:reference` (re-downloads the
+upstream files, preserves each snapshot's `knownGaps`, reports added/removed
+ids). Nothing re-vendors on a schedule — the workflows run the scraper, not the
+suite — so freshness comes from a local `npm test` (which re-vendors) or
+`npm run update:reference`.
 
 ## Layout
 
@@ -878,6 +1085,8 @@ src/registry.js         provider registry + date-range helper
 src/provider-catalog.js authored provider, reference, CI, and sports inventory
 src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
+src/m3u/                standalone --m3u playlist builder (parser, identity, writer, catalog)
+m3u.config.json         playlist config the m3u-scraper workflow builds from
 src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, sporekraniapi, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/provider-inventory.js  print provider/CI/sports inventory projections
