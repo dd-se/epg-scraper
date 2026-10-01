@@ -11,7 +11,8 @@
       "url": "https://raw.githubusercontent.com/hayatiptv/iptv/refs/heads/master/BDNLTR.m3u"
     }
   ],
-  "style": "backup",
+  "style": "numbered",
+  "unifyGroups": true,
   "live": { "enabled": true, "retries": 3 },
   "output": { "path": "playlist.m3u", "gzip": false }
 }

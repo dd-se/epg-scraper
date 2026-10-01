@@ -293,8 +293,8 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       pinned by a timing regression test.
     - `identity.js` — `normalizeName()` (folds Turkish diacritics to ASCII),
       `channelKeys()`, `groupEntries()` (union-find), `normalizeStreamUrl()`,
-      `collapseIdenticalFeeds()`, `applyNamingStyle()`, `expandYedek()`,
-      `applyMaxCopies()`, `baseDisplayName()`.
+      `collapseIdenticalFeeds()`, `unifyGroupTitles()`, `applyNamingStyle()`,
+      `expandYedek()`, `applyMaxCopies()`, `baseDisplayName()`.
     - `selection.js` — `globToMatcher()` (anchored `*`/`?` only, no user
       regex), `selectionForms()`, `selectEntries()`.
     - `writer.js` — `generateM3U()`/`writeM3U()`, mirroring `src/xmltv.js`.

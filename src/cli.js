@@ -793,6 +793,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     stripQuality: plan.stripQuality,
     useYedek: plan.useYedek,
     dedupeIdenticalUrls: plan.dedupeIdenticalUrls,
+    unifyGroups: plan.unifyGroups,
     unifyScheme: plan.unifyScheme,
     keepQuery: plan.keepQuery,
     inferTvgId: plan.inferTvgId,

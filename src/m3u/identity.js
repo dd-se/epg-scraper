@@ -407,6 +407,48 @@ export function applyNamingStyle(groups, style = 'numbered', options = {}) {
 // A declared backup URL attribute: `Yedek`, `Yedek1`…`Yedek11`, and the
 // lower-case `yedek9` that source B really ships.  Matched case-insensitively,
 // and anchored so a hypothetical `YedekBackup` attribute is not mistaken for one.
+/**
+ * Unify the `group-title` a channel's copies carry.
+ *
+ * The sources categorize the same channel differently — one files `Beyaz TV`
+ * under `Undefined`, the other under `ULUSAL` — so without this a player shows
+ * one channel in two folders.  The label carried by the **most copies** wins
+ * (three `ULUSAL` copies beat a single `Undefined`), and every copy adopts it,
+ * so a channel lands in exactly one group.  A tie keeps the base (highest-
+ * ranked) copy's label, so the result stays deterministic.
+ *
+ * @param {object[]} groups
+ * @returns {object[]} the same groups with each entry's `group` unified
+ */
+export function unifyGroupTitles(groups) {
+  return (Array.isArray(groups) ? groups : []).map((group) => {
+    const entries = Array.isArray(group && group.entries) ? group.entries : [];
+    if (entries.length === 0) return group;
+
+    const counts = new Map();
+    for (const item of entries) {
+      const label = String((item && item.group) || '');
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+
+    const baseLabel = String((rankEntries(entries)[0] || {}).group || '');
+    let winner = baseLabel;
+    let best = counts.get(baseLabel) || 0;
+    for (const [label, count] of counts) {
+      if (count > best) {
+        best = count;
+        winner = label;
+      }
+    }
+
+    if (entries.every((item) => String((item && item.group) || '') === winner)) return group;
+    return {
+      ...group,
+      entries: entries.map((item) => ({ ...item, group: winner })),
+    };
+  });
+}
+
 const YEDEK_ATTRIBUTE = /^yedek\d*$/i;
 
 /**

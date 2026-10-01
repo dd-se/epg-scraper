@@ -407,6 +407,7 @@ nothing. The committed [`m3u.config.json`](m3u.config.json) is the file the
 | `stripQuality` | string[] · `["HD","FHD","UHD","SD"]` | Quality tokens folded when matching (`[]` disables; `4K` never folds). | `--m3u-strip-quality` |
 | `useYedek` | boolean · `true` | Expand `Yedek*` backup attributes into real copies. | `--m3u-no-yedek` |
 | `dedupeIdenticalUrls` | boolean · `true` | Collapse entries whose normalized URL is the same feed. | — |
+| `unifyGroups` | boolean · `true` | Give every copy of a channel one `group-title` — the label carried by the most copies wins (ties keep the base copy's). | — |
 | `unifyScheme` | boolean · `true` | Treat `http`/`https` as one when comparing URLs. | `--m3u-keep-scheme` |
 | `keepQuery` | boolean · `false` | Keep the query string when comparing URLs. | `--m3u-keep-query` |
 | `inferTvgId` | boolean · `true` | Infer a missing `tvg-id` from the channel name. | `--m3u-no-infer-tvg-id` |
@@ -491,6 +492,12 @@ folded to ASCII, and a trailing resolution or a quality token (`HD`, `FHD`,
 
 A channel's display name is cleaned, not copied: the emitted channel is `ATV`,
 never `ATV (360p)`.
+
+The sources also file the same channel under different `group-title`s (`Beyaz TV`
+is `Undefined` in one source and `ULUSAL` in the other), so the builder unifies
+each channel's group to the label carried by the **most copies** — ties keep the
+base copy's — and every copy adopts it, so a channel never lands in two player
+folders. Set `"unifyGroups": false` to keep each source's own label.
 
 Declared backup attributes (`Yedek="…"`, `Yedek2="…"`) are expanded into real
 copies by default; `--m3u-no-yedek` turns that off, and `--m3u-max-copies N`

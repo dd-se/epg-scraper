@@ -22,7 +22,7 @@ const MAX_PATTERNS = 200;
 
 const CONFIG_KEYS = new Set([
   'sources', 'want', 'exclude', 'style', 'stripQuality', 'useYedek',
-  'dedupeIdenticalUrls', 'unifyScheme', 'keepQuery', 'inferTvgId', 'idSuffix',
+  'dedupeIdenticalUrls', 'unifyGroups', 'unifyScheme', 'keepQuery', 'inferTvgId', 'idSuffix',
   'keepAttributes', 'maxCopies', 'maxBytes', 'catalog', 'live', 'output',
 ]);
 
@@ -185,6 +185,7 @@ export function loadM3uConfig(configPath, options = {}) {
     stripQuality,
     useYedek: optionalBoolean(parsed.useYedek, true, 'useYedek'),
     dedupeIdenticalUrls: optionalBoolean(parsed.dedupeIdenticalUrls, true, 'dedupeIdenticalUrls'),
+    unifyGroups: optionalBoolean(parsed.unifyGroups, true, 'unifyGroups'),
     unifyScheme: optionalBoolean(parsed.unifyScheme, true, 'unifyScheme'),
     keepQuery: optionalBoolean(parsed.keepQuery, false, 'keepQuery'),
     inferTvgId: optionalBoolean(parsed.inferTvgId, true, 'inferTvgId'),

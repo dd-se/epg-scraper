@@ -15,6 +15,7 @@ import { selectEntries } from './selection.js';
 import {
   groupEntries,
   collapseIdenticalFeeds,
+  unifyGroupTitles,
   applyNamingStyle,
   expandYedek,
   applyMaxCopies,
@@ -62,6 +63,7 @@ export async function collectEntries(options = {}) {
     stripQuality = ['HD', 'FHD', 'UHD', 'SD'],
     useYedek = true,
     dedupeIdenticalUrls = true,
+    unifyGroups = true,
     unifyScheme = true,
     keepQuery = false,
     inferTvgId = true,
@@ -118,7 +120,10 @@ export async function collectEntries(options = {}) {
     unifyScheme, keepQuery, dedupeIdenticalUrls,
   });
   const { groups: capped, maxCopiesDropped } = applyMaxCopies(collapsed, { maxCopies });
-  const named = applyNamingStyle(capped, style, { idSuffix, inferTvgId });
+  // Unify the copies' group-title before naming so every copy of a channel
+  // lands in one player folder (the label carried by the most copies wins).
+  const unified = unifyGroups ? unifyGroupTitles(capped) : capped;
+  const named = applyNamingStyle(unified, style, { idSuffix, inferTvgId });
 
   // Cross-group identical feeds.  Collapse runs per group, so two *differently
   // named* channels that happen to publish the very same URL ("A2TV" vs "A2")
