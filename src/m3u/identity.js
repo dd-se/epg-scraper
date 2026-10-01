@@ -407,15 +407,30 @@ export function applyNamingStyle(groups, style = 'numbered', options = {}) {
 // A declared backup URL attribute: `Yedek`, `Yedek1`…`Yedek11`, and the
 // lower-case `yedek9` that source B really ships.  Matched case-insensitively,
 // and anchored so a hypothetical `YedekBackup` attribute is not mistaken for one.
+// A placeholder carries no category information: the sources spell "we don't
+// know" as `Undefined`, or leave the attribute off entirely.
+function isPlaceholderGroupLabel(label) {
+  const trimmed = String(label == null ? '' : label).trim().toLowerCase();
+  return trimmed === '' || trimmed === 'undefined';
+}
+
 /**
  * Unify the `group-title` a channel's copies carry.
  *
  * The sources categorize the same channel differently — one files `Beyaz TV`
  * under `Undefined`, the other under `ULUSAL` — so without this a player shows
- * one channel in two folders.  The label carried by the **most copies** wins
- * (three `ULUSAL` copies beat a single `Undefined`), and every copy adopts it,
- * so a channel lands in exactly one group.  A tie keeps the base (highest-
- * ranked) copy's label, so the result stays deterministic.
+ * one channel in two folders.  Every copy adopts one label, so a channel lands
+ * in exactly one group:
+ *
+ *  - A **placeholder** (`Undefined`, or an empty `group-title`) loses to any
+ *    real label, however few copies publish that real one: `Undefined` means
+ *    "uncategorized", so one source knowing the category beats another source
+ *    not knowing it.
+ *  - Among real labels, the one carried by the **most copies** wins (three
+ *    `ULUSAL` copies beat a single `News`).
+ *  - A tie keeps the base (highest-ranked) copy's label, so the result stays
+ *    deterministic.
+ *  - Only when *every* copy is a placeholder does one of them have to win.
  *
  * @param {object[]} groups
  * @returns {object[]} the same groups with each entry's `group` unified
@@ -431,10 +446,14 @@ export function unifyGroupTitles(groups) {
       counts.set(label, (counts.get(label) || 0) + 1);
     }
 
+    const real = [...counts.entries()].filter(([label]) => !isPlaceholderGroupLabel(label));
+    const candidates = real.length > 0 ? real : [...counts.entries()];
+
     const baseLabel = String((rankEntries(entries)[0] || {}).group || '');
-    let winner = baseLabel;
-    let best = counts.get(baseLabel) || 0;
-    for (const [label, count] of counts) {
+    const baseIsCandidate = candidates.some(([label]) => label === baseLabel);
+    let winner = baseIsCandidate ? baseLabel : '';
+    let best = baseIsCandidate ? counts.get(baseLabel) || 0 : 0;
+    for (const [label, count] of candidates) {
       if (count > best) {
         best = count;
         winner = label;
