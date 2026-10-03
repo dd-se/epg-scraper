@@ -273,14 +273,33 @@ Development tooling includes a static file server in
     returns the applied names). Parsing is Node's own `node:util` `parseEnv()`,
     so the format matches `node --env-file`. The CLI calls it before any
     provider reads the environment.
-12. `src/cli.js` — CLI argument parsing, orchestration, output writing.
+12. `src/cli.js` — CLI orchestration, mode dispatch, output writing.
     Exports `runCli({ argv, stdout, stderr, cwd, providerLoader })` for
     testability. One execution lifecycle owns browser creation, scrape option
     construction, result acceptance, error conversion, and browser shutdown;
     the single, compare, merge, and offline mode handlers keep their distinct
-    behavior behind that seam. Provider metadata comes from
+    behavior behind that seam. All four modes share the write plumbing
+    (`guideOutputPath()` resolves `--out` or the mode's default base name,
+    `xmltvExtension()` applies `--gzip`, `isEmptyGuide()` is the shared
+    refusal, and `writeGuide()` performs the single `writeXmltv()` call plus
+    its log line), and `providerInfo()` memoizes each provider's
+    country/language/time zone. `playlistOutputPath()` is the playlist-mode
+    counterpart of `xmltvExtension()`: `writeM3U()` takes its path verbatim,
+    so the CLI resolves `output.path` + `.gz` (and strips a stale one) to keep
+    the logged name and the file on disk in agreement. Flag parsing and
+    validation live in `src/cli-flags.js`; provider metadata comes from
     `src/provider-catalog.js`.
-13. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
+13. `src/cli-flags.js` — pure flag parsing and validation, no I/O.
+    `deriveFlags()` normalizes the `parseArgs` bag once (provider ids,
+    `--from` paths, the window, the date anchor); `FLAG_VALIDATORS` is an
+    **ordered** table of `{ when, message }` rows where the first match is the
+    error reported, so adding a flag check is one row and reordering one is a
+    user-visible change with a test pinning it. `firstFlagViolation()` returns
+    that message or null. The integer flags (`--delay-ms`, `--max-channels`,
+    and `TRANSPORT_FLAGS`: `--retries`/`--timeout-ms`/`--retry-delay-ms`)
+    each declare their own range and complaint beside each other, so a flag's
+    bound and its error text cannot drift apart.
+14. `src/compare.js` — diffs two scrape() results.  `compareResults()` (same
     provider, plain HTTP vs headless browser) and `compareProviderResults()`
     (two providers, channel by channel) share one `compareSides()` core;
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
@@ -297,7 +316,7 @@ full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
 `tivibu` adds Tivibu Spor 1-4; `idmantv` adds İdman TV (an Azerbaijani
 charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.
-14. `src/merge.js` — `mergeResults(results, canonicalize?, options?)` combines N
+15. `src/merge.js` — `mergeResults(results, canonicalize?, options?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later
     providers), programmes
@@ -312,7 +331,7 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
     script): each CI merge job checks which downloaded artifacts survived,
     warns about the rest, and hands the survivors to the CLI in
     `COMMAND_PROFILES` precedence order, which `--from` resolves strictly.
-15. `src/m3u/` — the `--m3u` playlist builder: a **standalone** module tree
+16. `src/m3u/` — the `--m3u` playlist builder: a **standalone** module tree
     with its own result shape, writer and tests. It imports **nothing** from
     `model.js`, `xmltv.js`, `merge.js`, `compare.js`, `providers/` or
     `cli.js` (test-enforced in `test/m3u.test.mjs`); it reuses only
@@ -347,11 +366,15 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       exports `EPG_NAME_CONTRACT` (the three EPG-matching renames) and
       `CATALOG_EPG_GAPS` (channels with no programme data — only `TRT 4K` now;
       `TRT Haber` is served by both the `trt` and `mynet` guides).
-16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
+17. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
     differ between providers line up.  Resolution is transitive (alias
-    chains collapse onto one id) and cycle-safe.
+    chains collapse onto one id) and cycle-safe.  The lookup is an
+    **own**-property check with a string target, never `id in map`: an
+    inherited key (`constructor`, `toString`, `__proto__`, …) would otherwise
+    resolve a channel id to a function/object, which merge rejects as invalid
+    and thereby drops that channel and all of its programmes.
 
 Script load order is not critical (ES modules resolve automatically), but
 the dependency chain flows upward: providers → catalog/registry/http/xmltv/model/time/slug → env-file → cli.
@@ -537,6 +560,9 @@ node bin/epg-scraper.js --list-providers
   and `vi.resetModules()`. The mock must define `chromium.launch()` returning
   a browser with `newContext()` → `newPage()` → `goto()`/`content()`/`close()`.
   No real browser is launched during `npm test`.
+- Coverage by file: `test/cli-flags.test.mjs` — the CLI flag table: each rule's
+  message, the numeric flags' bounds, and the *order* of the rules (adjacent
+  rows are pinned against each other so a reorder fails a test);
 - Coverage by file: `test/core.test.mjs` — units (entities, slug, xmltv,
   registry, guide result, time); `test/provider-inventory.test.mjs` — catalog,
   CI membership, merge profiles, and sports-channel unions;

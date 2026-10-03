@@ -396,7 +396,7 @@ node scripts/dev-tools.js status browser     # check CDP endpoint
 - `DEV_STATE_DIR` — pidfile/log directory (default `~/.cache/epg-scraper`)
 - `CHROME_DEBUG_HOST` / `CHROME_DEBUG_PORT` — CDP bind (default `127.0.0.1:9222`)
 - `CHROME_CACHE_DIR` — browser binary cache (default `~/.cache/ms-playwright`)
-- `SERVER_PORT` / `SERVER_ROOT` — static server config (default `8080`, project root)
+- `SERVER_HOST` / `SERVER_PORT` / `SERVER_ROOT` — static server bind address, port and document root (default `127.0.0.1`, `8080`, project root)
 
 ## Playlist mode (`--m3u`)
 

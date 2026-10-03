@@ -556,6 +556,16 @@ function xmltvExtension(gzip) {
   return gzip ? '.xml.gz' : '.xml';
 }
 
+// The playlist writer, like the guide writer, receives a fully resolved path.
+// `output.path` gains a `.gz` when gzip is on and loses a stale one when it is
+// off, so the announced name and the file on disk always agree — and a
+// pre-suffixed `playlist.m3u.gz` never doubles into `playlist.m3u.gz.gz`.
+function playlistOutputPath(outputPath, gzip) {
+  const base = String(outputPath);
+  const stripped = /[.]gz$/i.test(base) ? base.slice(0, -3) : base;
+  return gzip ? `${stripped}.gz` : stripped;
+}
+
 // An explicit --out resolved against the working directory, or the mode's own
 // default base name when the flag was not passed.
 function guideOutputPath(context, defaultBase) {
@@ -720,7 +730,13 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
   // Gzip defaults OFF for this mode: a playlist is normally handed to a player
   // or a local app, which reads plain text.  The config's output.gzip opts in.
   const useGzip = plan.output.gzip === true;
-  const outputPath = path.resolve(cwd, values['m3u-out'] || plan.output.path);
+  // `writeM3U()` writes to the path it is handed verbatim (like `writeXmltv()`),
+  // so the caller resolves the final name — same contract as the guide side's
+  // `xmltvExtension()`.  Without this the gzipped playlist landed in
+  // `playlist.m3u` while the log announced a `playlist.m3u.gz` that was never
+  // created.
+  const outputBase = path.resolve(cwd, values['m3u-out'] || plan.output.path);
+  const outputPath = playlistOutputPath(outputBase, useGzip);
 
   log(`m3u: ${plan.sources.length} source(s), ${plan.want.length} want pattern(s), style=${plan.style}`);
 
@@ -801,7 +817,7 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     keepAttributes: plan.keepAttributes,
     allowSharedIdentity: plan.style === 'none',
   });
-  log(`m3u: wrote ${result.entries.length} entries -> ${outputPath}${useGzip ? '.gz' : ''} (${written.bytes} bytes)`);
+  log(`m3u: wrote ${result.entries.length} entries -> ${outputPath} (${written.bytes} bytes)`);
   if (result.failures.length > 0) {
     log(`m3u: ${result.failures.length} source(s) failed during the run`);
   }
