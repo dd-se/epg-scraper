@@ -17,6 +17,14 @@ import { loadAliasMap, createCanonicalizer } from './aliases.js';
 import { DEFAULT_ENV_FILE, applyEnv, readEnvFile } from './env-file.js';
 import { createGuideResult } from './model.js';
 import { resolveProviderContext } from './provider-catalog.js';
+import {
+  DELAY_FLAG,
+  MAX_CHANNELS_FLAG,
+  deriveFlags,
+  firstFlagViolation,
+  parseIntFlag,
+  parseTransportOptions,
+} from './cli-flags.js';
 
 const HELP_TEXT = `Usage: epg-scraper [options]
 
@@ -257,88 +265,16 @@ export async function runCli({
 
   const fail = (message) => write(stderr, `error: ${message}`);
 
-  if (values.date && !/^\d{4}-\d{2}-\d{2}$/.test(values.date)) {
-    fail(`--date expects YYYY-MM-DD, got "${values.date}"`);
+  // Flag well-formedness is one ordered table (src/cli-flags.js): the first
+  // check that fails is the one reported, so a run with several mistakes always
+  // complains about the same flag it used to.
+  const derived = deriveFlags(values);
+  const violation = firstFlagViolation(values, derived);
+  if (violation) {
+    fail(violation);
     return 1;
   }
-  if (values.date) {
-    // Reject impossible calendar dates (Feb 30, month 13, ...) that a lenient
-    // Date parser would silently roll over into a different day.
-    const [y, m, d] = values.date.split('-').map(Number);
-    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    if (m < 1 || m > 12 || d < 1 || d > daysInMonth) {
-      fail(`--date "${values.date}" is not a valid date`);
-      return 1;
-    }
-  }
-
-  const daysForward = Number(values['days-forward']);
-  const daysBack = Number(values['days-back']);
-  // A hostile or typo'd window (1e9, 1e21) must be rejected before
-  // buildDateRange() materializes it as a date array (hang/OOM), not after.
-  const MAX_WINDOW_DAYS = 60;
-  if (
-    !Number.isInteger(daysForward) ||
-    daysForward < 0 ||
-    daysForward > MAX_WINDOW_DAYS ||
-    !Number.isInteger(daysBack) ||
-    daysBack < 0 ||
-    daysBack > MAX_WINDOW_DAYS
-  ) {
-    fail(`--days-forward/--days-back expect integers between 0 and ${MAX_WINDOW_DAYS}`);
-    return 1;
-  }
-
-  const referenceDate = values.date ? new Date(`${values.date}T12:00:00Z`) : new Date();
-  if (Number.isNaN(referenceDate.getTime())) {
-    fail(`--date "${values.date}" is not a valid date`);
-    return 1;
-  }
-
-  const providerIds = String(values.provider)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (providerIds.length === 0) {
-    fail('--provider expects at least one provider id');
-    return 1;
-  }
-  if (values.compare && values.merge) {
-    fail('--compare and --merge cannot be combined');
-    return 1;
-  }
-  if (values.compare && providerIds.length > 2) {
-    fail('--compare supports at most two providers');
-    return 1;
-  }
-  if (providerIds.length > 1 && !values.merge && !values.compare) {
-    fail('multiple providers require --merge (combine into one guide) or --compare (diff the providers)');
-    return 1;
-  }
-
-  // Offline merge inputs: --merge --from a.xml.gz,b.xml.gz reuses
-  // already-scraped guides instead of hitting live servers.
-  const fromFiles =
-    values.from != null
-      ? String(values.from)
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-  // `--m3u` reports every mutually exclusive flag in one line further down, so
-  // defer to it here rather than emitting a second, narrower complaint first.
-  if (values.from != null && !values.merge && values.m3u == null) {
-    fail('--from requires --merge (it merges already-scraped XMLTV files)');
-    return 1;
-  }
-  if (values.from != null && values.m3u == null && fromFiles.length === 0) {
-    fail('--from expects at least one file path');
-    return 1;
-  }
-  if (values['exclusive-channels'] && !values.merge && values.m3u == null) {
-    fail('--exclusive-channels requires --merge (it only changes how providers are combined)');
-    return 1;
-  }
+  const { referenceDate, daysForward, daysBack, providerIds, fromFiles } = derived;
 
   const log = values.quiet ? () => {} : (line) => write(stdout, line);
 
@@ -369,8 +305,11 @@ export async function runCli({
     return 1;
   }
 
-  const delayMs = parseDelayMs(values, fail);
-  if (delayMs === null) return 1;
+  const delayMs = parseIntFlag(values['delay-ms'], DELAY_FLAG);
+  if (delayMs === null) {
+    fail(DELAY_FLAG.message);
+    return 1;
+  }
 
   const transportOptions = parseTransportOptions(values, fail);
   if (transportOptions === null) return 1;
@@ -473,7 +412,7 @@ export async function runCli({
     referenceDate,
     daysBack,
     daysForward,
-    timeZone: windowProvider ? resolveProviderContext(windowProvider).timeZone : undefined,
+    timeZone: windowProvider ? providerInfo(windowProvider).timeZone : undefined,
   });
 
   const offline = values.merge && fromFiles.length > 0;
@@ -509,52 +448,6 @@ export async function runCli({
   });
 }
 
-// Parse `--delay-ms` once for all modes.  Returns the delay in ms,
-// undefined when the flag was not passed (providers use their default),
-// or null after reporting an invalid value (caller must exit 1).
-function parseDelayMs(values, fail) {
-  if (values['delay-ms'] == null) return undefined;
-  const n = Number(values['delay-ms']);
-  if (!Number.isInteger(n) || n < 0) {
-    fail('--delay-ms expects a non-negative integer (milliseconds)');
-    return null;
-  }
-  return n;
-}
-
-// Parse `--retries`, `--timeout-ms` and `--retry-delay-ms` into an options
-// object forwarded to every provider (they pass it into the transport
-// layer).  Returns {} when no flag was passed, null after reporting an
-// invalid value (caller must exit 1).
-function parseTransportOptions(values, fail) {
-  const options = {};
-  if (values.retries != null) {
-    const n = Number(values.retries);
-    if (!Number.isInteger(n) || n < 0) {
-      fail('--retries expects a non-negative integer (retry attempts per request)');
-      return null;
-    }
-    options.retries = n;
-  }
-  if (values['timeout-ms'] != null) {
-    const n = Number(values['timeout-ms']);
-    if (!Number.isInteger(n) || n <= 0) {
-      fail('--timeout-ms expects a positive integer (milliseconds)');
-      return null;
-    }
-    options.timeoutMs = n;
-  }
-  if (values['retry-delay-ms'] != null) {
-    const n = Number(values['retry-delay-ms']);
-    if (!Number.isInteger(n) || n < 0) {
-      fail('--retry-delay-ms expects a non-negative integer (milliseconds)');
-      return null;
-    }
-    options.retryDelayMs = n;
-  }
-  return options;
-}
-
 function browserFetchOptions(stealth, transportOptions = {}) {
   return {
     headless: true,
@@ -572,22 +465,12 @@ function stripXmltvExtension(outputPath) {
   return base;
 }
 
-// Parse `--max-channels` once for all modes.  Returns the cap, undefined
-// when the flag was not passed, or null after reporting an invalid value
-// (caller must exit 1).
-function parseMaxChannels(value, fail) {
-  if (value == null) return undefined;
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) {
-    fail('--max-channels expects a positive integer');
-    return null;
-  }
-  return n;
-}
-
 async function executeCliRun(context) {
-  const maxChannels = parseMaxChannels(context.maxChannelsArg, context.fail);
-  if (maxChannels === null) return 1;
+  const maxChannels = parseIntFlag(context.maxChannelsArg, MAX_CHANNELS_FLAG);
+  if (maxChannels === null) {
+    context.fail(MAX_CHANNELS_FLAG.message);
+    return 1;
+  }
 
   const needBrowser =
     context.mode === 'http-browser-compare' ||
@@ -651,6 +534,58 @@ function errorMessage(error) {
   return error && error.message ? error.message : String(error);
 }
 
+// Country / language / time zone for a provider, resolved once per provider
+// object.  resolveProviderContext() re-validates its time zone on every call,
+// and the mode handlers ask for one or more of its three fields at nearly
+// every step, so the answer is memoized here rather than recomputed at each
+// call site.  A missing provider resolves to the documented TR/tr defaults,
+// which is what the offline merge path relies on.
+const providerInfoCache = new WeakMap();
+function providerInfo(provider) {
+  if (!provider || typeof provider !== 'object') return resolveProviderContext(provider);
+  let info = providerInfoCache.get(provider);
+  if (!info) {
+    info = resolveProviderContext(provider);
+    providerInfoCache.set(provider, info);
+  }
+  return info;
+}
+
+// The suffix implied by --gzip for every guide output path.
+function xmltvExtension(gzip) {
+  return gzip ? '.xml.gz' : '.xml';
+}
+
+// An explicit --out resolved against the working directory, or the mode's own
+// default base name when the flag was not passed.
+function guideOutputPath(context, defaultBase) {
+  return context.out != null
+    ? path.resolve(context.cwd, context.out)
+    : path.join(context.cwd, defaultBase);
+}
+
+// A guide with no channels or no programmes is indistinguishable downstream
+// from a successful run, so every mode refuses to write one.
+function isEmptyGuide(result) {
+  return result.channels.length === 0 || result.programmes.length === 0;
+}
+
+// Write one guide and report it on the given stream.  `label` and `suffix`
+// carry the small per-mode differences (the single mode aligns its labels in a
+// column; compare modes tag each side) without duplicating the call.
+async function writeGuide(context, { write, result, outputPath, generatorInfoName, label = 'written: ', suffix = '' }) {
+  const { bytes } = await writeXmltv({
+    channels: result.channels,
+    programmes: result.programmes,
+    outputPath,
+    gzip: context.gzip,
+    generatorInfoName,
+    language: result.language,
+  });
+  write(`${label}${outputPath} (${bytes} bytes uncompressed XML)${suffix}`);
+  return bytes;
+}
+
 async function scrapeProvider(provider, context, { useBrowser = false, logPrefix = '' } = {}) {
   const options = {
     dates: context.dates,
@@ -664,7 +599,7 @@ async function scrapeProvider(provider, context, { useBrowser = false, logPrefix
   return createGuideResult(
     {
       ...result,
-      language: result?.language || resolveProviderContext(provider).language,
+      language: result?.language || providerInfo(provider).language,
     },
     {
       onIssue: (code, count) => context.log(`warn: dropped ${count} invalid ${code} result entr(ies)`),
@@ -675,20 +610,18 @@ async function scrapeProvider(provider, context, { useBrowser = false, logPrefix
 async function writeComparisonSides(context, sides) {
   let wroteAny = false;
   for (const side of sides) {
-    const { label, result, outputPath, generatorInfoName, language } = side;
-    if (result.channels.length === 0 || result.programmes.length === 0) {
+    const { label, result, outputPath, generatorInfoName } = side;
+    if (isEmptyGuide(result)) {
       context.emit(`note: ${label} produced no data — skipping ${outputPath}`);
       continue;
     }
-    const { bytes } = await writeXmltv({
-      channels: result.channels,
-      programmes: result.programmes,
+    await writeGuide(context, {
+      write: context.emit,
+      result,
       outputPath,
-      gzip: context.gzip,
       generatorInfoName,
-      language,
+      suffix: ` [${label}]`,
     });
-    context.emit(`written: ${outputPath} (${bytes} bytes uncompressed XML) [${label}]`);
     wroteAny = true;
   }
   return wroteAny;
@@ -784,10 +717,10 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
     plan.live[key] = n;
   }
 
-  const outputPath = path.resolve(cwd, values['m3u-out'] || plan.output.path);
   // Gzip defaults OFF for this mode: a playlist is normally handed to a player
   // or a local app, which reads plain text.  The config's output.gzip opts in.
   const useGzip = plan.output.gzip === true;
+  const outputPath = path.resolve(cwd, values['m3u-out'] || plan.output.path);
 
   log(`m3u: ${plan.sources.length} source(s), ${plan.want.length} want pattern(s), style=${plan.style}`);
 
@@ -883,11 +816,10 @@ async function runM3uMode({ values, cwd, log, fail, delayMs, transportOptions })
 
 async function runSingleMode(context) {
   const provider = context.providers[0];
-  const extension = context.gzip ? '.xml.gz' : '.xml';
-  const outputPath =
-    context.out != null
-      ? path.resolve(context.cwd, context.out)
-      : path.join(context.cwd, `epg_${provider.id}_${resolveProviderContext(provider).country}${extension}`);
+  const outputPath = guideOutputPath(
+    context,
+    `epg_${provider.id}_${providerInfo(provider).country}${xmltvExtension(context.gzip)}`
+  );
   const useBrowser = context.forceBrowser || provider.requiresBrowser;
   const result = await scrapeProvider(provider, context, { useBrowser });
   context.log(
@@ -895,30 +827,28 @@ async function runSingleMode(context) {
       `from ${result.days} day page(s), ${result.failures} failed page(s)`
   );
 
-  if (result.channels.length === 0 || result.programmes.length === 0) {
+  if (isEmptyGuide(result)) {
     context.fail('nothing scraped — refusing to write an empty guide');
     return 1;
   }
 
-  const { bytes } = await writeXmltv({
-    channels: result.channels,
-    programmes: result.programmes,
+  await writeGuide(context, {
+    write: context.log,
+    result,
     outputPath,
-    gzip: context.gzip,
     generatorInfoName: `epg-scraper (${provider.id})`,
-    language: result.language || resolveProviderContext(provider).language,
+    label: 'written:  ',
   });
-  context.log(`written:  ${outputPath} (${bytes} bytes uncompressed XML)`);
   return 0;
 }
 
 async function runHttpBrowserCompareMode(context) {
   const provider = context.providers[0];
-  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const extension = xmltvExtension(context.gzip);
   const base =
     context.out != null
       ? path.resolve(context.cwd, stripXmltvExtension(context.out))
-      : path.join(context.cwd, `epg_${provider.id}_${resolveProviderContext(provider).country}`);
+      : path.join(context.cwd, `epg_${provider.id}_${providerInfo(provider).country}`);
 
   context.log('compare: scraping with plain HTTP fetch');
   const httpResult = await scrapeProvider(provider, context, { logPrefix: 'http:    ' });
@@ -937,20 +867,14 @@ async function runHttpBrowserCompareMode(context) {
     context.emit(line);
   }
 
+  const generatorInfoName = `epg-scraper (${provider.id})`;
   const wroteAny = await writeComparisonSides(context, [
-    {
-      label: 'http',
-      result: httpResult,
-      outputPath: `${base}.http${extension}`,
-      generatorInfoName: `epg-scraper (${provider.id})`,
-      language: httpResult.language || resolveProviderContext(provider).language,
-    },
+    { label: 'http', result: httpResult, outputPath: `${base}.http${extension}`, generatorInfoName },
     {
       label: 'browser',
       result: browserResult,
       outputPath: `${base}.browser${extension}`,
-      generatorInfoName: `epg-scraper (${provider.id})`,
-      language: browserResult.language || resolveProviderContext(provider).language,
+      generatorInfoName,
     },
   ]);
   if (!wroteAny) {
@@ -1010,7 +934,7 @@ async function runMergeMode(context) {
       (merged.shadowed > 0 ? `, ${merged.shadowed} programme(s) shadowed by an earlier provider's channel` : '')
   );
 
-  if (merged.channels.length === 0 || merged.programmes.length === 0) {
+  if (isEmptyGuide(merged)) {
     context.fail(
       offline
         ? 'nothing merged — refusing to write an empty guide'
@@ -1019,24 +943,17 @@ async function runMergeMode(context) {
     return 1;
   }
 
-  const extension = context.gzip ? '.xml.gz' : '.xml';
+  // An offline merge has no provider at all; providerInfo(undefined) is the
+  // documented TR/tr/Istanbul default that keeps the filename and lang stable.
   const leadProvider = offline ? undefined : context.providers[0];
-  const outputPath =
-    context.out != null
-      ? path.resolve(context.cwd, context.out)
-      : path.join(context.cwd, `epg_merged_${resolveProviderContext(leadProvider).country}${extension}`);
+  const outputPath = guideOutputPath(
+    context,
+    `epg_merged_${providerInfo(leadProvider).country}${xmltvExtension(context.gzip)}`
+  );
   const generatorInfoName = offline
     ? `epg-scraper (merged files: ${context.fromFiles.map((file) => path.basename(file)).join('+')})`
     : `epg-scraper (merged: ${context.providers.map((provider) => provider.id).join('+')})`;
-  const { bytes } = await writeXmltv({
-    channels: merged.channels,
-    programmes: merged.programmes,
-    outputPath,
-    gzip: context.gzip,
-    generatorInfoName,
-    language: merged.language || resolveProviderContext(leadProvider).language,
-  });
-  context.log(`written: ${outputPath} (${bytes} bytes uncompressed XML)`);
+  await writeGuide(context, { write: context.log, result: merged, outputPath, generatorInfoName });
   return 0;
 }
 
@@ -1075,7 +992,7 @@ async function runProviderCompareMode(context) {
     context.emit(line);
   }
 
-  const extension = context.gzip ? '.xml.gz' : '.xml';
+  const extension = xmltvExtension(context.gzip);
   const base =
     context.out != null
       ? path.resolve(context.cwd, stripXmltvExtension(context.out))
@@ -1087,7 +1004,6 @@ async function runProviderCompareMode(context) {
       result,
       outputPath: `${base}.${provider.id}${extension}`,
       generatorInfoName: `epg-scraper (${provider.id})`,
-      language: result.language || resolveProviderContext(provider).language,
     }))
   );
   if (!wroteAny) {
