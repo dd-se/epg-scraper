@@ -225,6 +225,19 @@ node bin/epg-scraper.js --provider hurriyet,mynet --merge
   **first** provider's version — the order in `--provider a,b,c` sets the
   precedence, so list the most authoritative source first and let later
   providers fill the gaps.
+- `--exclusive-channels` turns that union into a handover: the first provider
+  that lists a channel **owns** it, and later providers contribute nothing for
+  it (reported as `shadowed` programmes). Use it when one feed is
+  authoritative for a channel the others merely copy — TRT's own schedule vs
+  Hürriyet's copy of TRT 1 — otherwise both feeds' differing slot boundaries
+  survive and split the day. Channels are still unioned, so a logo-less owner
+  is backfilled from a later provider.
+
+```bash
+# TRT's schedule owns every TRT channel; Hürriyet fills the rest
+node bin/epg-scraper.js --provider trt,hurriyet --merge --exclusive-channels \
+  --out epg_hurriyet_trt_merged_TR.xml.gz
+```
 - Each provider runs with its own `requiresBrowser` / `--browser` handling,
   sharing a single headless Chromium when any of them needs it.
 - One file is written: `epg_merged_<COUNTRY>.xml[.gz]` (or `--out path`),
@@ -257,7 +270,38 @@ node bin/epg-scraper.js --merge --from guides/epg_a_TR.xml.gz,guides/epg_b_TR.xm
   default output filename still uses `_TR`; pass `--out ..._SE.xml.gz` when
   the desired asset name is Swedish.
 - This is how CI avoids scraping twice: per-provider jobs upload their
-  guides, the sports-merge job downloads them and merges offline.
+  guides, the merge jobs download them and merge offline. Two merged assets are
+  published: `epg_sports_merged_TR.xml.gz` (the sports union) and
+  `epg_hurriyet_trt_merged_TR.xml.gz` (TRT first with `--exclusive-channels`,
+  so the TRT channels come from TRT and Hürriyet fills the rest).
+
+### Rebuilding a published merged feed
+
+Both merged assets are plain `--merge --from` runs, with the input guides in
+precedence order. Two npm shortcuts spell them out:
+
+```bash
+npm run merge:sports          # -> epg_sports_merged_TR.xml.gz
+npm run merge:hurriyet-trt    # -> epg_hurriyet_trt_merged_TR.xml.gz
+
+node bin/epg-scraper.js --merge --from epg_trt_TR.xml.gz,epg_hurriyet_TR.xml.gz \
+  --exclusive-channels --out epg_hurriyet_trt_merged_TR.xml.gz
+```
+
+`--from` is strict: every listed file must exist. That is the right behaviour
+locally, but CI wants the opposite — a provider that failed today should not
+cost the whole merged asset — so each merge job checks which artifacts actually
+downloaded, warns about the missing ones, and merges the survivors. The file
+lists are projected from `COMMAND_PROFILES` in `src/provider-catalog.js` by
+`npm run inventory --github-output`, and the release notes resolve each merged
+asset back to the same profile.
+
+Both merged guides are published as release assets
+(`guide/epg_*.xml.gz`), after passing the same size / gzip-integrity / `<tv>`
+validation as the per-provider guides, so a corrupt merge can never overwrite
+yesterday's good asset. Their release-note sections are generated from the same
+profiles, so each merged asset is described with its real inputs rather than a
+provider name guessed from its filename.
 
 ## Channel-id aliases
 
@@ -517,12 +561,16 @@ it does not recognise. Three rules follow, and the config satisfies them via
    (`nowtv.tr`, `tv8.tr`, `showtvhd.tr`) — the id is the identity, the name is
    only a label.
 
-Two channels ship with **no programme data**: `TRT Haber` and `TRT 4K` are in
-neither `epg_hurriyet_TR.xml.gz` nor `epg_sports_merged_TR.xml.gz`, and the
-upstream epgshare01 reference carries no matching id. This is **accepted, not
-fixed** — a viewer picking them gets a channel with no NOW/NEXT. They are
-recorded in `CATALOG_EPG_GAPS` (`channels.js`) so the gap is a decision on
+One channel ships with **no programme data**: `TRT 4K` is in no published guide
+and the upstream epgshare01 reference carries no matching id. This is
+**accepted, not fixed** — a viewer picking it gets a channel with no NOW/NEXT.
+It is recorded in `CATALOG_EPG_GAPS` (`channels.js`) so the gap is a decision on
 record rather than a silent omission.
+
+`TRT Haber` used to sit beside it. Both the `trt` and `mynet` guides list the
+channel (`TRT.HABER.tr`), and its `<display-name>` folds onto the playlist's
+`TRT Haber`, so the name-keyed match resolves and the channel has NOW/NEXT like
+any other.
 
 `exclude` always beats `want`, and a pattern that matches nothing is reported
 so a typo cannot silently shorten the playlist.
@@ -705,6 +753,27 @@ browser transport to them.
 - Genres: the page's `data-type` values map to Turkish category labels
   (`dizi` → `Dizi`, `film` → `Film`, …). The source has no descriptions, so
   `<desc>` is not emitted.
+
+## Provider: trt
+
+- Source: `https://www.trthaber.com/yayin-akisi/{channel}/{DD-MM-YYYY}` — one
+  static server-rendered page per channel **and** date, plus an index that
+  carries the 11 channel logos. No JS, no API, no login.
+- Channels: TRT 1, TRT 2, TRT Haber, TRT Spor, TRT Spor Yıldız, TRT Belgesel,
+  TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî — ids normalized to the
+  epgshare01 reference (diacritics kept, TRT Avaz HD-only; `TRT.2.tr` and
+  `TRT.SPOR.YILDIZ.tr` are recorded as upstream gaps).
+- **Per-date, not week-shaped**: any date serves (past and future), so the
+  requested window is honoured as given and `--days-back` works — unlike
+  hurriyet, there is no Mon–Sun clamp. The index publishes today..+6, the same
+  span as the default CLI window.
+- Every page states the date it serves in its `<title>`, so the adapter
+  verifies the response against the request and skips a page that answers with
+  another day instead of misdating it. Pages that are not published yet (the
+  site publishes channels at different times, so a channel's tomorrow can 404
+  in the morning) degrade to a warning.
+- Slots carry a start time only; stops chain from the next slot (24:00 for the
+  last one), as in mynet/beinsports/idmantv.
 
 ## Provider: tvplus
 
@@ -1042,8 +1111,10 @@ the `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` GitHub Secrets.
 Mynet runs with an explicit `--delay-ms 500` because a full run is ~260
 page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 69 channels ×
 (3 requested days + 1 lookback day) = 276 requests before retries.
-The sports-merge job reuses per-provider artifacts via offline merge
-(`--merge --from`), rather than performing a second scrape for merging.
+The sports-merge and trt-merge jobs reuse per-provider artifacts via offline merge
+(`--merge --from`), rather than performing a second scrape for merging; each
+job checks which artifacts survived, warns about the missing ones, and passes the
+rest to the CLI in `COMMAND_PROFILES` precedence order.
 Transport retries and whole-provider retry attempts can still repeat requests.
 Outputs are gitignored, so nothing is
 committed — and if a day's scrape fails, the previous release stays live.
@@ -1170,7 +1241,7 @@ src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers -
 src/cli.js              CLI implementation (testable)
 src/m3u/                standalone --m3u playlist builder (parser, identity, writer, catalog)
 m3u.config.json         playlist config the m3u-scraper workflow builds from
-src/providers/          provider adapters (hurriyet, mynet, tvplus, beinsports, digiturkburada, sporekrani, sporekraniapi, tivibu, idmantv, tvnu)
+src/providers/    provider adapters (hurriyet, trt, mynet, tvplus, beinsports, digiturkburada, sporekrani, sporekraniapi, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/provider-inventory.js  print provider/CI/sports inventory projections
 scripts/update-reference-ids.js  refresh the vendored epgshare01 TR + SE id snapshots

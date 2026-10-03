@@ -9,12 +9,14 @@ import {
   curatedChannelIds,
   dailyCiMatrix,
   liveSportsProviders,
+  profileInputFiles,
   resolveProviderContext,
   toProviderRegistration,
 } from '../src/provider-catalog.js';
 
 const EXPECTED_IDS = [
   'hurriyet',
+  'trt',
   'mynet',
   'tvplus',
   'beinsports',
@@ -72,6 +74,7 @@ describe('provider operational inventory', () => {
   it('owns the daily CI matrix and provider-specific arguments', () => {
     expect(dailyCiMatrix()).toEqual([
       { provider: 'hurriyet', args: '' },
+      { provider: 'trt', args: '--delay-ms 300' },
       { provider: 'mynet', args: '--days-forward 2 --delay-ms 500' },
       { provider: 'tvplus', args: '--days-forward 2' },
       { provider: 'digiturkburada', args: '--days-forward 2' },
@@ -108,6 +111,57 @@ describe('provider operational inventory', () => {
     for (const id of curatedChannelIds(PROVIDER_CATALOG.find((entry) => entry.id === 'beinsports'))) {
       expect(ciIds.has(id)).toBe(true);
     }
+  });
+
+  it('owns the hurriyet+trt command profile with TRT owning its channels', () => {
+    const profile = COMMAND_PROFILES.hurriyetTrt;
+    expect(profile).toEqual({
+      // trt first: with exclusiveChannels it claims every TRT channel, so
+      // Hürriyet contributes only the channels TRT does not serve.
+      providerIds: ['trt', 'hurriyet'],
+      exclusiveChannels: true,
+      args: ['--delay-ms', '300'],
+      output: 'epg_hurriyet_trt_merged_TR.xml.gz',
+    });
+    const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    expect(packageJson.scripts['scrape:hurriyet-trt']).toBe(
+      'node scripts/provider-inventory.js --run hurriyetTrt'
+    );
+    // The offline rebuild of the same feed is the CLI's own merge mode — no
+    // wrapper script — with trt first and channels owned exclusively.
+    expect(packageJson.scripts['merge:hurriyet-trt']).toBe(
+      'node bin/epg-scraper.js --merge --from epg_trt_TR.xml.gz,epg_hurriyet_TR.xml.gz ' +
+        '--exclusive-channels --out epg_hurriyet_trt_merged_TR.xml.gz'
+    );
+  });
+
+  it('owns the sports command profile the CI sports merge rebuilds from', () => {
+    expect(COMMAND_PROFILES.sports).toEqual({
+      providerIds: ciSportsProviders().map((entry) => entry.id),
+      args: [],
+      output: 'epg_sports_merged_TR.xml.gz',
+    });
+    const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    // Order must match the profile: the CLI resolves the first file's
+    // conflicting slots as the winner.
+    const fromList = /--from (\S+)/.exec(packageJson.scripts['merge:sports'])[1];
+    expect(fromList.split(',')).toEqual(profileInputFiles(COMMAND_PROFILES.sports));
+    expect(packageJson.scripts['merge:sports']).toContain('--out epg_sports_merged_TR.xml.gz');
+  });
+
+  it('resolves every merge profile to the guide files its inputs are scraped to', () => {
+    for (const [name, profile] of Object.entries(COMMAND_PROFILES)) {
+      expect(profileInputFiles(profile), name).toEqual(
+        profile.providerIds.map((id) => {
+          const entry = PROVIDER_CATALOG.find((candidate) => candidate.id === id);
+          expect(entry, `${name} references ${id}`).toBeDefined();
+          return `epg_${id}_${resolveProviderContext(entry).country}.xml.gz`;
+        })
+      );
+    }
+    expect(() => profileInputFiles({ providerIds: ['no-such-provider'] })).toThrow(
+      /unknown provider: no-such-provider/
+    );
   });
 
   it('owns the special mynet-sports command profile', () => {

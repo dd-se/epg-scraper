@@ -772,6 +772,7 @@ describe('adversarial: mergeResults and compare', () => {
       failures: 0,
       language: 'tr',
       duplicates: 0,
+      shadowed: 0,
     });
   });
 
@@ -824,6 +825,7 @@ describe('adversarial: mergeResults and compare', () => {
       failures: 0,
       language: 'tr',
       duplicates: 0,
+      shadowed: 0,
     });
     expect(mergeResults([{ channels: 'x', programmes: 42 }]).programmes).toEqual([]);
   });

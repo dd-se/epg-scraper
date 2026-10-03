@@ -1,5 +1,6 @@
 import { normalizeLanguageTag } from './model.js';
 import * as hurriyet from './providers/hurriyet.js';
+import * as trt from './providers/trt.js';
 import * as mynet from './providers/mynet.js';
 import * as tvplus from './providers/tvplus.js';
 import * as beinsports from './providers/beinsports.js';
@@ -32,6 +33,17 @@ export const PROVIDER_CATALOG = [
     module: hurriyet,
     referenceCountry: 'TR',
     ci: { enabled: true, args: [], order: 10 },
+    sports: { live: false },
+  },
+  {
+    // TRT's own yayın akışı pages: 11 channels, one page per channel-day.
+    // Authoritative for every TRT channel, which is why the merged
+    // `hurriyetTrt` feed lists it first.
+    id: 'trt',
+    name: 'TRT Yayın Akışı (TRT 1/2/Haber/Spor/Belgesel/Çocuk/Müzik/Türk/Avaz/Kurdî)',
+    module: trt,
+    referenceCountry: 'TR',
+    ci: { enabled: true, args: ['--delay-ms', '300'], order: 15 },
     sports: { live: false },
   },
   {
@@ -127,6 +139,25 @@ export const PROVIDER_CATALOG = [
 ];
 
 export const COMMAND_PROFILES = {
+  // The public general-interest feed: TRT's own schedules first (it owns every
+  // TRT channel), then Hürriyet for the ~30 channels TRT does not serve.
+  // `exclusiveChannels` drops Hürriyet's duplicate TRT slots entirely, so the
+  // TRT channels are not split between two feeds' slot boundaries.
+  hurriyetTrt: {
+    providerIds: ['trt', 'hurriyet'],
+    exclusiveChannels: true,
+    args: ['--delay-ms', '300'],
+    output: 'epg_hurriyet_trt_merged_TR.xml.gz',
+  },
+  // The published sports merge, rebuilt in CI from the per-provider guides the
+  // scrape job already produced (an offline merge, so the providers are never
+  // hit twice). `sports.live` minus the SSR baseline `sporekrani`, which the
+  // day-scoped `sporekraniapi` adapter covers instead.
+  sports: {
+    providerIds: ciSportsProviders().map((entry) => entry.id),
+    args: [],
+    output: 'epg_sports_merged_TR.xml.gz',
+  },
   mynetSports: {
     providerIds: ['mynet', ...PROVIDER_CATALOG.filter((entry) => entry.sports.live).map((entry) => entry.id)],
     aliasMap: 'aliases.mynet-sports.json',
@@ -186,6 +217,17 @@ export function liveSportsProviders() {
 
 export function ciSportsProviders() {
   return liveSportsProviders().filter((entry) => entry.ci.enabled);
+}
+
+// The per-provider guide files a merge profile consumes, in precedence order
+// (first provider wins conflicts). Shared by `npm run merge:<profile>` and the
+// CI merge jobs so a merged feed's input list lives in exactly one place.
+export function profileInputFiles(profile) {
+  return (profile?.providerIds || []).map((id) => {
+    const entry = PROVIDER_CATALOG.find((candidate) => candidate.id === id);
+    if (!entry) throw new Error(`Merge profile references unknown provider: ${id}`);
+    return `epg_${id}_${resolveProviderContext(entry).country}.xml.gz`;
+  });
 }
 
 export function curatedChannelIds(entry) {

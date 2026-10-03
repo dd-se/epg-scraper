@@ -60,6 +60,11 @@ const HELP_TEXT = `Usage: epg-scraper [options]
                        XMLTV files instead (comma-separated .xml/.xml.gz
                        paths) — reuses earlier outputs without hitting live
                        servers again
+  --exclusive-channels with --merge, the first provider that lists a channel
+                       owns it: later providers contribute nothing for that
+                       channel, so a duplicate feed's differing slot
+                       boundaries never interleave with the authoritative one
+                       (still unions channels, so icons backfill)
   --alias-map <path>   JSON file { aliasId: canonicalId } mapping channel ids
                        that differ between providers onto one canonical id
                        (used by --compare and --merge)
@@ -189,6 +194,7 @@ export async function runCli({
         merge: { type: 'boolean', default: false },
         from: { type: 'string' },
         'alias-map': { type: 'string' },
+        'exclusive-channels': { type: 'boolean', default: false },
         // `--dotenv`, not `--env-file`: Node parses `--env-file` (and
         // `--env-file-if-exists`) anywhere in argv — even after the script
         // path — so a flag with that name never reaches this parser.
@@ -329,6 +335,10 @@ export async function runCli({
     fail('--from expects at least one file path');
     return 1;
   }
+  if (values['exclusive-channels'] && !values.merge && values.m3u == null) {
+    fail('--exclusive-channels requires --merge (it only changes how providers are combined)');
+    return 1;
+  }
 
   const log = values.quiet ? () => {} : (line) => write(stdout, line);
 
@@ -390,6 +400,7 @@ export async function runCli({
       ['--browser', values.browser],
       ['--stealth', values.stealth],
       ['--alias-map', values['alias-map'] != null],
+      ['--exclusive-channels', values['exclusive-channels']],
       ['--date', values.date != null],
       ['--max-channels', values['max-channels'] != null],
     ].filter(([, present]) => present).map(([name]) => name);
@@ -482,6 +493,7 @@ export async function runCli({
     providers,
     fromFiles,
     canonicalize,
+    exclusiveChannels: values['exclusive-channels'] === true,
     dates,
     cwd,
     gzip: values.gzip,
@@ -988,12 +1000,14 @@ async function runMergeMode(context) {
 
   const merged = mergeResults(results, context.canonicalize, {
     onIssue: (code, count) => context.log(`warn: merge reported ${count} ${code}`),
+    exclusiveChannels: context.exclusiveChannels === true,
   });
   const sourceCount = offline ? context.fromFiles.length : context.providers.length;
   const sourceNoun = offline ? 'file(s)' : 'provider(s)';
   context.log(
     `merge: ${merged.channels.length} channels, ${merged.programmes.length} programmes ` +
-      `from ${sourceCount} ${sourceNoun}, ${merged.duplicates} duplicate programme(s) removed`
+      `from ${sourceCount} ${sourceNoun}, ${merged.duplicates} duplicate programme(s) removed` +
+      (merged.shadowed > 0 ? `, ${merged.shadowed} programme(s) shadowed by an earlier provider's channel` : '')
   );
 
   if (merged.channels.length === 0 || merged.programmes.length === 0) {

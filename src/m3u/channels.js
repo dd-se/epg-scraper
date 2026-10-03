@@ -101,8 +101,7 @@ export const EPG_NAME_CONTRACT = [
  * than a silent omission.
  */
 export const CATALOG_EPG_GAPS = [
-  { name: 'TRT Haber', reason: 'in neither epg_hurriyet_TR.xml.gz nor epg_sports_merged_TR.xml.gz; upstream epgshare01 reference carries no TRT Haber id' },
-  { name: 'TRT 4K', reason: 'in neither epg_hurriyet_TR.xml.gz nor epg_sports_merged_TR.xml.gz; upstream reference carries no 4K id' },
+  { name: 'TRT 4K', reason: 'no provider serves it and the upstream epgshare01 reference carries no TRT 4K id' },
 ];
 
 /** The catalog as plain `want` patterns. */

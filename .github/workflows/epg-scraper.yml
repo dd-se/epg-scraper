@@ -3,6 +3,7 @@
 # can fetch them from a stable URL:
 #
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_hurriyet_TR.xml.gz
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_trt_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_mynet_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvplus_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_digiturkburada_TR.xml.gz
@@ -11,6 +12,7 @@
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_idmantv_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_tvnu_SE.xml.gz  (Swedish guide: lang="sv", +01:00/+02:00 Stockholm offsets)
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_sports_merged_TR.xml.gz  (sports merge: tvplus + digiturkburada + sporekraniapi + tivibu + idmantv)
+#   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_hurriyet_trt_merged_TR.xml.gz  (general merge: trt + hurriyet, TRT channels owned by trt)
 #
 # (Replace OWNER/REPO with this repository's path. The repo must be public —
 # release assets on private repos need authentication, which IPTV apps can't
@@ -55,6 +57,8 @@ jobs:
     outputs:
       matrix: ${{ steps.inventory.outputs.matrix }}
       sports_inputs: ${{ steps.inventory.outputs.sports_inputs }}
+      trt_inputs: ${{ steps.inventory.outputs.trt_inputs }}
+      trt_output: ${{ steps.inventory.outputs.trt_output }}
     steps:
       - name: Check out
         uses: actions/checkout@v5
@@ -268,6 +272,93 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  # The public general-interest feed: TRT's own schedules (11 channels) first
+  # so it owns every TRT channel, then Hürriyet for the ~30 channels TRT does
+  # not serve.  `--exclusive-channels` drops Hürriyet's duplicate TRT slots, so
+  # a TRT channel is not split between two feeds' slot boundaries.  Offline
+  # merge of the two per-provider guides — zero live-server hits.  Same
+  # resilience model as the sports merge: whatever survived is merged, and a
+  # missing provider only warns.
+  epg-trt-merged:
+    needs: [inventory, scrape]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Download TRT + Hürriyet guides
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          pattern: epg-*
+          merge-multiple: true
+          path: guides
+
+      - name: List guides
+        if: always()
+        run: ls -la guides/ 2>/dev/null || echo "::warning::No guide artifacts downloaded"
+
+      # Order matters: trt is listed first, so with --exclusive-channels it
+      # claims the TRT channels and Hürriyet only contributes the channels it
+      # alone serves.  Same resilience model as the sports merge — whatever
+      # survived is merged, and a missing guide only warns.
+      - name: Merge TRT + Hürriyet (offline, no scraping)
+        id: merge
+        env:
+          TRT_INPUTS_JSON: ${{ needs.inventory.outputs.trt_inputs }}
+          TRT_OUTPUT: ${{ needs.inventory.outputs.trt_output }}
+        run: |
+          shopt -s nullglob
+          mapfile -t wanted < <(node -e 'for (const file of JSON.parse(process.env.TRT_INPUTS_JSON)) console.log(file)')
+          inputs=()
+          missing=()
+          for f in "${wanted[@]}"; do
+            if [ -f "$f" ]; then
+              inputs+=("$f")
+            else
+              # Fall back to a plain-.xml artifact if a provider run wrote
+              # uncompressed output (e.g. a manual re-run artifact).
+              base="${f%.gz}"
+              if [ -f "$base" ]; then
+                inputs+=("$base")
+              else
+                missing+=("$(basename "$f")")
+              fi
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::Missing TRT/Hürriyet guides (skipped): ${missing[*]}"
+          fi
+          echo "Available TRT/Hürriyet guides: ${inputs[*]:-<none>}"
+          if [ "${#inputs[@]}" -eq 0 ]; then
+            echo "::error::No TRT/Hürriyet guides available — nothing to merge"
+            exit 1
+          fi
+          IFS=,; from_list="${inputs[*]}"; unset IFS
+          echo "Merging: $from_list"
+          node bin/epg-scraper.js --merge --from "$from_list" --exclusive-channels --out "$TRT_OUTPUT"
+
+      - name: List output
+        if: always()
+        run: ls -la epg_hurriyet_trt_merged_TR.xml* 2>/dev/null || echo "::warning::No merged guide produced"
+
+      - name: Upload merged guide
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: epg-hurriyet-trt-merged
+          path: epg_hurriyet_trt_merged_TR.xml*
+          retention-days: 7
+          if-no-files-found: warn
+
   # Collect the per-provider guides and (re)publish them as assets on a
   # rolling "latest" release. Asset names are stable, so
   # .../releases/latest/download/<name> is a permanent raw URL for IPTV apps.
@@ -275,7 +366,7 @@ jobs:
   # providers that failed today keep yesterday's assets (replacesArtifacts
   # only replaces the files actually uploaded).
   publish:
-    needs: [scrape, epg-sports-merged]
+    needs: [scrape, epg-sports-merged, epg-trt-merged]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

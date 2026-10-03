@@ -113,7 +113,10 @@ Development tooling includes a static file server in
    and `buildDateRange()` date helper.
 8. `src/provider-catalog.js` — one authored inventory for registrations,
    effective country/language/time-zone metadata, reference coverage, daily
-   CI membership/arguments, and live/CI sports profiles.
+   CI membership/arguments, and live/CI sports profiles. It also owns
+   `COMMAND_PROFILES` (a published merged feed = input guides in precedence
+   order + `exclusiveChannels` + output name) and `profileInputFiles()`, which
+   resolves a profile to the guide files its inputs are scraped to.
 9. `src/xmltv.js` — XMLTV document writer (`generateXmltv` → string, `writeXmltv` → file),
    XML escaping, plus the reader (`parseXmltv` ← string, `readXmltvFile` ←
    `.xml`/`.xml.gz`) so already-scraped guides can be reused without live
@@ -134,6 +137,26 @@ Development tooling includes a static file server in
       option.  Default `politenessDelayMs` is 500 (vs hurriyet's 250)
       because a full run is ~90 channel pages per day (~260 requests for 3
       days).
+    - `trt.js` — TRT Yayın Akışı (`trthaber.com`): the 11 TRT channels
+      (TRT 1, TRT 2, TRT Haber, TRT Spor, TRT Spor Yıldız, TRT Belgesel,
+      TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî), one static SSR
+      page per channel **and** date
+      (`/yayin-akisi/{channel}/{DD-MM-YYYY}`, plain HTTP, no JS/API/login).
+      Unlike hurriyet it is **per-date, not week-shaped** — any date serves
+      (past and future), so the requested window is honoured as given and
+      `--days-back` works; the index publishes today..+6, the default CLI
+      window, and is also the only place the per-channel logos
+      (`kanal-logo/…`) are published. `parseServedDate()` verifies each page's
+      `<title>` against the request and skips a mismatch instead of misdating
+      it (channels are published at different times, so a channel's "tomorrow"
+      can 404 in the morning). `parseDayPage()` reads the `epg-list` items,
+      `parseChannelLogos()` the index cards, `dayPageUrl()`/`daySlug()` the
+      URL shape. Ids are normalized to the epgshare01 reference (diacritics
+      kept — `TRT.ÇOCUK.tr`, `TRT.KURDİ.tr`; TRT Avaz is HD-only upstream);
+      `TRT.2.tr` and `TRT.SPOR.YILDIZ.tr` are recorded in the snapshot's
+      `knownGaps`. Stops chain from the next slot (24:00 for the last one).
+      Authoritative for every TRT channel, which is why the merged
+      `hurriyetTrt` feed lists it first. Browser-compatible (GET pages only).
     - `tvplus.js` — TV+ (Turkcell) Yayın Akışı: a **plain-HTTP JSON API**
       provider (16 channels incl. TRT Spor/Yıldız, A Spor, HT Spor, FB TV,
       tabii spor, S Sport 1/2, Eurosport 1/2, Sports TV, TRT 1, ATV, TV8,
@@ -274,12 +297,21 @@ full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
 `tivibu` adds Tivibu Spor 1-4; `idmantv` adds İdman TV (an Azerbaijani
 charter, not in the epgshare01 reference).
 Exxen stays login-walled and the rest are platform-exclusive feeds.
-14. `src/merge.js` — `mergeResults(results, canonicalize?)` combines N
+14. `src/merge.js` — `mergeResults(results, canonicalize?, options?)` combines N
     providers into one guide: channels unioned by (canonical) id (first
     provider's name wins; missing icon/url backfilled from later
     providers), programmes
     unioned + deduped, conflicting slots resolved first-provider-wins (the
     order in `--provider a,b,c` sets the precedence).
+    `{ exclusiveChannels: true }` (CLI `--exclusive-channels`) makes it a
+    handover instead of a union: the first provider that lists a channel id
+    owns it, and later providers' slots for it are dropped and counted in
+    `shadowed` (channels are still unioned, so logos backfill). That is what
+    the `hurriyetTrt` profile uses so the TRT channels come only from TRT.
+    The published merged feeds are plain `--merge --from` runs (no wrapper
+    script): each CI merge job checks which downloaded artifacts survived,
+    warns about the rest, and hands the survivors to the CLI in
+    `COMMAND_PROFILES` precedence order, which `--from` resolves strictly.
 15. `src/m3u/` — the `--m3u` playlist builder: a **standalone** module tree
     with its own result shape, writer and tests. It imports **nothing** from
     `model.js`, `xmltv.js`, `merge.js`, `compare.js`, `providers/` or
@@ -309,7 +341,8 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       `group-title` (Turkish labels that outrank the sources' own), permanent
       `tvg-id`, and display `name` (pinned to the EPG guide's spelling).  Also
       exports `EPG_NAME_CONTRACT` (the three EPG-matching renames) and
-      `CATALOG_EPG_GAPS` (channels with no programme data).
+      `CATALOG_EPG_GAPS` (channels with no programme data — only `TRT 4K` now;
+      `TRT Haber` is served by both the `trt` and `mynet` guides).
 16. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
@@ -338,6 +371,9 @@ the dependency chain flows upward: providers → catalog/registry/http/xmltv/mod
 - **Merge (`--merge`)** — scrapes every listed provider and writes ONE guide
   (`epg_merged_<COUNTRY>.xml[.gz]`); country and language follow the first
   provider. The first provider wins conflicts, later ones fill the gaps.
+  `--exclusive-channels` makes it a handover instead of a union: the first
+  provider that lists a channel owns it and later providers contribute nothing
+  for it (the TRT-first merged feed uses this).
   With `--from a.xml.gz,b.xml.gz`, no server is hit: already-scraped guides
   are merged offline (file order sets precedence). The reader preserves the
   first valid input guide language, so Swedish files stay `lang="sv"`;
@@ -472,6 +508,9 @@ npm run test:watch          # interactive vitest mode
 npm run inventory           # print the authored provider/CI inventory
 npm run scrape              # live scrape (hurriyet, 7 days)
 npm run scrape:gz           # same, gzip output
+npm run merge:sports          # offline merge -> epg_sports_merged_TR.xml.gz
+npm run merge:hurriyet-trt    # offline merge -> epg_hurriyet_trt_merged_TR.xml.gz
+node scripts/build-release-notes.js --guides guide --date YYYY-MM-DD  # release body
 npm run install:playwright  # install Chromium browser binary for --browser mode
 npm run check:browser       # verify Playwright is installed (exit 0 = ready)
 node bin/epg-scraper.js --help
@@ -517,7 +556,9 @@ node bin/epg-scraper.js --list-providers
   reference playlists.
   `test/reference.test.mjs` — provider id normalization against
   the vendored per-country epgshare01 snapshots (TR + SE; no network — see
-  below).
+  below); `test/release-notes.test.mjs` — the release-note builder (one section
+  per provider *and* per merged guide, each resolved from its
+  `COMMAND_PROFILES` entry).
 
 ### Channel-id reference snapshots (keep ≤ 7 days fresh)
 
