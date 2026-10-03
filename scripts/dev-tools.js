@@ -23,6 +23,7 @@
  *   CHROME_DEBUG_HOST    CDP bind address (default 127.0.0.1)
  *   CHROME_DEBUG_PORT    CDP port (default 9222)
  *   CHROME_CACHE_DIR     browser binary/profile cache (default ~/.cache/ms-playwright)
+ *   SERVER_HOST          static server bind address (default 127.0.0.1)
  *   SERVER_PORT          static server port (default 8080)
  *   SERVER_ROOT          static server document root (default project root)
  */
@@ -38,13 +39,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const HOST = '127.0.0.1';
 const STATE_DIR = process.env.DEV_STATE_DIR ||
   path.join(os.homedir(), '.cache', 'epg-scraper');
 const CHROME_CACHE = process.env.CHROME_CACHE_DIR ||
   path.join(os.homedir(), '.cache', 'ms-playwright');
 const CHROME_HOST = process.env.CHROME_DEBUG_HOST || '127.0.0.1';
 const CHROME_PORT = parseInt(process.env.CHROME_DEBUG_PORT || '9222', 10);
+const SERVER_HOST = process.env.SERVER_HOST || '127.0.0.1';
 const SERVER_PORT = parseInt(process.env.SERVER_PORT || '8080', 10);
 const SERVER_ROOT = process.env.SERVER_ROOT || ROOT;
 
@@ -102,13 +103,14 @@ const SERVICES = {
     tag: '[server]',
     desc: 'static file server for EPG output and test fixtures',
     endpoints: () => [
-      { name: 'http', url: 'http://' + HOST + ':' + SERVER_PORT + '/', kind: 'http' },
+      { name: 'http', url: 'http://' + SERVER_HOST + ':' + SERVER_PORT + '/', kind: 'http' },
     ],
     spawn: async () => ({
       file: process.execPath,
       args: ['scripts/scraper-server.js'],
       cwd: ROOT,
       env: Object.assign({}, process.env, {
+        SERVER_HOST: SERVER_HOST,
         SERVER_PORT: String(SERVER_PORT),
         SERVER_ROOT: SERVER_ROOT,
       }),

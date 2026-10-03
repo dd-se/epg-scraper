@@ -11,6 +11,7 @@
  *   # (normally launched via: node scripts/dev-tools.js start server)
  *
  * Config (env):
+ *   SERVER_HOST    listen address (default 127.0.0.1; set 0.0.0.0 to share)
  *   SERVER_PORT    listen port (default 8080)
  *   SERVER_ROOT    document root (default project root)
  */
@@ -24,7 +25,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const HOST = '127.0.0.1';
+const HOST = process.env.SERVER_HOST || '127.0.0.1';
 const PORT = parseInt(process.env.SERVER_PORT || '8080', 10);
 const DOCROOT = process.env.SERVER_ROOT || ROOT;
 
@@ -35,6 +36,8 @@ const MIME = {
   '.css':  'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.xml':  'application/xml; charset=utf-8',
+  '.m3u':  'audio/x-mpegurl',
+  '.m3u8': 'application/vnd.apple.mpegurl',
   '.gz':   'application/gzip',
   '.png':  'image/png',
   '.svg':  'image/svg+xml',
