@@ -59,7 +59,10 @@ export const CHANNEL_CATALOG = [
   // Eğlence / çocuk
   { pattern: 'TRT 4K', id: 'trt4k.tr', group: 'ULUSAL', note: '4K simulcast (E1: separate from TRT 1)' },
   { pattern: 'TRT Çocuk', id: 'trtcocuk.tr', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Minik Go', id: 'minikgo.tr', group: 'ÇOCUK', note: 'children' },
+  // Every source spells it `Minika Go` (and `MINIKA GO HD`), never `Minik Go`:
+  // a pattern has to be the spelling the matcher can reach, or this channel is
+  // silently dropped. `Minika Go*` also takes the HD-dated row.
+  { pattern: 'Minika Go*', id: 'minika.go.tr', group: 'ÇOCUK', note: 'children' },
   { pattern: 'Baby TV', id: 'babytv.tr', group: 'ÇOCUK', note: 'children' },
   { pattern: 'Cartoon Network', id: 'cartoonnetwork.tr', group: 'ÇOCUK', note: 'children' },
   { pattern: 'Nickelodeon', id: 'nickelodeon.tr', group: 'ÇOCUK', note: 'children' },
