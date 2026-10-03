@@ -1141,11 +1141,11 @@ so the two never write the release at once — and it only (re)places the
 guide workflow's release name, notes and `epg_*.xml.gz` assets untouched. The
 playlist is validated (`#EXTM3U` header plus at least one `#EXTINF`) before it
 can replace the asset, and a build that fails all three attempts leaves
-yesterday's playlist live. The current published playlist is also **checked in**
-at [`playlist.m3u`](playlist.m3u), so the file the app consumes is reviewable in
-a diff rather than only in a release asset — it is the one scraper output that
-is committed on purpose. Both workflows are also dispatchable by hand from the
-Actions tab.
+yesterday's playlist live. `playlist.m3u` itself is gitignored — it is a build
+output, not a checked-in snapshot — so to review a change, regenerate it
+locally with `node bin/epg-scraper.js --m3u m3u.config.json --m3u-out
+playlist.m3u --m3u-report m3u-report.json`. Both workflows are also
+dispatchable by hand from the Actions tab.
 
 ### Using the guide in an IPTV app
 

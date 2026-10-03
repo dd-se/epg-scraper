@@ -676,11 +676,12 @@ translate Swedish categories into Turkish.
 - One logical change per commit.  Inspect `git status` and `git diff`
   first; stage only the files that belong to the change.
 - Never commit: secrets/API keys, scratch files, or scraper output
-  (`epg_*.xml`, `epg_*.xml.gz`, `m3u-report.json` — already gitignored).
-  `playlist.m3u` is the deliberate exception: it is the published artifact a
-  consuming player reads, so the current snapshot is checked in. Regenerate it
-  with `node bin/epg-scraper.js --m3u m3u.config.json --m3u-out playlist.m3u
-  --m3u-report m3u-report.json` and commit the result when the sources change.
+  (`epg_*.xml`, `epg_*.xml.gz`, `playlist.m3u`, `m3u-report.json` — all
+  already gitignored). `playlist.m3u` is rebuilt and published by the
+  `m3u-scraper` workflow as a release asset, so there is no snapshot to keep
+  in the repository; review a change to it by regenerating locally with
+  `node bin/epg-scraper.js --m3u m3u.config.json --m3u-out playlist.m3u
+  --m3u-report m3u-report.json`.
 - Run `npm test` before committing; a red suite means the change is not
   done.
 - Only commit lockfile changes when dependencies actually changed.
