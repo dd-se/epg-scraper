@@ -9,6 +9,11 @@
       "id": "hayati-tr",
       "name": "hayatiptv (TR)",
       "url": "https://raw.githubusercontent.com/hayatiptv/iptv/refs/heads/master/BDNLTR.m3u"
+    },
+    {
+      "id": "freetvgarden-tr",
+      "name": "freetvgarden (TR)",
+      "url": "https://raw.githubusercontent.com/abhijeet620380/freetvgarden-data-v2/main/iptv/countries/tr.m3u"
     }
   ],
   "style": "none",
