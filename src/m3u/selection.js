@@ -11,7 +11,7 @@
 // never come along.  Editions are opted into with `ATV*` or an explicit
 // `"ATV Alanya"`.
 
-import { idKey, normalizeName, stripResolution } from './identity.js';
+import { foldDiacritics, idKey, normalizeName, stripResolution } from './identity.js';
 
 /**
  * Compile one glob into an anchored, case-insensitive matcher.
@@ -25,6 +25,12 @@ import { idKey, normalizeName, stripResolution } from './identity.js';
  * form is `ATV ALANYA`, which `* Alanya *` can never reach.  Trimming keeps
  * the example working and is still strictly narrower than substring matching:
  * `ATV` remains an exact match and never selects `ATV Alanya`.
+ *
+ * Each literal segment is also run through `foldDiacritics()`, the same fold
+ * the selection forms get.  The catalog requests channels by their real
+ * spelling (`TRT Çocuk`) while the sources publish ASCII (`TRT Cocuk`); without
+ * folding the pattern it could never reach the folded form, silently dropping
+ * the channel and its declared id/group.
  */
 export function globToMatcher(pattern) {
   const text = String(pattern == null ? '' : pattern);
@@ -42,7 +48,7 @@ export function globToMatcher(pattern) {
     // have. Trimming per segment (not just the whole pattern) is what makes
     // the documented `"exclude": ["* Alanya *"]` work at all.
     .map((part) =>
-      part
+      foldDiacritics(part)
         .trim()
         .replace(/\s+/g, ' ')
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')

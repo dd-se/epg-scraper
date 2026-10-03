@@ -43,17 +43,32 @@ const DIACRITIC_FOLD = {
 };
 
 /**
+ * NFKC-fold a string and map the Turkish diacritics channel names actually use
+ * to their ASCII base letters (case-insensitively).
+ *
+ * Kept separate from `normalizeName()` and exported because the selection
+ * matcher folds a *pattern* with it too: the curated catalog requests channels
+ * by their real spelling (`TRT Çocuk`), while the sources publish the ASCII
+ * form (`TRT Cocuk`).  If only the channel form were folded, that pattern could
+ * never match and the channel — and its declared id/group — would be dropped.
+ * Unlike `normalizeName()` this preserves punctuation and whitespace, so a
+ * glob's `*`/`?`/spaces survive to be compiled.
+ */
+export function foldDiacritics(value) {
+  return String(value == null ? '' : value)
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/[ÇĞİÖŞÜÂÎÛçğıöşüâîû]/g, (ch) => DIACRITIC_FOLD[ch] || ch);
+}
+
+/**
  * Canonical comparison form: NFKC-folded, uppercased, Turkish diacritics
  * mapped to ASCII, every non-alphanumeric run collapsed to a single space,
  * trimmed.  Turkish case folding matters — `Çocuk`/`çocuk` and `Kanal Çocuk`
  * vs `KANAL COCUK` must land on the same key across sources.
  */
 export function normalizeName(value) {
-  const folded = String(value == null ? '' : value)
-    .normalize('NFKC')
-    .toUpperCase()
-    .replace(/[ÇĞİÖŞÜÂÎÛçğıöşüâîû]/g, (ch) => DIACRITIC_FOLD[ch] || ch);
-  return folded
+  return foldDiacritics(value)
     .replace(/[^A-Z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -394,9 +409,15 @@ export function applyNamingStyle(groups, style = 'numbered', options = {}) {
   const uniqueId = (candidate) => {
     let id = candidate;
     let n = 1;
+    // Number the *first* free `.N` variant, not a fixed `.2`: a source id can
+    // collide more than twice, and an id with no `.[a-z]{2}` suffix (169 of the
+    // reference sources' ids are like `famelack-x1Y2`) has nothing for the
+    // replace below to anchor on, so it would loop forever re-deriving itself.
+    const variant = (k) =>
+      /(\.[a-z]{2})$/i.test(candidate) ? candidate.replace(/(\.[a-z]{2})$/i, `.${k}$1`) : `${candidate}.${k}`;
     while (usedIds.has(id.toLowerCase())) {
       n += 1;
-      id = candidate.replace(/(\.[a-z]{2})$/i, `.${n}$1`);
+      id = variant(n);
     }
     usedIds.add(id.toLowerCase());
     return id;

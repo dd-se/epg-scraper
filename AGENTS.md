@@ -323,12 +323,16 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       `/([A-Za-z0-9_-]+)="([^"]*)"/g` is quadratic on quote-free input (a 100 KB
       junk line measured **11.9 s** — a remote DoS), so it is banned here and
       pinned by a timing regression test.
-    - `identity.js` — `normalizeName()` (folds Turkish diacritics to ASCII),
-      `channelKeys()`, `groupEntries()` (union-find), `normalizeStreamUrl()`,
-      `collapseIdenticalFeeds()`, `unifyGroupTitles()`, `applyNamingStyle()`,
-      `expandYedek()`, `applyMaxCopies()`, `baseDisplayName()`.
+    - `identity.js` — `foldDiacritics()` (NFKC + uppercase + Turkish-diacritic
+      folding to ASCII, shared with the selection matcher), `normalizeName()`
+      (adds the alphanumeric collapse), `channelKeys()`, `groupEntries()`
+      (union-find), `normalizeStreamUrl()`, `collapseIdenticalFeeds()`,
+      `unifyGroupTitles()`, `applyNamingStyle()`, `expandYedek()`,
+      `applyMaxCopies()`, `baseDisplayName()`.
     - `selection.js` — `globToMatcher()` (anchored `*`/`?` only, no user
-      regex), `selectionForms()`, `selectEntries()`.
+      regex; each literal segment is folded with `foldDiacritics()` so a
+      pattern written in its real spelling matches the folded form),
+      `selectionForms()`, `selectEntries()`.
     - `writer.js` — `generateM3U()`/`writeM3U()`, mirroring `src/xmltv.js`.
       M3U has no escape syntax, so the writer *removes* a comma from a display
       name (it would re-read as the separator), a quote, and any CR/LF — while

@@ -506,7 +506,9 @@ node bin/epg-scraper.js --m3u m3u.config.json --m3u-want "ATV*,Show Turk"
 
 Patterns are **anchored globs** (`*`, `?`, case-insensitive), matched against
 four normalized forms of a channel — its `tvg-id`, `tvg-name`, resolution-
-stripped display name and `group-title` — never the raw decorated name:
+stripped display name and `group-title` — never the raw decorated name. The
+pattern is folded the same way the forms are (Turkish diacritics to ASCII), so
+the catalog's real spelling `TRT Çocuk` matches a source's ASCII `TRT Cocuk`:
 
 ```bash
 --m3u-want "ATV"          # exactly ATV — never ATV Alanya / ATV Avrupa
