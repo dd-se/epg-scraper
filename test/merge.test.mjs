@@ -146,6 +146,57 @@ describe('mergeResults', () => {
     expect(merged.programmes.map((p) => p.title)).toEqual(['From Hurriyet', 'From Mynet']);
   });
 
+  it('leaves channel ids that collide with Object.prototype keys untouched', () => {
+    // Regression: the canonicalizer used `id in map`, which also matches
+    // inherited keys, so `constructor` resolved to Object.prototype.constructor
+    // (a function). mergeResults then rejected the non-string id and silently
+    // dropped the channel *and* every programme on it. Own-property lookup only.
+    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'A.HABER.tr' });
+    const protoKeys = ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty'];
+    const merged = mergeResults(
+      [
+        {
+          channels: protoKeys.map((id) => ({ id, name: id })),
+          programmes: protoKeys.map((id) => ({
+            channel: id,
+            start: '2026-09-07T15:00:00+03:00',
+            stop: '2026-09-07T16:00:00+03:00',
+            title: `On ${id}`,
+          })),
+        },
+      ],
+      canonicalize
+    );
+    expect(merged.channels.map((c) => c.id)).toEqual(protoKeys);
+    expect(merged.programmes.map((p) => p.channel)).toEqual(protoKeys);
+  });
+
+  it('canonicalizes through an alias map with prototype keys as real entries', () => {
+    // An alias map may legitimately alias one of those names; an own entry must
+    // still win, and must not send resolution off the prototype chain.
+    const canonicalize = createCanonicalizer({ constructor: 'ATV.tr', toString: 'TRT.1.tr' });
+    expect(canonicalize('constructor')).toBe('ATV.tr');
+    expect(canonicalize('toString')).toBe('TRT.1.tr');
+    expect(canonicalize('__proto__')).toBe('__proto__');
+    expect(canonicalize('valueOf')).toBe('valueOf');
+  });
+
+  it('still resolves transitively and terminates on a cycle', () => {
+    const canonicalize = createCanonicalizer({ 'A.tr': 'B.tr', 'B.tr': 'C.tr', 'X.tr': 'Y.tr', 'Y.tr': 'X.tr' });
+    expect(canonicalize('A.tr')).toBe('C.tr');
+    expect(canonicalize('B.tr')).toBe('C.tr');
+    // A cycle resolves to a member of the cycle rather than looping forever.
+    expect(['X.tr', 'Y.tr']).toContain(canonicalize('X.tr'));
+    // An id that is absent is returned unchanged.
+    expect(canonicalize('ATV.tr')).toBe('ATV.tr');
+  });
+
+  it('ignores non-string alias targets instead of returning an object as an id', () => {
+    const canonicalize = createCanonicalizer({ 'A.tr': { nested: 'B.tr' }, 'B.tr': 42 });
+    expect(canonicalize('A.tr')).toBe('A.tr');
+    expect(canonicalize('B.tr')).toBe('B.tr');
+  });
+
   it('keeps conflicting slots from the first provider (precedence)', () => {
     // The XMLTV writer dedupes (channel, start, stop) keeping the first
     // occurrence, so the merge preserves both titles in order and lets the

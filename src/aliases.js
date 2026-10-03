@@ -33,11 +33,22 @@ export function loadAliasMap(filePath) {
 // Resolution is transitive: { A: B, B: C } collapses A and B onto C so a
 // chain of aliases converges on one id.  A cycle ({ A: B, B: A }) terminates
 // by returning the first id already visited — never an infinite loop.
+//
+// The lookup must be an **own**-property check.  `id in map` also matches
+// Object.prototype keys, so a channel id like `constructor`, `toString` or
+// `__proto__` resolved to the inherited *function/object* instead of its own
+// name; merge then rejected the non-string id and silently dropped the channel
+// and all of its programmes.  Object.hasOwn keeps every id that is not a
+// genuine entry in the map itself.
 export function createCanonicalizer(aliasMap) {
   const map = aliasMap || {};
+  const has = (id) =>
+    (typeof id === 'string' || typeof id === 'number') &&
+    Object.prototype.hasOwnProperty.call(map, id) &&
+    typeof map[id] === 'string';
   return (id) => {
     const visited = new Set();
-    while (id in map && !visited.has(id)) {
+    while (has(id) && !visited.has(id)) {
       visited.add(id);
       id = map[id];
     }
