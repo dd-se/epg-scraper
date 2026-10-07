@@ -211,7 +211,7 @@ jobs:
       - name: Download sports guides
         id: download
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: epg-*
           merge-multiple: true
@@ -296,7 +296,7 @@ jobs:
       - name: Download TRT + Hürriyet guides
         id: download
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: epg-*
           merge-multiple: true
@@ -384,7 +384,7 @@ jobs:
       - name: Download guides
         id: download
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: epg-*
           merge-multiple: true
