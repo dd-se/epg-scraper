@@ -25,6 +25,9 @@
 # - The committed config enables the liveness probe (3 retries with linear
 #   backoff), so streams that don't answer are dropped before publish.
 # - A failed build leaves the previous release asset untouched.
+# - Any failed run POSTs one alert to an ntfy topic from the trailing `notify`
+#   job (priority high); a green run sends nothing. See the README's
+#   "Failure alerts" section and the `NTFY_TOPIC` secret.
 
 name: m3u-scraper
 
@@ -238,3 +241,82 @@ jobs:
           omitNameDuringUpdate: true
           omitBodyDuringUpdate: true
           artifacts: dist/playlist.m3u
+
+  # Failure-only status alert, POSTed to an ntfy topic. Both jobs are in
+  # `needs`, so the alert covers the build as well as the publish — the
+  # publish job runs with `if: !cancelled()` precisely so this one can report
+  # a failed build instead of being skipped by it.
+  #
+  # `!cancelled() && failure()` is the pair that matters: `failure()` gates
+  # the message on a real failure, and the `cancelled()` check both keeps a
+  # manually aborted run silent and is a status function, so this job still
+  # *starts* even when an upstream job was skipped because an earlier one
+  # failed (a job whose needs were skipped is skipped itself otherwise).
+  #
+  # Alert level is `high`, not `urgent`: the playlist has a longer cadence
+  # than the daily guides and a failed build leaves yesterday's asset live,
+  # so it needs attention today rather than at 3 a.m. Tags
+  # `warning,rotating_light` mark it as a siren. The alert step is
+  # deliberately *not* failure-proof — if ntfy is unreachable this job goes
+  # red, because a silently dead notification path is worse than one extra
+  # red job on an already-red run.
+  #
+  # Secrets, never literals:
+  #   NTFY_TOPIC  — the topic name. It is the read credential for ntfy.sh
+  #                 (anyone who knows a public topic can subscribe to it), so
+  #                 it stays out of the file and out of the logs: the step
+  #                 echoes the server but never the topic. Set NTFY_SERVER as
+  #                 a repo *variable* if you self-host instead.
+  notify:
+    needs: [build, publish]
+    if: ${{ !cancelled() && failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send failure alert to ntfy
+        env:
+          NTFY_SERVER: https://ntfy.sh
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # A missing secret must fail loudly here rather than POSTing to a
+          # guessed topic (or to bare "/"), which would silently drop alerts.
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::error::NTFY_TOPIC secret is not set — cannot send the alert. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          # Needs results are our own workflow data (never scraped input), so
+          # the JSON travels through the environment instead of being built
+          # into a command line. Node (not jq) keeps this to the one tool the
+          # workflows already use.
+          failed=$(NEEDS_JSON='${{ toJSON(needs) }}' node -e '
+            const needs = JSON.parse(process.env.NEEDS_JSON || "{}");
+            const rows = Object.entries(needs)
+              .filter(([, job]) => job.result !== "success")
+              .map(([name, job]) => `  - ${name}: ${job.result}`);
+            process.stdout.write(rows.join("\n"));
+          ')
+          [ -n "$failed" ] || failed='  - <none reported>'
+          body=$(printf '%s\n' \
+            "$GITHUB_WORKFLOW failed" \
+            "" \
+            "Run:     $RUN_URL" \
+            "Branch:  $GITHUB_REF_NAME @ ${GITHUB_SHA::7}" \
+            "Trigger: $GITHUB_EVENT_NAME (by $GITHUB_ACTOR)" \
+            "" \
+            "Failed / skipped jobs:" \
+            "$failed")
+          echo "::group::ntfy alert"
+          printf '%s\n' "$body"
+          echo "::endgroup::"
+          # The topic is passed as a variable, so it never appears in `ps` or
+          # in a shell trace.
+          curl --fail-with-body --silent --show-error \
+            --max-time 20 --retry 3 --retry-delay 5 \
+            -H "Title: $GITHUB_WORKFLOW failed" \
+            -H "Priority: high" \
+            -H "Tags: warning,rotating_light" \
+            -H "Click: $RUN_URL" \
+            --data-binary "$body" "$NTFY_SERVER/$NTFY_TOPIC"
+          echo "Alert delivered to $NTFY_SERVER/<redacted topic> (priority high)"

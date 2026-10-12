@@ -1129,6 +1129,36 @@ merge and publish whatever guides survived — guides are validated
 (size, gzip integrity, `<tv>` root) before they can overwrite the release,
 and a run with zero valid guides leaves the previous release untouched.
 
+### Failure alerts (ntfy)
+
+Both workflows end in a `notify` job that runs **only when the run failed**
+(`if: ${{ !cancelled() && failure() }}` — so a green run stays silent and a
+manually aborted run is never announced). It POSTs one message per failed run
+to an ntfy topic at priority `high` (4), tagged `warning,rotating_light`, with
+a `Click` header that deep-links straight to the failed run, and lists which
+jobs failed or were skipped. Subscribe in the ntfy app or web UI to the topic
+named in the `NTFY_TOPIC` secret.
+
+Two deliberate choices:
+
+- **Priority `high`, not `urgent`.** A flapping source needs attention today,
+  but the run still publishes every guide that survived and yesterday's
+  release assets stay live for the rest — that is not a 3 a.m. emergency.
+  `urgent` (5) is reserved for real outages.
+- **The topic is a secret, not a literal.** On ntfy.sh the topic *name* is the
+  read credential — anyone who knows it can subscribe — so it lives in the
+  `NTFY_TOPIC` repository secret, never in the workflow. The step echoes the
+  server but never the topic, and passes it as a variable so it cannot leak
+  into `ps` or a shell trace. A missing secret fails the step with an explicit
+  `::error::` instead of silently posting to a guessed topic.
+
+Setup: Settings → Secrets and variables → Actions → add `NTFY_TOPIC` with your
+topic name. Edit `NTFY_SERVER` in the workflow to point at your own host if you
+self-host instead of ntfy.sh. The alert step is intentionally *not*
+failure-tolerant: if ntfy is unreachable the `notify` job goes red, because a
+silently dead notification path is worse than one extra red job on a run that
+is already red.
+
 `.github/workflows/m3u-scraper.yml` is the playlist counterpart: it builds the
 merged IPTV playlist from the committed `m3u.config.json` every third-ish day
 (06:20 UTC, a deliberately different clock from the guide scrape's 00:30 UTC),
