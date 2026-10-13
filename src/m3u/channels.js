@@ -111,8 +111,10 @@ export const EPG_NAME_CONTRACT = [
  * Every entry was verified against a live run of the broad Turkish guides
  * (hürriyet, mynet, tvplus): the channel is absent from their channel lists
  * altogether, not merely spelled differently.  A per-provider breakdown of each
- * gap is tracked as a research note; give any of these channels a real guide id
- * and its entry goes with it.
+ * gap lives in `docs/research/channels-without-guides.md`, which also records
+ * the two entries (Baby TV, Discovery Channel) that mynet *does* serve through
+ * the generic slug and that are therefore false until curated; give any of
+ * these channels a real guide id and its entry goes with it.
  */
 export const CATALOG_EPG_GAPS = [
   { id: 'showturk.tr', name: 'Show Turk', reason: 'no guide lists Show Türk; the guides carry neither spelling' },
