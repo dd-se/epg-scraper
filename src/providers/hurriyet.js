@@ -11,7 +11,7 @@
 // since 2016, so the provider emits a single +03:00 offset.
 
 import { decodeEntities } from '../entities.js';
-import { channelIdFromName } from '../slug.js';
+import { channelIdFromName, foldChannelId } from '../slug.js';
 import { fetchText, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
@@ -35,48 +35,49 @@ export const DAY_SLUGS = [
   'cumartesi',
   'pazar',
 ];
-// Curated channel-id map: epgshare01-compatible ids for the channels that do
+// Curated channel-id map: ids for the channels that do
 // not survive the generic slug rule (case-sensitive ids, aliases, HD
 // suffixes). Keys are normalized (uppercase, whitespace collapsed).
-// Exported so test/reference.test.mjs can enforce that every value exists
-// in the vendored epgshare01 snapshot (test/fixtures/epgshare01/).
+// Ids are authored in final form: ASCII, Turkish diacritics folded, no
+// separators, `.tr` (see src/slug.js).
 export const CHANNEL_ID_MAP = {
-  'KANAL D': 'KANAL.D.tr',
-  'CNN TÜRK': 'CNN.TÜRK.tr',
-  'STAR TV': 'STAR.TV.tr',
-  'SHOW TV': 'SHOW.TV.tr',
+  'KANAL D': 'KANALD.tr',
+  'CNN TÜRK': 'CNNTURK.tr',
+  'STAR TV': 'STARTV.tr',
+  'SHOW TV': 'SHOWTV.tr',
   'ATV': 'ATV.tr',
-  'TRT 1': 'TRT.1.tr',
-  'TRT 3 - SPOR': 'TRT.SPOR.tr',
-  'TRT SPOR': 'TRT.SPOR.tr',
-  // Station aliases: the source of truth (epgshare01) lists these stations
-  // under one id — NOW is the FOX rebrand, TV2 shares teve2's logo/feed.
-  'NOW': 'FOX.tr',
+  'TRT 1': 'TRT1.tr',
+  'TRT 3 - SPOR': 'TRTSPOR.tr',
+  'TRT SPOR': 'TRTSPOR.tr',
+  // Station aliases: these stations are published under one id — NOW is the
+  // FOX rebrand (its id follows the current name, like the playlist's
+  // `nowtv.tr`), TV2 shares teve2's logo/feed.
+  'NOW': 'NOWTV.tr',
   'TV2': 'TEVE2.tr',
   'TV8': 'TV8.tr',
   '360': '360.tr',
-  'BLOOMBERG HT': 'BLOOMBERG.HT.tr',
-  'A HABER': 'A.HABER.tr',
-  'KANAL 7': 'KANAL.7.tr',
-  '24 TV': '24.TV.tr',
-  'HABERTÜRK': 'HABERTÜRK.tr',
-  'BEYAZ TV': 'BEYAZ.TV.tr',
-  'SİNEMA TV': 'SİNEMA.TV.HD.tr',
-  'EUROSPORT 1': 'EUROSPORT.1.HD.tr',
-  'EUROSPORT 2 INT': 'EUROSPORT.2.TR.HD.tr',
-  'NATIONAL GEOGRAPHIC': 'NATIONAL.GEOGRAPHIC.tr',
-  // Map KEYS are normalized (uppercased) by mapChannelId; VALUES keep the
-  // exact mixed-case spelling the epgshare01 convention uses.
-  'BEIN SPORTS 1': 'beIN.SPORTS.1.tr',
-  'BEIN SPORTS 3': 'beIN.SPORTS.3.tr',
-  'SPORTS TV': 'SPORTS.TV.tr',
+  'BLOOMBERG HT': 'BLOOMBERGHT.tr',
+  'A HABER': 'AHABER.tr',
+  'KANAL 7': 'KANAL7.tr',
+  '24 TV': '24TV.tr',
+  'HABERTÜRK': 'HABERTURK.tr',
+  'BEYAZ TV': 'BEYAZTV.tr',
+  'SİNEMA TV': 'SINEMATVHD.tr',
+  'EUROSPORT 1': 'EUROSPORT1.tr',
+  'EUROSPORT 2 INT': 'EUROSPORT2.tr',
+  'NATIONAL GEOGRAPHIC': 'NATIONALGEOGRAPHIC.tr',
+  // Map KEYS are normalized (uppercased) by mapChannelId; VALUES keep their
+  // case (the `beIN` brand token stays lowercase-mixed).
+  'BEIN SPORTS 1': 'beINSPORTS1.tr',
+  'BEIN SPORTS 3': 'beINSPORTS3.tr',
+  'SPORTS TV': 'SPORTSTV.tr',
   'TLC': 'TLC.tr',
   'NTV': 'NTV.tr',
   'TEVE2': 'TEVE2.tr',
   'DMAX': 'DMAX.tr',
-  'CARTOON NETWORK': 'CARTOON.NETWORK.tr',
-  'TRT BELGESEL': 'TRT.BELGESEL.tr',
-  'DISNEY JUNIOR': 'DISNEY.JUNIOR.tr',
+  'CARTOON NETWORK': 'CARTOONNETWORK.tr',
+  'TRT BELGESEL': 'TRTBELGESEL.tr',
+  'DISNEY JUNIOR': 'DISNEYJUNIOR.tr',
 };
 
 // data-type attribute -> XMLTV category label.
@@ -98,7 +99,7 @@ export function normalizeChannelKey(name) {
 }
 
 export function mapChannelId(name) {
-  return CHANNEL_ID_MAP[normalizeChannelKey(name)] || channelIdFromName(name);
+  return foldChannelId(CHANNEL_ID_MAP[normalizeChannelKey(name)] || channelIdFromName(name));
 }
 
 export function dayPageUrl(slug) {

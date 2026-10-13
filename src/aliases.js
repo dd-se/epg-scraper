@@ -1,7 +1,7 @@
 // Optional channel-id alias map.
 //
 // Providers sometimes emit different XMLTV ids for the same channel — e.g.
-// hurriyet's curated "A.HABER.tr" vs mynet's generic-slug "AHABER.tr".  A
+// mynet's "FBTV.tr" vs tvplus's curated "FENERBAHCETV.tr".  A
 // JSON alias map { "aliasId": "canonicalId" } makes --compare and --merge
 // treat them as one channel.  Aliases are directional: the key is replaced,
 // the value is kept, and resolution is transitive so alias chains

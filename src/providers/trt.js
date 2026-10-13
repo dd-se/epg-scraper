@@ -18,12 +18,12 @@
 // <title>, so `parseServedDate()` verifies the response against the request
 // instead of trusting the URL.
 //
-// The 11 channels served are TRT's national lineup; ids are normalized to the
-// epgshare01 reference (epg_ripper_TR1.xml.gz), which keeps Turkish diacritics
-// (TRT.ÇOCUK.tr, TRT.KURDİ.tr), lists TRT Avaz HD-only, and has no TRT 2 entry
-// at all (acknowledged in reference.json knownGaps). Channels publish their
-// next day at different times of day, so a tomorrow page can 404 in the morning
-// — that degrades to a warning.
+// The 11 channels served are TRT's national lineup; ids are authored in this
+// project's format (src/slug.js): ASCII, Turkish diacritics folded
+// (TRT Çocuk -> TRTCOCUK.tr, TRT Kurdî -> TRTKURDI.tr), no separators, and TRT
+// Avaz kept HD-only (TRTAVAZHD.tr). Channels publish their next day at
+// different times of day, so a tomorrow page can 404 in the morning — that
+// degrades to a warning.
 //
 // Slots carry a start time only, so a programme's stop is derived from the next
 // slot (24:00 for the last one) — the mynet/beinsports/idmantv convention.
@@ -47,29 +47,29 @@ export { normalizeChannelKey };
 export const BASE_URL = 'https://www.trthaber.com';
 export const INDEX_URL = `${BASE_URL}/yayin-akisi.html`;
 
-// Curated channel table: site slug, display name, epgshare01-compatible id.
+// Curated channel table: site slug, display name, XMLTV id.
 // The names are the site's own (page titles and card alts), which is what the
 // playlist consumer matches on after folding, so they are kept verbatim.
 export const CHANNELS = [
-  { slug: 'trt-1', name: 'TRT 1', id: 'TRT.1.tr' },
-  { slug: 'trt-2', name: 'TRT 2', id: 'TRT.2.tr' },
-  { slug: 'trt-haber', name: 'TRT Haber', id: 'TRT.HABER.tr' },
-  { slug: 'trt-spor', name: 'TRT Spor', id: 'TRT.SPOR.tr' },
+  { slug: 'trt-1', name: 'TRT 1', id: 'TRT1.tr' },
+  { slug: 'trt-2', name: 'TRT 2', id: 'TRT2.tr' },
+  { slug: 'trt-haber', name: 'TRT Haber', id: 'TRTHABER.tr' },
+  { slug: 'trt-spor', name: 'TRT Spor', id: 'TRTSPOR.tr' },
   // The site calls the second sports feed "TRT Spor 2" in its slug and "TRT
   // Spor Yıldız" in its title; upstream lists it as TRT Spor Yıldız.
-  { slug: 'trt-spor-2', name: 'TRT Spor Yıldız', id: 'TRT.SPOR.YILDIZ.tr' },
-  { slug: 'trt-belgesel', name: 'TRT Belgesel', id: 'TRT.BELGESEL.tr' },
-  { slug: 'trt-cocuk', name: 'TRT Çocuk', id: 'TRT.ÇOCUK.tr' },
-  { slug: 'trt-muzik', name: 'TRT Müzik', id: 'TRT.MÜZİK.tr' },
-  { slug: 'trt-turk', name: 'TRT Türk', id: 'TRT.TÜRK.tr' },
+  { slug: 'trt-spor-2', name: 'TRT Spor Yıldız', id: 'TRTSPORYILDIZ.tr' },
+  { slug: 'trt-belgesel', name: 'TRT Belgesel', id: 'TRTBELGESEL.tr' },
+  { slug: 'trt-cocuk', name: 'TRT Çocuk', id: 'TRTCOCUK.tr' },
+  { slug: 'trt-muzik', name: 'TRT Müzik', id: 'TRTMUZIK.tr' },
+  { slug: 'trt-turk', name: 'TRT Türk', id: 'TRTTURK.tr' },
   // Upstream lists TRT Avaz HD-only.
-  { slug: 'trt-avaz', name: 'TRT Avaz', id: 'TRT.AVAZ.HD.tr' },
-  { slug: 'trt-kurdi', name: 'TRT Kurdî', id: 'TRT.KURDİ.tr' },
+  { slug: 'trt-avaz', name: 'TRT Avaz', id: 'TRTAVAZHD.tr' },
+  { slug: 'trt-kurdi', name: 'TRT Kurdî', id: 'TRTKURDI.tr' },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that every
-// curated id exists in the vendored epgshare01 snapshot.  Keys are normalized
-// (uppercased, whitespace collapsed) so lookup is case/spacing-insensitive.
+// name -> XMLTV id.  Keys are normalized (uppercased, whitespace collapsed)
+// so lookup is case/spacing-insensitive; ids follow this project's format
+// (src/slug.js): ASCII, Turkish diacritics folded, no separators, `.tr`.
 export const CHANNEL_ID_MAP = Object.fromEntries(
   CHANNELS.map((c) => [normalizeChannelKey(c.name), c.id])
 );

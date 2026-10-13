@@ -54,28 +54,27 @@ export const BASE_URL = 'https://tvplus.com.tr';
 export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
 
 // Curated channel table: display name -> { tvId (TV+ numeric id), id (XMLTV
-// id normalized to the epgshare01 reference) }.
+// id, see src/slug.js for the format) }.
 export const CHANNELS = [
-  { name: 'TRT 1', tvId: '144', id: 'TRT.1.tr' },
-  { name: 'TRT Spor', tvId: '31', id: 'TRT.SPOR.tr' },
-  { name: 'TRT Spor Yıldız', tvId: '205', id: 'TRT.SPOR.YILDIZ.tr' },
-  { name: 'A Spor', tvId: '3', id: 'A.SPOR.tr' },
-  { name: 'HT Spor', tvId: '4396', id: 'HT.SPOR.tr' },
-  { name: 'FB TV', tvId: '148', id: 'FENERBAHÇE.TV.tr' },
-  { name: 'tabii spor', tvId: '4399', id: 'TABII.SPOR.tr' },
-  { name: 'S Sport', tvId: '11', id: 'SSport.tr' },
-  { name: 'S Sport 2', tvId: '170', id: 'SSport.2.tr' },
-  { name: 'Eurosport 1', tvId: '77', id: 'EUROSPORT.1.HD.tr' },
-  { name: 'Eurosport 2', tvId: '106', id: 'EUROSPORT.2.TR.HD.tr' },
-  { name: 'Sports TV', tvId: '173', id: 'SPORTS.TV.tr' },
+  { name: 'TRT 1', tvId: '144', id: 'TRT1.tr' },
+  { name: 'TRT Spor', tvId: '31', id: 'TRTSPOR.tr' },
+  { name: 'TRT Spor Yıldız', tvId: '205', id: 'TRTSPORYILDIZ.tr' },
+  { name: 'A Spor', tvId: '3', id: 'ASPOR.tr' },
+  { name: 'HT Spor', tvId: '4396', id: 'HTSPOR.tr' },
+  { name: 'FB TV', tvId: '148', id: 'FENERBAHCETV.tr' },
+  { name: 'tabii spor', tvId: '4399', id: 'TABIISPOR.tr' },
+  { name: 'S Sport', tvId: '11', id: 'SSPORT1.tr' },
+  { name: 'S Sport 2', tvId: '170', id: 'SSPORT2.tr' },
+  { name: 'Eurosport 1', tvId: '77', id: 'EUROSPORT1.tr' },
+  { name: 'Eurosport 2', tvId: '106', id: 'EUROSPORT2.tr' },
+  { name: 'Sports TV', tvId: '173', id: 'SPORTSTV.tr' },
   { name: 'ATV', tvId: '124', id: 'ATV.tr' },
   { name: 'TV8', tvId: '134', id: 'TV8.tr' },
-  { name: 'TV8,5', tvId: '188', id: 'TV8.5.tr' },
+  { name: 'TV8,5', tvId: '188', id: 'TV85.tr' },
   { name: 'A2', tvId: '2', id: 'A2.tr' },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 snapshot.
+// name -> XMLTV id.
 export const CHANNEL_ID_MAP = Object.fromEntries(CHANNELS.map((c) => [c.name, c.id]));
 
 export { normalizeChannelKey };

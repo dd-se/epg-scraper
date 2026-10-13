@@ -104,15 +104,15 @@ describe('digiturkburada pure parsers', () => {
     expect(parseDayPage(undefined)).toEqual({ date: undefined, slots: [] });
   });
 
-  it('maps display names to page slugs and epgshare01 ids', () => {
-    expect(mapChannelId('beIN Sports 1')).toBe('beIN.SPORTS.1.tr');
-    expect(mapChannelId('beIN Sports 2')).toBe('beIN.SPORTS.2.tr');
-    expect(mapChannelId('beIN Sports 3')).toBe('beIN.SPORTS.3.tr');
-    expect(mapChannelId('beIN Sports 4')).toBe('beIN.SPORTS.4.tr');
-    expect(mapChannelId('beIN Sports 5')).toBe('beIN.SPORTS.5.tr');
-    expect(mapChannelId('beIN Sports Max 1')).toBe('beIN.SPORTS.MAX.1.tr');
-    expect(mapChannelId('beIN Sports Max 2')).toBe('beIN.SPORTS.MAX.2.tr');
-    expect(mapChannelId('GS TV')).toBe('GS.TV.tr');
+  it('maps display names to page slugs and curated ids', () => {
+    expect(mapChannelId('beIN Sports 1')).toBe('beINSPORTS1.tr');
+    expect(mapChannelId('beIN Sports 2')).toBe('beINSPORTS2.tr');
+    expect(mapChannelId('beIN Sports 3')).toBe('beINSPORTS3.tr');
+    expect(mapChannelId('beIN Sports 4')).toBe('beINSPORTS4.tr');
+    expect(mapChannelId('beIN Sports 5')).toBe('beINSPORTS5.tr');
+    expect(mapChannelId('beIN Sports Max 1')).toBe('beINSPORTSMAX1.tr');
+    expect(mapChannelId('beIN Sports Max 2')).toBe('beINSPORTSMAX2.tr');
+    expect(mapChannelId('GS TV')).toBe('GSTV.tr');
     expect(normalizeChannelKey('  beIN   SPORTS 5 ')).toBe('BEIN SPORTS 5');
     expect(channelPage('beIN Sports 5')).toBe('/bein-sports-5-hd-yayin-akisi-154.html');
     expect(dayPageUrl('/gs-tv-hd-yayin-akisi-58.html')).toBe(
@@ -151,25 +151,25 @@ describe('digiturkburada scrape (stubbed POST)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
-      'beIN.SPORTS.1.tr',
-      'beIN.SPORTS.2.tr',
-      'beIN.SPORTS.3.tr',
-      'beIN.SPORTS.4.tr',
-      'beIN.SPORTS.5.tr',
-      'beIN.SPORTS.MAX.1.tr',
-      'beIN.SPORTS.MAX.2.tr',
-      'GS.TV.tr',
+      'beINSPORTS1.tr',
+      'beINSPORTS2.tr',
+      'beINSPORTS3.tr',
+      'beINSPORTS4.tr',
+      'beINSPORTS5.tr',
+      'beINSPORTSMAX1.tr',
+      'beINSPORTSMAX2.tr',
+      'GSTV.tr',
     ]);
     // Every channel carries its page-header logo — absolute, query-free,
     // single URLs (never pipe-joined).
     const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
-    expect(icons['beIN.SPORTS.1.tr']).toBe(
+    expect(icons['beINSPORTS1.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-1-buyuk.png'
     );
-    expect(icons['beIN.SPORTS.5.tr']).toBe(
+    expect(icons['beINSPORTS5.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
     );
-    expect(icons['GS.TV.tr']).toBe(
+    expect(icons['GSTV.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/gs-tv-hd-buyuk.png'
     );
     for (const icon of Object.values(icons)) {
@@ -194,7 +194,7 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     });
     // maxChannels: 1 keeps beIN Sports 1; the stub serves the beIN 5
     // fixture for every URL, so its slots land on beIN.SPORTS.1.tr.
-    const ch5 = result.programmes.filter((p) => p.channel === 'beIN.SPORTS.1.tr');
+    const ch5 = result.programmes.filter((p) => p.channel === 'beINSPORTS1.tr');
     expect(ch5[0].start).toBe('2026-09-08T00:00:00+03:00');
     expect(ch5[0].stop).toBe('2026-09-08T01:47:00+03:00'); // next slot
     expect(ch5[ch5.length - 1].start).toBe('2026-09-08T20:19:00+03:00');
@@ -257,9 +257,9 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || a[1].localeCompare(b[1])
     );
     expect(keys).toEqual(sorted);
-    expect(result.programmes[0].channel).toBe('GS.TV.tr');
+    expect(result.programmes[0].channel).toBe('GSTV.tr');
     // Within one channel, starts ascend.
-    const gs = result.programmes.filter((p) => p.channel === 'GS.TV.tr');
+    const gs = result.programmes.filter((p) => p.channel === 'GSTV.tr');
     expect(gs.map((p) => p.start)).toEqual([...gs.map((p) => p.start)].sort());
   });
 });

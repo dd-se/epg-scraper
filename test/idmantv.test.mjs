@@ -147,13 +147,13 @@ describe('idmantv pure parsers', () => {
   });
 
   it('maps the display names to the curated id', () => {
-    expect(mapChannelId('İdman TV')).toBe('IDMAN.TV.tr');
-    expect(mapChannelId('İDMAN TELEVİZİYASI')).toBe('IDMAN.TV.tr');
+    expect(mapChannelId('İdman TV')).toBe('IDMANTV.tr');
+    expect(mapChannelId('İDMAN TELEVİZİYASI')).toBe('IDMANTV.tr');
     expect(mapChannelId('beIN Sports 1')).toBeUndefined(); // served by beinsports
     expect(normalizeChannelKey('İdman TV')).toBe('İDMAN TV');
     expect(normalizeChannelKey('  idman   tv ')).toBe('IDMAN TV'); // ASCII i -> I
-    expect(CHANNEL_ID_MAP['İDMAN TV']).toBe('IDMAN.TV.tr');
-    expect(CHANNEL_ID_MAP['İDMAN TELEVİZİYASI']).toBe('IDMAN.TV.tr');
+    expect(CHANNEL_ID_MAP['İDMAN TV']).toBe('IDMANTV.tr');
+    expect(CHANNEL_ID_MAP['İDMAN TELEVİZİYASI']).toBe('IDMANTV.tr');
     expect(CHANNELS[0].id.endsWith('.tr')).toBe(true);
     expect(weekPageUrl()).toBe('https://idmantv.az/az/program');
   });
@@ -168,7 +168,7 @@ describe('idmantv scrape (stubbed fetch)', () => {
     // Baku is UTC+4 year-round since 2016; the page's 01:00 slot is the
     // 2026-09-11T21:00Z instant, not the +03:00-mislabeled 22:00Z.
     expect(result.programmes[0]).toEqual({
-      channel: 'IDMAN.TV.tr',
+      channel: 'IDMANTV.tr',
       start: '2026-09-12T01:00:00+04:00',
       stop: '2026-09-12T03:00:00+04:00',
       title: 'Bədii film.”Şöhrət qanadlarında”',
@@ -207,20 +207,20 @@ describe('idmantv scrape (stubbed fetch)', () => {
     });
     const other = {
       providerId: 'other',
-      channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }],
+      channels: [{ id: 'KANALD.tr', name: 'KANAL D' }],
       programmes: [
-        { channel: 'KANAL.D.tr', start: '2026-09-12T13:00:00+03:00', stop: '2026-09-12T14:00:00+03:00', title: 'X' },
+        { channel: 'KANALD.tr', start: '2026-09-12T13:00:00+03:00', stop: '2026-09-12T14:00:00+03:00', title: 'X' },
       ],
     };
     // Must not throw "stop <= start": merge sees both offsets, the writer
     // compares stop>start as instants and emits a guide with two offsets.
     const merged = mergeResults([idman, other], (x) => x);
-    expect(merged.programmes.map((p) => p.channel)).toContain('IDMAN.TV.tr');
-    expect(merged.programmes.map((p) => p.channel)).toContain('KANAL.D.tr');
-    const idmanMerged = merged.programmes.filter((p) => p.channel === 'IDMAN.TV.tr');
+    expect(merged.programmes.map((p) => p.channel)).toContain('IDMANTV.tr');
+    expect(merged.programmes.map((p) => p.channel)).toContain('KANALD.tr');
+    const idmanMerged = merged.programmes.filter((p) => p.channel === 'IDMANTV.tr');
     expect(idmanMerged[0].start).toBe('2026-09-12T01:00:00+04:00');
     expect(idmanMerged[0].stop).toBe('2026-09-12T03:00:00+04:00');
-    const otherMerged = merged.programmes.filter((p) => p.channel === 'KANAL.D.tr');
+    const otherMerged = merged.programmes.filter((p) => p.channel === 'KANALD.tr');
     expect(otherMerged[0]).toMatchObject({ start: '2026-09-12T13:00:00+03:00' });
     generateXmltv({ channels: merged.channels, programmes: merged.programmes, lang: 'tr' });
   });
@@ -232,13 +232,13 @@ describe('idmantv scrape (stubbed fetch)', () => {
       politenessDelayMs: 0,
     });
     expect(result.programmes).toHaveLength(20); // Şənbə
-    expect(result.programmes.every((p) => p.channel === 'IDMAN.TV.tr')).toBe(true);
+    expect(result.programmes.every((p) => p.channel === 'IDMANTV.tr')).toBe(true);
     // The channel carries the site's brand logo.
     expect(result.channels[0].icon).toBe('https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png');
     // Baku is UTC+4 year-round, so the page's 01:00 wall time is the
     // 2026-09-11T21:00Z instant — not the +03:00-mislabeled 22:00Z.
     expect(result.programmes[0]).toEqual({
-      channel: 'IDMAN.TV.tr',
+      channel: 'IDMANTV.tr',
       start: '2026-09-12T01:00:00+04:00',
       stop: '2026-09-12T03:00:00+04:00',
       title: 'Bədii film.”Şöhrət qanadlarında”',
@@ -313,7 +313,7 @@ describe('idmantv scrape (stubbed fetch)', () => {
     });
     expect(result.programmes).toHaveLength(1);
     expect(result.programmes[0]).toEqual({
-      channel: 'IDMAN.TV.tr',
+      channel: 'IDMANTV.tr',
       start: '2026-09-07T10:00:00+04:00',
       stop: '2026-09-08T00:00:00+04:00',
       title: 'Bar',
@@ -355,7 +355,7 @@ describe('idmantv cli integration (stubbed fetch, temp output)', () => {
       expect(fs.existsSync(out)).toBe(true);
       expect(fs.statSync(out).size).toBeGreaterThan(300);
       const xml = gunzipSync(fs.readFileSync(out)).toString('utf8');
-      expect(xml).toContain('IDMAN.TV.tr');
+      expect(xml).toContain('IDMANTV.tr');
       expect(xml).toContain('<display-name lang="tr">İdman TV</display-name>');
       expect(xml).toContain('<icon src="https://admin.aztv.az/userfiles/files/4AA0BSfjB7Kev11a29qo.png" />');
       expect(xml).toContain('Basketbol.Avroliqa'); // a 2026-09-08 fixture programme

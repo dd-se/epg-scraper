@@ -17,12 +17,12 @@ import { fetchText } from '../src/http.js';
 
 const httpSide = () => ({
   channels: [
-    { id: 'KANAL.D.tr', name: 'KANAL D' },
+    { id: 'KANALD.tr', name: 'KANAL D' },
     { id: 'ATV.tr', name: 'ATV' },
   ],
   programmes: [
     {
-      channel: 'KANAL.D.tr',
+      channel: 'KANALD.tr',
       start: '2026-09-07T15:00:00+03:00',
       stop: '2026-09-07T17:00:00+03:00',
       title: 'Same Show',
@@ -39,19 +39,19 @@ const httpSide = () => ({
 
 const browserSide = () => ({
   channels: [
-    { id: 'KANAL.D.tr', name: 'KANAL D' },
+    { id: 'KANALD.tr', name: 'KANAL D' },
     { id: 'NTV.tr', name: 'NTV' },
   ],
   programmes: [
     {
-      channel: 'KANAL.D.tr',
+      channel: 'KANALD.tr',
       start: '2026-09-07T15:00:00+03:00',
       stop: '2026-09-07T17:00:00+03:00',
       title: 'Same Show',
       category: 'Dizi',
     },
     {
-      channel: 'KANAL.D.tr',
+      channel: 'KANALD.tr',
       start: '2026-09-07T17:00:00+03:00',
       stop: '2026-09-07T18:00:00+03:00',
       title: 'Browser Extra',
@@ -73,7 +73,7 @@ describe('compareResults', () => {
 
   it('detects channels and programmes present on only one side', () => {
     const report = compareResults({ http: httpSide(), browser: browserSide() });
-    expect(report.channels.common).toEqual(['KANAL.D.tr']);
+    expect(report.channels.common).toEqual(['KANALD.tr']);
     expect(report.channels.onlyHttp).toEqual(['ATV.tr']);
     expect(report.channels.onlyBrowser).toEqual(['NTV.tr']);
     expect(report.programmes.matched).toBe(1);
@@ -94,7 +94,7 @@ describe('compareResults', () => {
     expect(report.programmes.changed[0].http.title).toBe('Same Show');
     expect(report.programmes.changed[0].browser.title).toBe('Renamed in Browser');
     expect(report.programmes.changed[0].key).toBe(
-      'KANAL.D.tr|2026-09-07T15:00:00+03:00|2026-09-07T17:00:00+03:00'
+      'KANALD.tr|2026-09-07T15:00:00+03:00|2026-09-07T17:00:00+03:00'
     );
   });
 
@@ -132,15 +132,15 @@ describe('renderCompareReport', () => {
     const programmes = [];
     for (let i = 0; i < 12; i++) {
       programmes.push({
-        channel: 'KANAL.D.tr',
+        channel: 'KANALD.tr',
         start: `2026-09-07T${String(i).padStart(2, '0')}:00:00+03:00`,
         stop: `2026-09-07T${String(i).padStart(2, '0')}:30:00+03:00`,
         title: `T${i}`,
       });
     }
-    const http = { channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }], programmes };
+    const http = { channels: [{ id: 'KANALD.tr', name: 'KANAL D' }], programmes };
     const browser = {
-      channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }],
+      channels: [{ id: 'KANALD.tr', name: 'KANAL D' }],
       programmes: programmes.map((p) => ({ ...p, title: p.title + 'X' })),
     };
     const report = compareResults({ http, browser });
@@ -156,7 +156,7 @@ describe('renderCompareReport', () => {
 const providerASide = () => ({
   channels: [
     { id: 'ATV.tr', name: 'ATV' },
-    { id: 'KANAL.D.tr', name: 'KANAL D' },
+    { id: 'KANALD.tr', name: 'KANAL D' },
   ],
   programmes: [
     {
@@ -207,7 +207,7 @@ describe('compareProviderResults', () => {
     expect(atv.onlyA).toBe(1);
     expect(atv.onlyB).toBe(1);
     // Channels present on one side only.
-    const kanalD = report.channels.find((c) => c.id === 'KANAL.D.tr');
+    const kanalD = report.channels.find((c) => c.id === 'KANALD.tr');
     expect(kanalD.inA).toBe(true);
     expect(kanalD.inB).toBe(false);
     expect(kanalD.programmesA).toBe(0);
@@ -216,7 +216,7 @@ describe('compareProviderResults', () => {
     expect(ntv.inB).toBe(true);
     // Summary.
     expect(report.summary.common).toEqual(['ATV.tr']);
-    expect(report.summary.onlyAChannels).toEqual(['KANAL.D.tr']);
+    expect(report.summary.onlyAChannels).toEqual(['KANALD.tr']);
     expect(report.summary.onlyBChannels).toEqual(['NTV.tr']);
     expect(report.summary.matched).toBe(1);
     expect(report.summary.changed).toEqual([]);
@@ -247,19 +247,8 @@ describe('compareProviderResults', () => {
   });
 
   it('resolves channel-id aliases onto one canonical channel', () => {
-    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'A.HABER.tr' });
+    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'AHABERX.tr' });
     const a = {
-      channels: [{ id: 'A.HABER.tr', name: 'A Haber' }],
-      programmes: [
-        {
-          channel: 'A.HABER.tr',
-          start: '2026-09-07T15:00:00+03:00',
-          stop: '2026-09-07T16:00:00+03:00',
-          title: 'Ana Haber',
-        },
-      ],
-    };
-    const b = {
       channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
       programmes: [
         {
@@ -270,9 +259,20 @@ describe('compareProviderResults', () => {
         },
       ],
     };
+    const b = {
+      channels: [{ id: 'AHABERX.tr', name: 'A Haber' }],
+      programmes: [
+        {
+          channel: 'AHABERX.tr',
+          start: '2026-09-07T15:00:00+03:00',
+          stop: '2026-09-07T16:00:00+03:00',
+          title: 'Ana Haber',
+        },
+      ],
+    };
     const report = compareProviderResults({ a, b, canonicalize });
     // The two ids collapse onto the canonical channel.
-    expect(report.summary.common).toEqual(['A.HABER.tr']);
+    expect(report.summary.common).toEqual(['AHABERX.tr']);
     expect(report.summary.onlyAChannels).toEqual([]);
     expect(report.summary.onlyBChannels).toEqual([]);
     expect(report.summary.matched).toBe(1);
@@ -340,10 +340,10 @@ describe('cli --compare', () => {
   let scrapeCalls;
 
   const httpResult = {
-    channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }],
+    channels: [{ id: 'KANALD.tr', name: 'KANAL D' }],
     programmes: [
       {
-        channel: 'KANAL.D.tr',
+        channel: 'KANALD.tr',
         start: '2026-09-07T15:00:00+03:00',
         stop: '2026-09-07T16:00:00+03:00',
         title: 'HTTP SHOW',
@@ -352,12 +352,12 @@ describe('cli --compare', () => {
   };
   const browserResult = {
     channels: [
-      { id: 'KANAL.D.tr', name: 'KANAL D' },
+      { id: 'KANALD.tr', name: 'KANAL D' },
       { id: 'NTV.tr', name: 'NTV' },
     ],
     programmes: [
       {
-        channel: 'KANAL.D.tr',
+        channel: 'KANALD.tr',
         start: '2026-09-07T15:00:00+03:00',
         stop: '2026-09-07T16:00:00+03:00',
         title: 'BROWSER SHOW',
@@ -685,16 +685,16 @@ describe('cli --compare', () => {
 
   it('applies --alias-map so aliased channel ids compare as one', async () => {
     const aliasPath = path.join(tmpDir, 'aliases.json');
-    writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'A.HABER.tr' }));
+    writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'AHABERX.tr' }));
     registerProvider({
       id: 'cmp-alias-a',
       name: 'Alias A',
       baseUrl: 'https://a',
       scrape: async () => ({
-        channels: [{ id: 'A.HABER.tr', name: 'A Haber' }],
+        channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
         programmes: [
           {
-            channel: 'A.HABER.tr',
+            channel: 'AHABER.tr',
             start: '2026-09-07T15:00:00+03:00',
             stop: '2026-09-07T16:00:00+03:00',
             title: 'Ana Haber',
@@ -709,10 +709,10 @@ describe('cli --compare', () => {
       name: 'Alias B',
       baseUrl: 'https://b',
       scrape: async () => ({
-        channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
+        channels: [{ id: 'AHABERX.tr', name: 'A Haber' }],
         programmes: [
           {
-            channel: 'AHABER.tr',
+            channel: 'AHABERX.tr',
             start: '2026-09-07T15:00:00+03:00',
             stop: '2026-09-07T16:00:00+03:00',
             title: 'Ana Haber',

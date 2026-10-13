@@ -102,21 +102,21 @@ describe('sporekraniapi API contract', () => {
     expect(parseDayEvents(events, '2026-09-30')).toEqual({
       slots: [
         {
-          channel: 'S.SPORT.PLUS.tr',
+          channel: 'SSPORTPLUS.tr',
           date: '2026-09-30',
           startMin: 21 * 60 + 15,
           title: 'Panathinaikos - Asvel Villeurbanne',
           category: 'Basketbol',
         },
         {
-          channel: 'TABII.SPOR.1.tr',
+          channel: 'TABIISPOR1.tr',
           date: '2026-09-30',
           startMin: 22 * 60,
           title: 'Shared simulcast',
           category: 'Futbol',
         },
         {
-          channel: 'TABII.SPOR.2.tr',
+          channel: 'TABIISPOR2.tr',
           date: '2026-09-30',
           startMin: 22 * 60,
           title: 'Shared simulcast',
@@ -124,7 +124,7 @@ describe('sporekraniapi API contract', () => {
         },
       ],
       channelIcons: new Map([
-        ['S.SPORT.PLUS.tr', 'https://img.sporekrani.com/channels/valid.png'],
+        ['SSPORTPLUS.tr', 'https://img.sporekrani.com/channels/valid.png'],
       ]),
     });
   });
@@ -167,21 +167,21 @@ describe('sporekraniapi scrape', () => {
     expect(requests[0].options.headers.accept).toContain('application/json');
     expect(requests[0].options.headers['user-agent']).toContain('Mozilla/5.0');
     expect(result.channels).toHaveLength(9);
-    expect(result.channels.find((channel) => channel.id === 'S.SPORT.PLUS.tr')).toEqual({
-      id: 'S.SPORT.PLUS.tr',
+    expect(result.channels.find((channel) => channel.id === 'SSPORTPLUS.tr')).toEqual({
+      id: 'SSPORTPLUS.tr',
       name: 'S Sport Plus',
       icon: 'https://img.sporekrani.com/channels/s-sport-plus.png',
     });
     expect(result.programmes).toEqual([
       {
-        channel: 'S.SPORT.PLUS.tr',
+        channel: 'SSPORTPLUS.tr',
         start: '2026-09-30T21:05:00+03:00',
         stop: '2026-09-30T21:15:00+03:00',
         title: 'Maccabi Fox - Beşiktaş',
         category: 'Basketbol',
       },
       {
-        channel: 'S.SPORT.PLUS.tr',
+        channel: 'SSPORTPLUS.tr',
         start: '2026-09-30T21:15:00+03:00',
         stop: '2026-10-01T00:00:00+03:00',
         title: 'Panathinaikos - Asvel Villeurbanne',
@@ -221,14 +221,14 @@ describe('sporekraniapi scrape', () => {
     expect(result.failures).toBe(1);
     expect(result.programmes).toEqual([
       {
-        channel: 'S.SPORT.PLUS.tr',
+        channel: 'SSPORTPLUS.tr',
         start: '2026-09-29T20:00:00+03:00',
         stop: '2026-09-30T00:00:00+03:00',
         title: 'Survives 2026-09-29',
         category: 'Basketbol',
       },
       {
-        channel: 'S.SPORT.PLUS.tr',
+        channel: 'SSPORTPLUS.tr',
         start: '2026-10-01T20:00:00+03:00',
         stop: '2026-10-02T00:00:00+03:00',
         title: 'Survives 2026-10-01',

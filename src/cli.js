@@ -353,7 +353,7 @@ export async function runCli({
   }
 
   // Optional channel-id alias map: canonicalize ids before compare/merge so
-  // e.g. mynet's "AHABER.tr" and hurriyet's "A.HABER.tr" line up.
+  // e.g. mynet's "FBTV.tr" and tvplus's "FENERBAHCETV.tr" line up.
   let canonicalize = (id) => id;
   if (values['alias-map'] != null) {
     try {

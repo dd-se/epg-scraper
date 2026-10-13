@@ -74,7 +74,7 @@ export function compareResults({ http, browser, canonicalize }) {
  *
  * @param {{ a: object, b: object, canonicalize?: (id: string) => string }} options
  *   a/b — { channels, programmes }; canonicalize maps alias ids to one
- *   canonical id (e.g. "AHABER.tr" -> "A.HABER.tr") so both sides line up.
+ *   canonical id (e.g. "FBTV.tr" -> "FENERBAHCETV.tr") so both sides line up.
  * @returns {{ channels: Array, summary: object }}
  */
 export function compareProviderResults({ a, b, canonicalize }) {

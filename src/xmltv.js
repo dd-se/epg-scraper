@@ -1,12 +1,12 @@
-// XMLTV writer emitting the exact shape of the epgshare01 TR reference file:
+// XMLTV writer emitting this project's guide shape:
 //
 //   <tv generator-info-name="none" generator-info-url="none">
-//     <channel id="KANAL.D.tr">
+//     <channel id="KANALD.tr">
 //       <display-name lang="tr">KANAL D</display-name>
 //       <icon src="..."/>            (optional)
 //       <url>http://...</url>        (optional)
 //     </channel>
-//     <programme start="20260907150000 +0300" stop="..." channel="KANAL.D.tr">
+//     <programme start="20260907150000 +0300" stop="..." channel="KANALD.tr">
 //       <title lang="tr">...</title>
 //       <sub-title lang="tr">...</sub-title>   (optional)
 //       <desc lang="tr">...</desc>             (optional)
@@ -14,8 +14,9 @@
 //       <icon src="..."/>                      (optional)
 //     </programme>
 //
-// All <programme> blocks are sorted by channel then start time, like the
-// reference. Gzip output is streamed with Node's zlib.
+// Channel ids are canonical (see slug.js): `validateGuideResult()` refuses to
+// write one that is not. All <programme> blocks are sorted by channel then
+// start time. Gzip output is streamed with Node's zlib.
 
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';

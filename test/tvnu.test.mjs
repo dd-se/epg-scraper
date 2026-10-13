@@ -235,7 +235,7 @@ it('rejects hostile broadcast payloads one by one', () => {
       expect(channel.name.length).toBeGreaterThan(0);
     }
     expect(CHANNELS).toHaveLength(69);
-    // Ids are the Swedish epgshare01 ones where upstream carries them.
+    // Ids keep their source-tagged Swedish spelling.
     expect(CHANNEL_ID_MAP['SVT 1']).toBe('[SVT1HD].SVT1.HD.se');
     expect(CHANNEL_ID_MAP['KANAL 5']).toBe('[KANL5HD].KANAL.5.HD.se');
     expect(mapChannelId('nat geo wild')).toBe('[NATGWHD].National.Geographic.Wild.HD.se');

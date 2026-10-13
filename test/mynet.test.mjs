@@ -116,41 +116,42 @@ describe('mynet wallToIso', () => {
 });
 
 describe('mynet mapChannelId', () => {
-  it('uses curated epgshare01 ids', () => {
-    expect(mapChannelId('KANAL D')).toBe('KANAL.D.tr');
+  it('uses curated ids', () => {
+    expect(mapChannelId('KANAL D')).toBe('KANALD.tr');
     expect(mapChannelId('ATV')).toBe('ATV.tr');
-    expect(mapChannelId('CNN TÜRK')).toBe('CNN.TÜRK.tr');
+    expect(mapChannelId('CNN TÜRK')).toBe('CNNTURK.tr');
   });
 
   it('normalizes diacritic-less names to the reference ids', () => {
-    expect(mapChannelId('CNN TURK')).toBe('CNN.TÜRK.tr');
-    expect(mapChannelId('HABERTURK')).toBe('HABERTÜRK.tr');
-    expect(mapChannelId('EKOTURK')).toBe('EKOTÜRK.tr');
-    expect(mapChannelId('TRT ÇOCUK')).toBe('TRT.ÇOCUK.tr');
-    expect(mapChannelId('TRT MÜZİK')).toBe('TRT.MÜZİK.tr');
-    expect(mapChannelId('TRT TURK')).toBe('TRT.TÜRK.tr');
-    expect(mapChannelId('TRT KURDI')).toBe('TRT.KURDİ.tr');
-    expect(mapChannelId('BENGÜTÜRK')).toBe('BENGÜ.TÜRK.tr');
-    expect(mapChannelId('ÜLKE TV')).toBe('ÜLKE.TV.tr');
+    expect(mapChannelId('CNN TURK')).toBe('CNNTURK.tr');
+    expect(mapChannelId('HABERTURK')).toBe('HABERTURK.tr');
+    expect(mapChannelId('EKOTURK')).toBe('EKOTURK.tr');
+    expect(mapChannelId('FOX')).toBe('NOWTV.tr'); // mynet still lists the old name
+    expect(mapChannelId('TRT ÇOCUK')).toBe('TRTCOCUK.tr');
+    expect(mapChannelId('TRT MÜZİK')).toBe('TRTMUZIK.tr');
+    expect(mapChannelId('TRT TURK')).toBe('TRTTURK.tr');
+    expect(mapChannelId('TRT KURDI')).toBe('TRTKURDI.tr');
+    expect(mapChannelId('BENGÜTÜRK')).toBe('BENGUTURK.tr');
+    expect(mapChannelId('ÜLKE TV')).toBe('ULKETV.tr');
   });
 
   it('maps split/renamed feeds onto the reference ids', () => {
-    expect(mapChannelId('NATIONAL GEO.')).toBe('NATIONAL.GEOGRAPHIC.tr');
-    expect(mapChannelId('NAT.GEO.WILD')).toBe('NATIONAL.GEOGRAPHIC.WILD.tr');
-    expect(mapChannelId('TRT 3 / TRT SPOR')).toBe('TRT.SPOR.tr');
-    expect(mapChannelId('BLOOMBERG')).toBe('BLOOMBERG.TV.tr');
-    expect(mapChannelId('Da Vinci')).toBe('DA.VINCI.LEARNING.HD.tr');
+    expect(mapChannelId('NATIONAL GEO.')).toBe('NATIONALGEOGRAPHIC.tr');
+    expect(mapChannelId('NAT.GEO.WILD')).toBe('NATIONALGEOGRAPHICWILD.tr');
+    expect(mapChannelId('TRT 3 / TRT SPOR')).toBe('TRTSPOR.tr');
+    expect(mapChannelId('BLOOMBERG')).toBe('BLOOMBERGTV.tr');
+    expect(mapChannelId('Da Vinci')).toBe('DAVINCILEARNINGHD.tr');
   });
 
   it('uses the HD id where the reference has no SD variant', () => {
-    expect(mapChannelId('A NEWS')).toBe('A.NEWS.HD.tr');
-    expect(mapChannelId('TRT AVAZ')).toBe('TRT.AVAZ.HD.tr');
-    expect(mapChannelId('TRT WORLD')).toBe('TRT.WORLD.HD.tr');
-    expect(mapChannelId('beIN SPORTS HABER')).toBe('beIN.SPORTS.HABER.HD.tr');
+    expect(mapChannelId('A NEWS')).toBe('ANEWSHD.tr');
+    expect(mapChannelId('TRT AVAZ')).toBe('TRTAVAZHD.tr');
+    expect(mapChannelId('TRT WORLD')).toBe('TRTWORLDHD.tr');
+    expect(mapChannelId('beIN SPORTS HABER')).toBe('beINSPORTSHABERHD.tr');
   });
 
   it('falls back to generic slug', () => {
-    expect(mapChannelId('Yeni Kanal 9')).toBe('YENI.KANAL.9.tr');
+    expect(mapChannelId('Yeni Kanal 9')).toBe('YENIKANAL9.tr');
   });
 });
 

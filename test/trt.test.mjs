@@ -62,15 +62,15 @@ describe('trt channel table', () => {
     ]);
   });
 
-  it('normalizes ids to the epgshare01 reference, diacritics included', () => {
-    expect(mapChannelId('TRT Haber')).toBe('TRT.HABER.tr');
-    expect(mapChannelId('TRT 1')).toBe('TRT.1.tr');
-    expect(mapChannelId('TRT Çocuk')).toBe('TRT.ÇOCUK.tr');
-    expect(mapChannelId('TRT Müzik')).toBe('TRT.MÜZİK.tr');
-    expect(mapChannelId('TRT Türk')).toBe('TRT.TÜRK.tr');
-    expect(mapChannelId('trt kurdî')).toBe('TRT.KURDİ.tr'); // case-insensitive
-    expect(mapChannelId('TRT Avaz')).toBe('TRT.AVAZ.HD.tr'); // HD-only upstream
-    expect(mapChannelId('TRT Spor Yıldız')).toBe('TRT.SPOR.YILDIZ.tr');
+  it('curates final-form ids, Turkish diacritics folded', () => {
+    expect(mapChannelId('TRT Haber')).toBe('TRTHABER.tr');
+    expect(mapChannelId('TRT 1')).toBe('TRT1.tr');
+    expect(mapChannelId('TRT Çocuk')).toBe('TRTCOCUK.tr');
+    expect(mapChannelId('TRT Müzik')).toBe('TRTMUZIK.tr');
+    expect(mapChannelId('TRT Türk')).toBe('TRTTURK.tr');
+    expect(mapChannelId('trt kurdî')).toBe('TRTKURDI.tr'); // case-insensitive
+    expect(mapChannelId('TRT Avaz')).toBe('TRTAVAZHD.tr'); // HD-only upstream
+    expect(mapChannelId('TRT Spor Yıldız')).toBe('TRTSPORYILDIZ.tr');
     expect(mapChannelId('No Such Channel')).toBeUndefined();
   });
 
@@ -186,14 +186,14 @@ describe('trt scrape (stubbed)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels).toHaveLength(CHANNELS.length);
-    expect(result.channels.find((c) => c.id === 'TRT.HABER.tr')).toMatchObject({
-      id: 'TRT.HABER.tr',
+    expect(result.channels.find((c) => c.id === 'TRTHABER.tr')).toMatchObject({
+      id: 'TRTHABER.tr',
       name: 'TRT Haber',
     });
     // Logos come from the single index fetch.
-    expect(result.channels.find((c) => c.id === 'TRT.HABER.tr').icon).toContain('trt-haber-logo');
+    expect(result.channels.find((c) => c.id === 'TRTHABER.tr').icon).toContain('trt-haber-logo');
 
-    const haber = result.programmes.filter((p) => p.channel === 'TRT.HABER.tr');
+    const haber = result.programmes.filter((p) => p.channel === 'TRTHABER.tr');
     expect(haber[0].start).toBe('2026-10-03T06:00:00+03:00');
     // The last slot of the fixture runs to 24:00 (explicit end-of-day).
     const last = haber[haber.length - 1];
@@ -213,7 +213,7 @@ describe('trt scrape (stubbed)', () => {
       maxChannels: 1,
     });
     expect(result.channels).toHaveLength(1);
-    expect(result.channels[0].id).toBe('TRT.1.tr');
+    expect(result.channels[0].id).toBe('TRT1.tr');
   });
 
   it('skips a page that serves a different date than requested', async () => {
@@ -267,24 +267,24 @@ describe('trt scrape (stubbed)', () => {
 describe('trt + hurriyet merge (exclusive channels)', () => {
   const trtGuide = {
     channels: [
-      { id: 'TRT.1.tr', name: 'TRT 1', icon: 'https://trt/1.png' },
-      { id: 'TRT.HABER.tr', name: 'TRT Haber', icon: 'https://trt/haber.png' },
+      { id: 'TRT1.tr', name: 'TRT 1', icon: 'https://trt/1.png' },
+      { id: 'TRTHABER.tr', name: 'TRT Haber', icon: 'https://trt/haber.png' },
     ],
     programmes: [
-      { channel: 'TRT.1.tr', start: '2026-10-03T06:00:00+03:00', stop: '2026-10-03T09:00:00+03:00', title: 'TRT 06' },
-      { channel: 'TRT.HABER.tr', start: '2026-10-03T06:00:00+03:00', stop: '2026-10-03T07:00:00+03:00', title: 'Haber 06' },
+      { channel: 'TRT1.tr', start: '2026-10-03T06:00:00+03:00', stop: '2026-10-03T09:00:00+03:00', title: 'TRT 06' },
+      { channel: 'TRTHABER.tr', start: '2026-10-03T06:00:00+03:00', stop: '2026-10-03T07:00:00+03:00', title: 'Haber 06' },
     ],
     days: 1,
   };
   const hurriyetGuide = {
     channels: [
-      { id: 'TRT.1.tr', name: 'TRT 1', icon: 'https://hurriyet/1.png' },
+      { id: 'TRT1.tr', name: 'TRT 1', icon: 'https://hurriyet/1.png' },
       { id: 'ATV.tr', name: 'ATV' },
     ],
     programmes: [
       // Same channel as TRT's, different boundaries: an additive merge would
       // keep both and split the day.
-      { channel: 'TRT.1.tr', start: '2026-10-03T06:30:00+03:00', stop: '2026-10-03T08:30:00+03:00', title: 'Hürriyet TRT 1' },
+      { channel: 'TRT1.tr', start: '2026-10-03T06:30:00+03:00', stop: '2026-10-03T08:30:00+03:00', title: 'Hürriyet TRT 1' },
       { channel: 'ATV.tr', start: '2026-10-03T06:00:00+03:00', stop: '2026-10-03T07:00:00+03:00', title: 'ATV 06' },
     ],
     days: 1,
@@ -293,13 +293,13 @@ describe('trt + hurriyet merge (exclusive channels)', () => {
   it('additive by default: both feeds survive', () => {
     const merged = mergeResults([trtGuide, hurriyetGuide], (id) => id);
     expect(merged.shadowed).toBe(0);
-    expect(merged.programmes.filter((p) => p.channel === 'TRT.1.tr')).toHaveLength(2);
+    expect(merged.programmes.filter((p) => p.channel === 'TRT1.tr')).toHaveLength(2);
   });
 
   it('exclusive: the first provider owns the channel, the duplicate is dropped', () => {
     const merged = mergeResults([trtGuide, hurriyetGuide], (id) => id, { exclusiveChannels: true });
     expect(merged.shadowed).toBe(1);
-    const trt1 = merged.programmes.filter((p) => p.channel === 'TRT.1.tr');
+    const trt1 = merged.programmes.filter((p) => p.channel === 'TRT1.tr');
     expect(trt1).toHaveLength(1);
     expect(trt1[0].title).toBe('TRT 06');
     // Channels are still unioned, and Hürriyet's channels-only entry fills gaps.
@@ -309,16 +309,16 @@ describe('trt + hurriyet merge (exclusive channels)', () => {
 
   it('exclusive: the owner keeps its own logo, never the later provider’s', () => {
     const merged = mergeResults([trtGuide, hurriyetGuide], (id) => id, { exclusiveChannels: true });
-    expect(merged.channels.find((c) => c.id === 'TRT.1.tr').icon).toBe('https://trt/1.png');
+    expect(merged.channels.find((c) => c.id === 'TRT1.tr').icon).toBe('https://trt/1.png');
   });
 
   it('exclusive: a logo-less owner is still backfilled from a later provider', () => {
     const merged = mergeResults(
-      [{ ...trtGuide, channels: [{ id: 'TRT.1.tr', name: 'TRT 1' }] }, hurriyetGuide],
+      [{ ...trtGuide, channels: [{ id: 'TRT1.tr', name: 'TRT 1' }] }, hurriyetGuide],
       (id) => id,
       { exclusiveChannels: true }
     );
-    expect(merged.channels.find((c) => c.id === 'TRT.1.tr').icon).toBe('https://hurriyet/1.png');
+    expect(merged.channels.find((c) => c.id === 'TRT1.tr').icon).toBe('https://hurriyet/1.png');
   });
 
   it('exclusive respects an alias map: ownership follows the canonical id', () => {
@@ -329,10 +329,10 @@ describe('trt + hurriyet merge (exclusive channels)', () => {
       ],
       days: 1,
     };
-    const merged = mergeResults([trtGuide, aliased], (id) => (id === 'TRT1.tr' ? 'TRT.1.tr' : id), {
+    const merged = mergeResults([trtGuide, aliased], (id) => (id === 'TRT1.tr' ? 'TRT1.tr' : id), {
       exclusiveChannels: true,
     });
-    expect(merged.programmes.filter((p) => p.channel === 'TRT.1.tr')).toHaveLength(1);
+    expect(merged.programmes.filter((p) => p.channel === 'TRT1.tr')).toHaveLength(1);
     expect(merged.shadowed).toBe(1);
   });
 });
@@ -386,7 +386,7 @@ describe('trt cli integration (stubbed, temp output)', () => {
     expect(existsSync(out)).toBe(true);
     const parsed = await readXmltvFile(out);
     expect(parsed.language).toBe('tr');
-    expect(parsed.channels.map((c) => c.id)).toContain('TRT.HABER.tr');
+    expect(parsed.channels.map((c) => c.id)).toContain('TRTHABER.tr');
     expect(parsed.programmes.length).toBeGreaterThan(0);
   });
 

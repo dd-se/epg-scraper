@@ -38,26 +38,23 @@ export { normalizeChannelKey };
 
 export const BASE_URL = 'https://www.sporekrani.com';
 
-// Curated channel table: display name -> page slug + XMLTV id.  None of these
-// channels exist in the epgshare01 reference yet, so ids use the generic slug
-// from the site's own display name (acknowledged in reference.json
-// `knownGaps`).  `name` is the exact spelling the site uses in
-// event.channels[].name so the parser can match events to the page's channel.
+// Curated channel table: display name -> page slug + XMLTV id.  Ids are the
+// generic slug of the site's own display name (ASCII, no separators, `.tr`).
+// `name` is the exact spelling the site uses in event.channels[].name so the
+// parser can match events to the page's channel.
 export const CHANNELS = [
-  { name: 'tabii Spor 1', slug: 'tabii-spor-1', id: 'TABII.SPOR.1.tr' },
-  { name: 'tabii Spor 2', slug: 'tabii-spor-2', id: 'TABII.SPOR.2.tr' },
-  { name: 'tabii Spor 3', slug: 'tabii-spor-3', id: 'TABII.SPOR.3.tr' },
-  { name: 'tabii Spor 4', slug: 'tabii-spor-4', id: 'TABII.SPOR.4.tr' },
-  { name: 'tabii Spor 5', slug: 'tabii-spor-5', id: 'TABII.SPOR.5.tr' },
-  { name: 'tabii Spor 6', slug: 'tabii-spor-6', id: 'TABII.SPOR.6.tr' },
-  { name: 'tabii Spor 7', slug: 'tabii-spor-7', id: 'TABII.SPOR.7.tr' },
-  { name: 'tabii Spor 8', slug: 'tabii-spor-8', id: 'TABII.SPOR.8.tr' },
-  { name: 'S Sport Plus', slug: 's-sport-plus', id: 'S.SPORT.PLUS.tr' },
+  { name: 'tabii Spor 1', slug: 'tabii-spor-1', id: 'TABIISPOR1.tr' },
+  { name: 'tabii Spor 2', slug: 'tabii-spor-2', id: 'TABIISPOR2.tr' },
+  { name: 'tabii Spor 3', slug: 'tabii-spor-3', id: 'TABIISPOR3.tr' },
+  { name: 'tabii Spor 4', slug: 'tabii-spor-4', id: 'TABIISPOR4.tr' },
+  { name: 'tabii Spor 5', slug: 'tabii-spor-5', id: 'TABIISPOR5.tr' },
+  { name: 'tabii Spor 6', slug: 'tabii-spor-6', id: 'TABIISPOR6.tr' },
+  { name: 'tabii Spor 7', slug: 'tabii-spor-7', id: 'TABIISPOR7.tr' },
+  { name: 'tabii Spor 8', slug: 'tabii-spor-8', id: 'TABIISPOR8.tr' },
+  { name: 'S Sport Plus', slug: 's-sport-plus', id: 'SSPORTPLUS.tr' },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 snapshot (or is an
-// acknowledged gap).  Keys are normalized (uppercased) like the other
+// name -> XMLTV id.  Keys are normalized (uppercased) like the other
 // providers' maps; the site's exact spelling lives in CHANNELS[].name.
 export const CHANNEL_ID_MAP = Object.fromEntries(
   CHANNELS.map((c) => [normalizeChannelKey(c.name), c.id])

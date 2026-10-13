@@ -2,9 +2,9 @@
 
 Universal EPG (electronic programme guide) scraper. Provider adapters scrape
 different TV-guide sources; the pipeline normalizes them into one internal
-model and writes **XMLTV** files matching the shape of epgshare01's
-reference guides (`epg_ripper_TR1.xml.gz` for the Turkish providers,
-`epg_ripper_SE1.xml.gz` for the Swedish `tvnu` provider), optionally gzipped.
+model and writes **XMLTV** files with this project's own channel-id format
+(`TRTCOCUK.tr` for the Turkish providers, the source-tagged Swedish spelling
+for `tvnu`), optionally gzipped.
 
 ```
 source site ──> provider adapter ──> internal model ──> XMLTV writer ──> epg_<provider>_<COUNTRY>.xml.gz
@@ -306,7 +306,7 @@ provider name guessed from its filename.
 ## Channel-id aliases
 
 Providers sometimes emit different XMLTV ids for the same channel — e.g.
-hurriyet's curated `A.HABER.tr` vs mynet's generic-slug `AHABER.tr`.  Without
+mynet's `FBTV.tr` vs tvplus's curated `FENERBAHCETV.tr`.  Without
 help, `--compare` reports them as two unrelated channels and `--merge` writes
 both into the guide.  An optional alias map tells the tool they are the same
 channel:
@@ -314,7 +314,7 @@ channel:
 ```json
 // aliases.json
 {
-  "AHABER.tr": "A.HABER.tr",
+  "FBTV.tr": "FENERBAHCETV.tr",
   "TV8HD.tr": "TV8.tr"
 }
 ```
@@ -560,17 +560,17 @@ it does not recognise. Three rules follow, and the config satisfies them via
 3. **The name must be the guide's own spelling.** Three renames are declared in
    `channels.js` (`EPG_NAME_CONTRACT`): `NOW TV`→`NOW`, `TV 8`→`TV8`,
    `SHOW TV HD`→`SHOW TV`. Each keeps its **original** id slug
-   (`nowtv.tr`, `tv8.tr`, `showtvhd.tr`) — the id is the identity, the name is
+   (`nowtv.tr`, `tv8.tr`, `showtv.tr`) — the id is the identity, the name is
    only a label.
 
-One channel ships with **no programme data**: `TRT 4K` is in no published guide
-and the upstream epgshare01 reference carries no matching id. This is
+One channel ships with **no programme data**: `TRT 4K` is in no published
+guide. This is
 **accepted, not fixed** — a viewer picking it gets a channel with no NOW/NEXT.
 It is recorded in `CATALOG_EPG_GAPS` (`channels.js`) so the gap is a decision on
 record rather than a silent omission.
 
 `TRT Haber` used to sit beside it. Both the `trt` and `mynet` guides list the
-channel (`TRT.HABER.tr`), and its `<display-name>` folds onto the playlist's
+channel (`TRTHABER.tr`), and its `<display-name>` folds onto the playlist's
 `TRT Haber`, so the name-keyed match resolves and the channel has NOW/NEXT like
 any other.
 
@@ -673,8 +673,8 @@ run from home) and read `deadEntries` before trusting the drop.
    - `async scrape({ dates, fetchImpl, log, ... })` returning through
      `finishResult()`.
 2. Add one entry to `src/provider-catalog.js` with its display name,
-   country/language/time zone, browser capability, reference country, CI
-   arguments, and sports-profile membership. `src/providers/index.js` derives
+   country/language/time zone, browser capability, CI arguments, and
+   sports-profile membership. `src/providers/index.js` derives
    registrations from that catalog.
 3. Add fixtures, provider tests, and any intentional provider-inventory
    assertions.
@@ -690,19 +690,19 @@ Conventions every provider must follow:
   the Stockholm offset in force at that instant (`+01:00` winter, `+02:00`
   summer), because a pinned offset would shift every summer programme by an
   hour; the instants stay absolute either way.
-- **Curated channel-id map.** XMLTV channel ids follow the epgshare01
-  convention (name uppercased, non-alphanumeric runs → `.`, `.tr` suffix for
-  the Turkish guides — `.se` for the Swedish tvnu guide;
-  case-sensitive exceptions like `beIN.SPORTS.1.tr` are mapped explicitly).
-  Ids are normalized to the epgshare01 guide for the provider's own country
-  (`epg_ripper_TR1.xml.gz` for the Turkish providers,
-  `epg_ripper_SE1.xml.gz` for tvnu) as the source of truth:
-  diacritics are kept (`CNN.TÜRK.tr`, `TRT.ÇOCUK.tr`), stations the
-  reference lists HD-only use the HD id (`A.NEWS.HD.tr`), and renamed/split
-  feeds collapse onto one id (`NOW` → `FOX.tr`, `TV2` → `TEVE2.tr`,
-  `TRT 3 / TRT SPOR` → `TRT.SPOR.tr`).  Channels the reference does not
-  carry keep the generic slug.
-  Unknown channels fall back to the generic slug.
+- **Curated channel-id map.** Turkish XMLTV channel ids are this project's
+  own format: the name in ASCII with every Turkish diacritic folded to its
+  Latin letter (`CNN TÜRK` → `CNNTURK.tr`, `TRT Çocuk` → `TRTCOCUK.tr`),
+  no separators at all, case preserved (`beIN Sports 1` → `beINSPORTS1.tr`,
+  `S Sport` → `SSport.tr`), plus the `.tr` suffix — only the suffix may
+  contain a dot. `foldChannelId()` in `src/slug.js` implements the rule and
+  the writer refuses any id that is not already in final form. Providers pin
+  the ids a slug cannot recover: HD-only stations (`ANEWSHD.tr`,
+  `TRTAVAZHD.tr`) and renamed/split feeds that collapse onto one id
+  (`NOW` → `FOX.tr`, `TV2` → `TEVE2.tr`, `TRT 3 / TRT SPOR` → `TRTSPOR.tr`).
+  Unknown channels fall back to the generic slug of their display name,
+  folded at the same seam. Swedish (`tvnu`) ids are the exception: they keep
+  their source-tagged upstream spelling (`[SVT1HD].SVT1.HD.se`) verbatim.
 - **Politeness.** Sequential day-page fetches with a small delay; browser-like
   User-Agent; bounded retries; no other endpoints, no telemetry.
 
@@ -762,9 +762,8 @@ browser transport to them.
   static server-rendered page per channel **and** date, plus an index that
   carries the 11 channel logos. No JS, no API, no login.
 - Channels: TRT 1, TRT 2, TRT Haber, TRT Spor, TRT Spor Yıldız, TRT Belgesel,
-  TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî — ids normalized to the
-  epgshare01 reference (diacritics kept, TRT Avaz HD-only; `TRT.2.tr` and
-  `TRT.SPOR.YILDIZ.tr` are recorded as upstream gaps).
+  TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî — ids curated
+  (`TRTCOCUK.tr`, `TRTAVAZHD.tr`, `TRTSPORYILDIZ.tr`, …).
 - **Per-date, not week-shaped**: any date serves (past and future), so the
   requested window is honoured as given and `--days-back` works — unlike
   hurriyet, there is no Mon–Sun clamp. The index publishes today..+6, the same
@@ -1041,10 +1040,9 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
   `<title lang="sv">`, with the first genre as `<category lang="sv">` and
   the description as `<desc lang="sv">`.
 - Channel logos are each page's own `themedLogo` image.
-- Channel ids are normalized to epgshare01's Swedish guide
-  (`epg_ripper_SE1.xml.gz`), e.g. `[SVT1HD].SVT1.HD.se`; the few channels it
-  does not carry yet use a generic `.se` slug (e.g. `SVT.BARN.se`) and are
-  acknowledged in `test/fixtures/epgshare01/reference-se.json` `knownGaps`.
+- Channel ids keep their source-tagged Swedish spelling, e.g.
+  `[SVT1HD].SVT1.HD.se`; a channel with no tagged id uses a generic `.se` slug
+  (e.g. `SVT.BARN.se`). Swedish ids are exempt from the Turkish folding rule.
 - The provider supports `maxChannels` in `scrape()` options.
 
 ```bash
@@ -1097,7 +1095,7 @@ node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniap
 `digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV
 exist nowhere else); `sporekraniapi` adds
 tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
-adds İdman TV (Azerbaijani titles; not in the Turkish epgshare01 reference).
+adds İdman TV (Azerbaijani titles).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
 
 ## Scheduled scrapes (GitHub Actions)
@@ -1204,17 +1202,18 @@ expire after 7 days.
 
 ## Output shape
 
-Matches the epgshare01 reference exactly:
+Turkish channel ids follow this project's format (ASCII, folded, no
+separators, `.tr`); everything else is standard XMLTV:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <tv generator-info-name="epg-scraper (hurriyet)" generator-info-url="none">
-  <channel id="KANAL.D.tr">
+  <channel id="KANALD.tr">
     <display-name lang="tr">KANAL D</display-name>
     <icon src="https://.../94.png" />
     <url>https://www.hurriyet.com.tr/tv-rehberi/yayin-akisi/94/1/kanal-d/</url>
   </channel>
-  <programme start="20260907150000 +0300" stop="20260907170000 +0300" channel="KANAL.D.tr">
+  <programme start="20260907150000 +0300" stop="20260907170000 +0300" channel="KANALD.tr">
     <title lang="tr">Program Adı</title>
     <category lang="tr">Dizi</category>
   </programme>
@@ -1224,8 +1223,8 @@ Matches the epgshare01 reference exactly:
 Programmes are sorted by channel (codepoint order), then start instant;
 equal instants are ordered by their ISO strings for deterministic output.
 The writer keeps the first occurrence per `(channel, start, stop)`, even if
-titles differ. Turkish providers stamp one
-`+0300` offset like the Turkish reference file. Exceptions: the Swedish tvnu
+titles differ, and throws rather than write a channel id that is not in
+canonical form. Turkish providers stamp one `+0300` offset. Exceptions: the Swedish tvnu
 guide, whose timestamps carry the Stockholm offset in force at each instant
 (`+0100` winter / `+0200` summer) and whose titles carry `lang="sv"`; and
 İdman TV, stamped `+0400` (Baku, no DST) — a merged guide may carry
@@ -1241,18 +1240,15 @@ manual step (`npm run scrape`).
 Browser tests mock `playwright` via `vi.mock()` — no real browser is
 launched during `npm test`.
 
-Channel ids are normalized to epgshare01's guides.  The upstream id lists are
-vendored as `test/fixtures/epgshare01/reference.json`
-(`epg_ripper_TR1.xml.gz`, the Turkish providers) and
-`test/fixtures/epgshare01/reference-se.json` (`epg_ripper_SE1.xml.gz`, the
-Swedish `tvnu` provider), and enforced by `test/reference.test.mjs`, which
-re-vendors a snapshot older than 7 days before re-checking the provider ids
-(set `EPG_REFERENCE_NO_REFRESH=1` to make staleness a hard failure instead).
-Refresh both explicitly with `npm run update:reference` (re-downloads the
-upstream files, preserves each snapshot's `knownGaps`, reports added/removed
-ids). Nothing re-vendors on a schedule — the workflows run the scraper, not the
-suite — so freshness comes from a local `npm test` (which re-vendors) or
-`npm run update:reference`.
+Channel ids are curated in this repository — there is no upstream id list to
+track, and no network access in the suite. `test/channel-id.test.mjs` is the
+contract: the folding rule and its idempotence, the Swedish passthrough, the
+guide-result seam that folds ids and rewrites programme references, the
+writer's refusal to write a non-canonical id, and — over every curated id in
+`src/provider-catalog.js` — that each one is canonical and that no two of them
+fold onto the same string. Adding a provider or renaming a channel therefore
+means editing that provider's `CHANNEL_ID_MAP` and letting the suite prove the
+result is still well-formed.
 
 ## Layout
 
@@ -1264,11 +1260,11 @@ src/merge.js            multi-provider merge for --merge
 src/aliases.js          optional channel-id alias map (--alias-map)
 src/http.js             fetch helper (UA, timeout, retries)
 src/entities.js         HTML entity decoder
-src/slug.js             generic channel-id slug (country suffix, default .tr)
+src/slug.js             channel-id format: foldChannelId/isCanonicalChannelId + generic slug
 src/model.js            guide-result normalization + strict writer validation
 src/time.js             wall-clock, guide-instant, and XMLTV timestamp semantics
 src/registry.js         provider registry + date-range helper
-src/provider-catalog.js authored provider, reference, CI, and sports inventory
+src/provider-catalog.js authored provider, CI, and sports inventory + curated ids
 src/xmltv.js            XMLTV writer + reader (plain + gzip; parseXmltv powers --merge --from)
 src/cli.js              CLI implementation (testable)
 src/m3u/                standalone --m3u playlist builder (parser, identity, writer, catalog)
@@ -1276,7 +1272,6 @@ m3u.config.json         playlist config the m3u-scraper workflow builds from
 src/providers/    provider adapters (hurriyet, trt, mynet, tvplus, beinsports, digiturkburada, sporekrani, sporekraniapi, tivibu, idmantv, tvnu)
 scripts/dev-tools.js    lifecycle manager for browser + server
 scripts/provider-inventory.js  print provider/CI/sports inventory projections
-scripts/update-reference-ids.js  refresh the vendored epgshare01 TR + SE id snapshots
 scripts/scraper-server.js  static file server for EPG output
 test/                   vitest suites + fixtures
 ```

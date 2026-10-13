@@ -161,8 +161,8 @@ describe('tivibu pure parsers', () => {
   });
 
   it('maps display names to slugs and ids', () => {
-    expect(mapChannelId('Tivibu Spor 1')).toBe('TIVIBU.SPOR.1.tr');
-    expect(mapChannelId('TIVIBU SPOR 4')).toBe('TIVIBU.SPOR.4.tr');
+    expect(mapChannelId('Tivibu Spor 1')).toBe('TIVIBUSPOR1.tr');
+    expect(mapChannelId('TIVIBU SPOR 4')).toBe('TIVIBUSPOR4.tr');
     expect(mapChannelId('Tivibu Spor 5')).toBeUndefined();
     expect(normalizeChannelKey('  tivibu   spor 2 ')).toBe('TIVIBU SPOR 2');
     expect(channelPageUrl('tivibu-spor-1')).toBe('https://www.tivibu.com.tr/kanallar/tivibu-spor-1');
@@ -259,18 +259,18 @@ describe('tivibu scrape (stubbed fetch)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
-      'TIVIBU.SPOR.1.tr',
-      'TIVIBU.SPOR.2.tr',
-      'TIVIBU.SPOR.3.tr',
-      'TIVIBU.SPOR.4.tr',
+      'TIVIBUSPOR1.tr',
+      'TIVIBUSPOR2.tr',
+      'TIVIBUSPOR3.tr',
+      'TIVIBUSPOR4.tr',
     ]);
     expect(posts).toHaveLength(4);
     expect(result.programmes).toHaveLength(11 + 5 + 5 + 5); // spor-1 keeps 11 of 12 (drops yesterday's tail)
 
-    const t1 = result.programmes.filter((p) => p.channel === 'TIVIBU.SPOR.1.tr');
+    const t1 = result.programmes.filter((p) => p.channel === 'TIVIBUSPOR1.tr');
     expect(t1).toHaveLength(11);
     expect(t1[0]).toEqual({
-      channel: 'TIVIBU.SPOR.1.tr',
+      channel: 'TIVIBUSPOR1.tr',
       start: '2026-09-09T01:15:00+03:00',
       stop: '2026-09-09T04:45:00+03:00',
       title: 'Türk Telekom - eSüper Lig',
@@ -292,7 +292,7 @@ describe('tivibu scrape (stubbed fetch)', () => {
       politenessDelayMs: 0,
       maxChannels: 1,
     });
-    const t1 = result.programmes.filter((p) => p.channel === 'TIVIBU.SPOR.1.tr');
+    const t1 = result.programmes.filter((p) => p.channel === 'TIVIBUSPOR1.tr');
     expect(t1).toHaveLength(12 + 11);
     const lastOf08 = t1.find((p) => p.start === '2026-09-08T23:30:00+03:00');
     expect(lastOf08.title).toBe('KDZ. Ereğli Belediyespor - Fatsa Belediyespor');

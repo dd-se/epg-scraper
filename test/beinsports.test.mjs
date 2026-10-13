@@ -91,10 +91,10 @@ describe('beinsports parseDayPage (fixtures)', () => {
 
 describe('beinsports channel id mapping', () => {
   it('maps the four beIN Sports feeds to epgshare01 ids', () => {
-    expect(mapChannelId('BEIN SPORTS 1')).toBe('beIN.SPORTS.1.tr');
-    expect(mapChannelId('BeIN Sports 2')).toBe('beIN.SPORTS.2.tr');
-    expect(mapChannelId('BEIN SPORTS 3')).toBe('beIN.SPORTS.3.tr');
-    expect(mapChannelId('BEIN SPORTS 4')).toBe('beIN.SPORTS.4.tr');
+    expect(mapChannelId('BEIN SPORTS 1')).toBe('beINSPORTS1.tr');
+    expect(mapChannelId('BeIN Sports 2')).toBe('beINSPORTS2.tr');
+    expect(mapChannelId('BEIN SPORTS 3')).toBe('beINSPORTS3.tr');
+    expect(mapChannelId('BEIN SPORTS 4')).toBe('beINSPORTS4.tr');
     expect(mapChannelId('BEIN SPORTS 5')).toBeUndefined(); // not served by the site
   });
 
@@ -126,20 +126,20 @@ describe('beinsports scrape (stubbed week)', () => {
     expect(result.days).toBe(7);
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
-      'beIN.SPORTS.1.tr',
-      'beIN.SPORTS.2.tr',
-      'beIN.SPORTS.3.tr',
-      'beIN.SPORTS.4.tr',
+      'beINSPORTS1.tr',
+      'beINSPORTS2.tr',
+      'beINSPORTS3.tr',
+      'beINSPORTS4.tr',
     ]);
     // Channel logos come from activeLeagues[].image on the already-fetched
     // day pages — single clean URLs, never pipe-joined.  (The stub serves
     // the ch1/ch2 fixtures for every channel, so only 1 & 2 find their own
     // rewriteId advertised; live pages advertise all four.)
     const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
-    expect(icons['beIN.SPORTS.1.tr']).toBe(
+    expect(icons['beINSPORTS1.tr']).toBe(
       'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports1.png'
     );
-    expect(icons['beIN.SPORTS.2.tr']).toBe(
+    expect(icons['beINSPORTS2.tr']).toBe(
       'https://media-cf.tr.beinsports.com/App_Themes/2011/gfx/beinlogo/bein_sports2.png'
     );
     for (const icon of Object.values(icons)) {
@@ -179,7 +179,7 @@ describe('beinsports scrape (stubbed week)', () => {
     });
     // The window is clamped to the whole Mon-Sun week; look at Tuesday.
     const tue = result.programmes.filter((p) => p.start.startsWith('2026-09-08'));
-    const ch1 = tue.filter((p) => p.channel === 'beIN.SPORTS.1.tr');
+    const ch1 = tue.filter((p) => p.channel === 'beINSPORTS1.tr');
     expect(ch1[0].start).toBe('2026-09-08T10:30:00+03:00');
     expect(ch1[0].stop).toBe('2026-09-08T11:30:00+03:00'); // next slot
     expect(ch1[ch1.length - 1].stop).toBe('2026-09-09T00:00:00+03:00'); // end of day

@@ -152,10 +152,10 @@ describe('sporekrani pure parsers', () => {
   });
 
   it('maps display names to slugs and ids', () => {
-    expect(mapChannelId('tabii Spor 1')).toBe('TABII.SPOR.1.tr');
-    expect(mapChannelId('tabii Spor 8')).toBe('TABII.SPOR.8.tr');
-    expect(mapChannelId('S Sport Plus')).toBe('S.SPORT.PLUS.tr');
-    expect(mapChannelId('S SPORT PLUS')).toBe('S.SPORT.PLUS.tr'); // case/space-insensitive
+    expect(mapChannelId('tabii Spor 1')).toBe('TABIISPOR1.tr');
+    expect(mapChannelId('tabii Spor 8')).toBe('TABIISPOR8.tr');
+    expect(mapChannelId('S Sport Plus')).toBe('SSPORTPLUS.tr');
+    expect(mapChannelId('S SPORT PLUS')).toBe('SSPORTPLUS.tr'); // case/space-insensitive
     expect(mapChannelId('CBC Sport')).toBeUndefined();
     expect(normalizeChannelKey('  tabii   Spor 1 ')).toBe('TABII SPOR 1');
     expect(channelPageUrl('tabii-spor-1')).toBe('https://www.sporekrani.com/home/channel/tabii-spor-1');
@@ -203,24 +203,24 @@ describe('sporekrani scrape (stubbed fetch)', () => {
     expect(result.programmes.every((p) => ids.has(p.channel))).toBe(true);
     expect(result.programmes.every((p) => p.start.endsWith('+03:00'))).toBe(true);
 
-    const t1 = result.programmes.filter((p) => p.channel === 'TABII.SPOR.1.tr');
+    const t1 = result.programmes.filter((p) => p.channel === 'TABIISPOR1.tr');
     expect(t1).toHaveLength(5);
-    const t2 = result.programmes.filter((p) => p.channel === 'TABII.SPOR.2.tr');
+    const t2 = result.programmes.filter((p) => p.channel === 'TABIISPOR2.tr');
     expect(t2).toHaveLength(3);
-    const t4 = result.programmes.filter((p) => p.channel === 'TABII.SPOR.4.tr');
+    const t4 = result.programmes.filter((p) => p.channel === 'TABIISPOR4.tr');
     expect(t4).toHaveLength(0);
 
     // Logos ride on each page's own channels[] entry: scraped channels carry
     // their icon, the empty tabii spor 4 page stays logoless.
-    expect(result.channels.find((c) => c.id === 'TABII.SPOR.1.tr').icon).toBe(
+    expect(result.channels.find((c) => c.id === 'TABIISPOR1.tr').icon).toBe(
       'https://img.sporekrani.com/channels/72276f1d-f504-4c98-9ce7-410e047cb7ee.png'
     );
-    expect(result.channels.find((c) => c.id === 'S.SPORT.PLUS.tr').icon).toBe(
+    expect(result.channels.find((c) => c.id === 'SSPORTPLUS.tr').icon).toBe(
       'https://img.sporekrani.com/channels/VmyIJfY9ujeeFQv90fWj3b5tqulXoou0Q3BSJ1pF.png'
     );
-    expect(result.channels.find((c) => c.id === 'TABII.SPOR.4.tr').icon).toBeUndefined();
+    expect(result.channels.find((c) => c.id === 'TABIISPOR4.tr').icon).toBeUndefined();
 
-    const ssp = result.programmes.filter((p) => p.channel === 'S.SPORT.PLUS.tr');
+    const ssp = result.programmes.filter((p) => p.channel === 'SSPORTPLUS.tr');
     expect(ssp.length).toBeGreaterThan(0);
     expect(ssp.every((p) => ['2026-09-08', '2026-09-09', '2026-09-10'].includes(p.start.slice(0, 10))))
       .toBe(true);
@@ -234,7 +234,7 @@ describe('sporekrani scrape (stubbed fetch)', () => {
       politenessDelayMs: 0,
       maxChannels: 1, // only tabii spor 1
     });
-    const t1 = result.programmes.filter((p) => p.channel === 'TABII.SPOR.1.tr');
+    const t1 = result.programmes.filter((p) => p.channel === 'TABIISPOR1.tr');
     expect(t1).toHaveLength(5);
     // Same-day chaining: next event starts 22:00.
     expect(t1[0].start).toBe('2026-09-08T19:45:00+03:00');

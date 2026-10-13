@@ -39,24 +39,22 @@ import {
 export const BASE_URL = 'https://www.tivibu.com.tr';
 const PREVUE_URL = `${BASE_URL}/Channel/GetPrevueList`;
 
-// Curated channel table: display name -> page slug + XMLTV id.  None of
-// these channels exist in the epgshare01 reference yet, so ids use the
-// generic slug from the display name (acknowledged in reference.json
-// `knownGaps`).  The channel code is discovered from the page itself
-// (`/rv?i=2|ch…` link), never hardcoded.
+// Curated channel table: display name -> page slug + XMLTV id.  Ids are the
+// generic slug of the display name (ASCII, no separators, `.tr`).  The
+// channel code is discovered from the page itself (`/rv?i=2|ch…` link),
+// never hardcoded.
 export const CHANNELS = [
-  { name: 'Tivibu Spor 1', slug: 'tivibu-spor-1', id: 'TIVIBU.SPOR.1.tr' },
-  { name: 'Tivibu Spor 2', slug: 'tivibu-spor-2', id: 'TIVIBU.SPOR.2.tr' },
-  { name: 'Tivibu Spor 3', slug: 'tivibu-spor-3', id: 'TIVIBU.SPOR.3.tr' },
-  { name: 'Tivibu Spor 4', slug: 'tivibu-spor-4', id: 'TIVIBU.SPOR.4.tr' },
+  { name: 'Tivibu Spor 1', slug: 'tivibu-spor-1', id: 'TIVIBUSPOR1.tr' },
+  { name: 'Tivibu Spor 2', slug: 'tivibu-spor-2', id: 'TIVIBUSPOR2.tr' },
+  { name: 'Tivibu Spor 3', slug: 'tivibu-spor-3', id: 'TIVIBUSPOR3.tr' },
+  { name: 'Tivibu Spor 4', slug: 'tivibu-spor-4', id: 'TIVIBUSPOR4.tr' },
 ];
 
 export { normalizeChannelKey };
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 snapshot (or is an
-// acknowledged gap).  Keys are normalized (uppercased) like the other
-// providers' maps.
+// name -> XMLTV id.  Keys are normalized (uppercased, whitespace collapsed)
+// so lookup is case/spacing-insensitive; ids follow this project's format
+// (src/slug.js): ASCII, Turkish diacritics folded, no separators, `.tr`.
 export const CHANNEL_ID_MAP = Object.fromEntries(
   CHANNELS.map((c) => [normalizeChannelKey(c.name), c.id])
 );

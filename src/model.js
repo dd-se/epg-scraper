@@ -1,3 +1,4 @@
+import { foldChannelId, isCanonicalChannelId } from './slug.js';
 import { parseGuideInstant } from './time.js';
 
 const LANGUAGE_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
@@ -58,7 +59,7 @@ function sanitizedChannel(channel, issues) {
     issues.add('invalid-channel');
     return undefined;
   }
-  const entry = { id: channel.id, name: channel.name };
+  const entry = { id: foldChannelId(channel.id), name: channel.name };
   const icon = optionalString(channel.icon);
   const url = optionalString(channel.url);
   if (icon != null) entry.icon = icon;
@@ -75,7 +76,10 @@ function sanitizedProgramme(programme, channelIds, issues) {
     issues.add('invalid-programme');
     return undefined;
   }
-  if (!channelIds.has(programme.channel)) {
+  // Fold before the membership test, so a programme that names a channel in a
+  // pre-fold spelling still resolves to the emitted id.
+  const channel = foldChannelId(programme.channel);
+  if (!channelIds.has(channel)) {
     issues.add('unknown-channel');
     return undefined;
   }
@@ -90,7 +94,7 @@ function sanitizedProgramme(programme, channelIds, issues) {
     return undefined;
   }
   const entry = {
-    channel: programme.channel,
+    channel,
     start: programme.start,
     stop: programme.stop,
     title: programme.title,
@@ -182,6 +186,12 @@ export function validateGuideResult({ channels, programmes, lang = 'tr' }) {
       throw new Error('channels must not contain null or non-object entries');
     }
     if (!nonEmptyString(channel.id)) throw new Error('channel.id is required');
+    if (!isCanonicalChannelId(channel.id)) {
+      throw new Error(
+        `channel id "${channel.id}" is not in canonical form ` +
+          `(fold it with foldChannelId() before writing)`
+      );
+    }
     if (!nonEmptyString(channel.name)) throw new Error(`channel "${channel.id}" name is required`);
     assertOptionalString(channel.icon, `channel "${channel.id}" icon`);
     assertOptionalString(channel.url, `channel "${channel.id}" url`);

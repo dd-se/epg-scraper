@@ -45,14 +45,13 @@ export const DAY_TAGS = [
   'pazar',
 ];
 
-// Curated channel-id map: display name -> XMLTV id normalized to the
-// epgshare01 reference.  Exported so test/reference.test.mjs can enforce that
-// every value exists in the vendored snapshot.
+// Curated channel-id map: display name -> XMLTV id (see src/slug.js for the
+// format).  Case is preserved, so the beIN brand token stays `beIN`.
 export const CHANNEL_ID_MAP = {
-  'BEIN SPORTS 1': 'beIN.SPORTS.1.tr',
-  'BEIN SPORTS 2': 'beIN.SPORTS.2.tr',
-  'BEIN SPORTS 3': 'beIN.SPORTS.3.tr',
-  'BEIN SPORTS 4': 'beIN.SPORTS.4.tr',
+  'BEIN SPORTS 1': 'beINSPORTS1.tr',
+  'BEIN SPORTS 2': 'beINSPORTS2.tr',
+  'BEIN SPORTS 3': 'beINSPORTS3.tr',
+  'BEIN SPORTS 4': 'beINSPORTS4.tr',
 };
 
 // Display name -> site URL slug (rewriteId).  The site itself also serves
@@ -99,9 +98,8 @@ function pageProps(html) {
 }
 
 // A channel logo is only accepted when it is a single clean http(s) URL.
-// This deliberately rejects pipe-joined garbage like the upstream
-// epgshare01 file carries ("url1|url2|url3|url4") — such a string must
-// never become a channel <icon>.
+// This deliberately rejects pipe-joined garbage some guides carry
+// ("url1|url2|url3|url4") — such a string must never become a channel <icon>.
 function cleanLogoUrl(value) {
   if (typeof value !== 'string') return undefined;
   const url = value.trim();

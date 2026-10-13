@@ -11,27 +11,11 @@ import * as tivibu from './providers/tivibu.js';
 import * as idmantv from './providers/idmantv.js';
 import * as tvnu from './providers/tvnu.js';
 
-export const REFERENCE_SNAPSHOTS = [
-  {
-    country: 'TR',
-    suffix: '.tr',
-    file: 'test/fixtures/epgshare01/reference.json',
-    url: 'https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz',
-  },
-  {
-    country: 'SE',
-    suffix: '.se',
-    file: 'test/fixtures/epgshare01/reference-se.json',
-    url: 'https://epgshare01.online/epgshare01/epg_ripper_SE1.xml.gz',
-  },
-];
-
 export const PROVIDER_CATALOG = [
   {
     id: 'hurriyet',
     name: 'Hürriyet TV Rehberi',
     module: hurriyet,
-    referenceCountry: 'TR',
     ci: { enabled: true, args: [], order: 10 },
     sports: { live: false },
   },
@@ -42,7 +26,6 @@ export const PROVIDER_CATALOG = [
     id: 'trt',
     name: 'TRT Yayın Akışı (TRT 1/2/Haber/Spor/Belgesel/Çocuk/Müzik/Türk/Avaz/Kurdî)',
     module: trt,
-    referenceCountry: 'TR',
     ci: { enabled: true, args: ['--delay-ms', '300'], order: 15 },
     sports: { live: false },
   },
@@ -50,7 +33,6 @@ export const PROVIDER_CATALOG = [
     id: 'mynet',
     name: 'Mynet TV Rehberi',
     module: mynet,
-    referenceCountry: 'TR',
     ci: { enabled: true, args: ['--days-forward', '2', '--delay-ms', '500'], order: 20 },
     sports: { live: false },
   },
@@ -58,7 +40,6 @@ export const PROVIDER_CATALOG = [
     id: 'tvplus',
     name: 'TV+ (Turkcell) Yayın Akışı',
     module: tvplus,
-    referenceCountry: 'TR',
     browserCompatible: false,
     ci: { enabled: true, args: ['--days-forward', '2'], order: 30 },
     sports: { live: true },
@@ -67,7 +48,6 @@ export const PROVIDER_CATALOG = [
     id: 'beinsports',
     name: 'beIN Sports Yayın Akışı',
     module: beinsports,
-    referenceCountry: 'TR',
     ci: {
       enabled: false,
       order: 40,
@@ -80,7 +60,6 @@ export const PROVIDER_CATALOG = [
     id: 'digiturkburada',
     name: 'DigiturkBurada Yayın Akışı (beIN Sports 1-5 / Max / GS TV)',
     module: digiturkburada,
-    referenceCountry: 'TR',
     browserCompatible: false,
     ci: { enabled: true, args: ['--days-forward', '2'], order: 50 },
     sports: { live: true },
@@ -89,7 +68,6 @@ export const PROVIDER_CATALOG = [
     id: 'sporekrani',
     name: 'Spor Ekranı Yayın Akışı (tabii spor 1-8 / S Sport Plus)',
     module: sporekrani,
-    referenceCountry: 'TR',
     ci: {
       enabled: false,
       order: 60,
@@ -102,7 +80,6 @@ export const PROVIDER_CATALOG = [
     id: 'sporekraniapi',
     name: 'Spor Ekranı API (tabii spor 1-8 / S Sport Plus)',
     module: sporekraniapi,
-    referenceCountry: 'TR',
     browserCompatible: false,
     ci: { enabled: true, args: [], order: 65 },
     sports: { live: true },
@@ -111,7 +88,6 @@ export const PROVIDER_CATALOG = [
     id: 'tivibu',
     name: 'Tivibu Yayın Akışı (Tivibu Spor 1-4)',
     module: tivibu,
-    referenceCountry: 'TR',
     browserCompatible: false,
     ci: { enabled: true, args: [], order: 70 },
     sports: { live: true },
@@ -121,7 +97,6 @@ export const PROVIDER_CATALOG = [
     name: 'iDMAN TV (İdman Televiziyası) Həftəlik Proqram',
     module: idmantv,
     timeZone: 'Asia/Baku',
-    referenceCountry: 'TR',
     ci: { enabled: true, args: [], order: 90 },
     sports: { live: true },
   },
@@ -132,7 +107,6 @@ export const PROVIDER_CATALOG = [
     country: 'SE',
     language: 'sv',
     timeZone: 'Europe/Stockholm',
-    referenceCountry: 'SE',
     ci: { enabled: true, args: ['--days-forward', '2', '--delay-ms', '400'], order: 80 },
     sports: { live: false },
   },

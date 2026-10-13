@@ -137,7 +137,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   get-platform-info → Authenticate handshake PlayBillList needs): it
   carries exactly **171 entries** — the 154 channels of the public
   `tvplus.com.tr/canli-tv` directory, the "TV+" promo channel (id 177,
-  8 promo slots/day, not in the epgshare01 reference), and 16 VOD genre
+  8 promo slots/day, no provider serves it), and 16 VOD genre
   rails (FANTASTİK DÜNYALAR, SAVAŞ FİLMLERİ, … ids 2004–2439) whose
   PlayBillList responses are empty.  **None of the channels above
   (beIN Sports 1-5/Max, S Sport Plus, Smart Spor 1-2, Tivibu Spor 1-4,
@@ -146,7 +146,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   4401, 4402, …) also return `{"counttotal":"0","playbilllist":[]}`, so
   there is no hidden EPG beyond the directory.  Re-probe after any TV+
   lineup change with the ChannelList call above; a new sports channel
-  would then need its id + epgshare01-style id in `CHANNELS`.
+  would then need its display name + curated id in `CHANNELS`.
 - beinsports.com.tr's embedded `activeLeagues` array is the source of truth
   for which beIN feeds are public — check it when BeIN Sports 5 appears.
 - **tabii spor 1-8 are match-day simulcast channels** — most days most of
@@ -177,10 +177,9 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   DST in 2016), and the provider stamps them with the fixed `+04:00`, so
   emitted instants match the source times. A merged guide legitimately
   carries both `+03:00` and `+04:00` stamps; compare instants, not strings.
-- **idmantv's channel id** `IDMAN.TV.tr` was added to `knownGaps` in
-  `test/fixtures/epgshare01/reference.json` (the upstream snapshot carries
-  no iDMAN TV entry); `src/providers/idmantv.js` `CHANNEL_ID_MAP` maps both
-  "İdman TV" and the site's "İDMAN TELEVİZİYASI" heading onto it.
+- **idmantv's channel id** `IDMANTV.tr` is curated in
+  `src/providers/idmantv.js`; its `CHANNEL_ID_MAP` maps both "İdman TV" and the
+  site's "İDMAN TELEVİZİYASI" heading onto it.
 - **Swedish channels outside tv.nu** (probed 2026-09-17 when the `tvnu`
   provider landed — no such channel page, HTTP 404): TV4 Nyheterna
   (`/kanal/tv4-nyheterna`), Dagens Industri TV (`/kanal/di-tv`,
@@ -198,8 +197,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   Premium / Football / Golf / Motor / Vinter" numbered variants do not exist
   on tv.nu (tv.nu carries the combined `viaplay-sport` feed; football,
   golf and motor ride V Sport Fotboll/Golf/Motor).
-- All uncovered channels keep their epgshare01-style ids unmapped; when a
-  source lands, add the id to `CHANNEL_ID_MAP` and (if missing upstream)
-  to `knownGaps` in the matching per-country snapshot
-  (`test/fixtures/epgshare01/reference.json` for TR,
-  `reference-se.json` for SE).
+- All uncovered channels stay unmapped; when a source lands, add its display
+  name + final-form id (`TRTCOCUK.tr`, `TRTSPORT1.tr`, …) to the provider's
+  `CHANNEL_ID_MAP` and let `test/channel-id.test.mjs` prove the map is
+  canonical and collision-free.

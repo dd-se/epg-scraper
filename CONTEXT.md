@@ -41,7 +41,7 @@ The language tag applied to a guide's human-readable channel and programme text.
 _Avoid_: Locale setting, country code
 
 **Provider Inventory**:
-The authoritative lineup of provider registrations, reference coverage, scheduled jobs, and guide merge profiles.
+The authoritative lineup of provider registrations, scheduled jobs, curated channel identities, and guide merge profiles.
 _Avoid_: Provider list, CI matrix
 
 ## Playlist language (`--m3u`)

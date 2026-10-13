@@ -1,7 +1,8 @@
 // Well-formedness of the XMLTV writer's output, verified with a real XML
 // parser (saxes — strict, dependency-free).  The adversarial suite proves the
-// writer escapes hostile scraped content; this suite proves the *result* is
-// actually parseable XML that round-trips back to the original text.
+// writer escapes hostile scraped content and refuses non-canonical channel ids;
+// this suite proves the *result* is actually parseable XML that round-trips
+// back to the original text.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -61,16 +62,15 @@ describe('xmltv output: well-formed against saxes', () => {
       '📺 Emoji & Symbols ©®',
       '   leading and trailing spaces   ',
     ];
-    const channels = [{ id: 'X" onclick="evil()', name: 'A&B <b>' }];
+    const channels = [{ id: 'XTR.tr', name: 'A&B <b>' }];
     const programmes = titles.map((title, i) =>
-      programme('X" onclick="evil()', `2026-09-07T${String(i).padStart(2, '0')}:00:00+03:00`, title)
+      programme('XTR.tr', `2026-09-07T${String(i).padStart(2, '0')}:00:00+03:00`, title)
     );
     const xml = generateXmltv({ channels, programmes });
     const parsed = parseXml(xml);
 
     expect(parsed.errors).toEqual([]);
-    // The evil channel id survives the attribute round-trip.
-    expect(parsed.channelIds).toEqual(['X" onclick="evil()']);
+    expect(parsed.channelIds).toEqual(['XTR.tr']);
     expect(parsed.programmeCount).toBe(titles.length);
     // Every title parses back to exactly the text that went in.
     expect(parsed.titles).toEqual(titles);

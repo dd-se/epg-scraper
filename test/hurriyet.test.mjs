@@ -112,20 +112,21 @@ describe('hurriyet week mapping', () => {
 });
 
 describe('hurriyet channel id mapping', () => {
-  it('uses curated epgshare01 ids', () => {
-    expect(mapChannelId('KANAL D')).toBe('KANAL.D.tr');
-    expect(mapChannelId('beIN SPORTS 1')).toBe('beIN.SPORTS.1.tr');
-    expect(mapChannelId('EUROSPORT 2 INT')).toBe('EUROSPORT.2.TR.HD.tr');
-    expect(mapChannelId('TRT 3 -  SPOR')).toBe('TRT.SPOR.tr');
+  it('uses curated ids', () => {
+    expect(mapChannelId('KANAL D')).toBe('KANALD.tr');
+    expect(mapChannelId('beIN SPORTS 1')).toBe('beINSPORTS1.tr');
+    expect(mapChannelId('EUROSPORT 1')).toBe('EUROSPORT1.tr');
+    expect(mapChannelId('EUROSPORT 2 INT')).toBe('EUROSPORT2.tr');
+    expect(mapChannelId('TRT 3 -  SPOR')).toBe('TRTSPOR.tr');
   });
 
-  it('normalizes station aliases to the epgshare01 reference ids', () => {
-    expect(mapChannelId('NOW')).toBe('FOX.tr'); // FOX rebrand
+  it('normalizes station aliases onto the curated id', () => {
+    expect(mapChannelId('NOW')).toBe('NOWTV.tr'); // FOX rebrand; id follows the current name
     expect(mapChannelId('TV2')).toBe('TEVE2.tr'); // same feed/logo as teve2
   });
 
   it('falls back to the generic slug for unknown channels', () => {
-    expect(mapChannelId('Yeni Kanal 9')).toBe('YENI.KANAL.9.tr');
+    expect(mapChannelId('Yeni Kanal 9')).toBe('YENIKANAL9.tr');
   });
 
   it('normalizes whitespace before lookup', () => {
@@ -153,7 +154,7 @@ describe('hurriyet scrape (stubbed week)', () => {
 
     expect(result.days).toBe(7);
     expect(result.failures).toBe(0);
-    expect(result.channels.map((c) => c.id)).toContain('KANAL.D.tr');
+    expect(result.channels.map((c) => c.id)).toContain('KANALD.tr');
     expect(result.programmes.length).toBeGreaterThan(7 * 31 * 5); // sane lower bound
     // Every programme's channel must be a known channel id.
     const ids = new Set(result.channels.map((c) => c.id));

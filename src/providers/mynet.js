@@ -16,7 +16,7 @@
 // fetches all discovered channels for each day.
 
 import { decodeEntities } from '../entities.js';
-import { channelIdFromName } from '../slug.js';
+import { channelIdFromName, foldChannelId } from '../slug.js';
 import { fetchText, createPoliteFetch } from '../http.js';
 import {
   wallToIso,
@@ -34,66 +34,67 @@ export const MAIN_URL = `${BASE_URL}/tv-rehberi`;
 // Day slug suffixes in URL order (today, tomorrow, day-after-tomorrow).
 export const DAY_SLUGS = ['bugun', 'yarin', 'sonraki-gun'];
 
-// Mynet channel slugs use lowercase kebab-case.  The XMLTV channel id is
-// derived from the display name via the generic slug (UPPERCASE.DOTS.tr).
-// A curated map overrides channels that need specific treatment: ids are
-// normalized to the epgshare01 reference (epg_ripper_TR1.xml.gz), which
-// keeps Turkish diacritics (CNN.TÜRK.tr, HABERTÜRK.tr, TRT.ÇOCUK.tr),
-// lists some stations HD-only (A.NEWS.HD.tr, TRT.AVAZ.HD.tr,
-// TRT.WORLD.HD.tr, DA.VINCI.LEARNING.HD.tr, beIN.SPORTS.HABER.HD.tr),
-// and merges split feeds onto one id (TRT 3 / TRT SPOR -> TRT.SPOR.tr).
-// Exported so test/reference.test.mjs can enforce that every value exists
-// in the vendored epgshare01 snapshot (test/fixtures/epgshare01/).
+// Mynet channel slugs use lowercase kebab-case.  A channel without an entry
+// below gets the generic slug of its display name.  This curated map pins the
+// ids for the channels that need specific treatment: HD-only stations
+// (ANEWSHD.tr, TRTAVAZHD.tr, TRTWORLDHD.tr, DAVINCILEARNINGHD.tr,
+// beINSPORTSHABERHD.tr) and split feeds merged onto one id
+// (TRT 3 / TRT SPOR -> TRTSPOR.tr).  Ids are authored in final form: ASCII,
+// Turkish diacritics folded (CNN TÜRK -> CNNTURK.tr), no separators,
+// `.tr` (see src/slug.js).
 export const CHANNEL_ID_MAP = {
   'ATV': 'ATV.tr',
-  'KANAL D': 'KANAL.D.tr',
-  'SHOW TV': 'SHOW.TV.tr',
-  'STAR TV': 'STAR.TV.tr',
-  'TRT 1': 'TRT.1.tr',
+  'KANAL D': 'KANALD.tr',
+  'SHOW TV': 'SHOWTV.tr',
+  'STAR TV': 'STARTV.tr',
+  'TRT 1': 'TRT1.tr',
   'TV8': 'TV8.tr',
-  'CNN TÜRK': 'CNN.TÜRK.tr',
-  'CNN TURK': 'CNN.TÜRK.tr',
+  'CNN TÜRK': 'CNNTURK.tr',
+  'CNN TURK': 'CNNTURK.tr',
   'NTV': 'NTV.tr',
-  'HABERTÜRK': 'HABERTÜRK.tr',
-  'HABERTURK': 'HABERTÜRK.tr',
-  'A HABER': 'A.HABER.tr',
-  'AHABER': 'A.HABER.tr',
-  'KANAL 7': 'KANAL.7.tr',
+  'HABERTÜRK': 'HABERTURK.tr',
+  'HABERTURK': 'HABERTURK.tr',
+  'A HABER': 'AHABER.tr',
+  'AHABER': 'AHABER.tr',
+  'KANAL 7': 'KANAL7.tr',
   '360': '360.tr',
   'TEVE2': 'TEVE2.tr',
-  'BEYAZ TV': 'BEYAZ.TV.tr',
+  'BEYAZ TV': 'BEYAZTV.tr',
   'TV2': 'TV2.tr',
-  '24 TV': '24.TV.tr',
-  'BLOOMBERG HT': 'BLOOMBERG.HT.tr',
-  'BLOOMBERG': 'BLOOMBERG.TV.tr',
-  'A SPOR': 'A.SPOR.tr',
-  'A NEWS': 'A.NEWS.HD.tr',
+  // mynet still lists the channel under its old name; the id follows the
+  // current name (the playlist spells it `nowtv.tr`).
+  'FOX': 'NOWTV.tr',
+  '24 TV': '24TV.tr',
+  'BLOOMBERG HT': 'BLOOMBERGHT.tr',
+  'BLOOMBERG': 'BLOOMBERGTV.tr',
+  'A SPOR': 'ASPOR.tr',
+  'A NEWS': 'ANEWSHD.tr',
   'A2': 'A2.tr',
   'TLC': 'TLC.tr',
   'DMAX': 'DMAX.tr',
-  'EUROSPORT 1': 'EUROSPORT.1.HD.tr',
-  'EUROSPORT 2': 'EUROSPORT.2.TR.HD.tr',
-  'SPORTS TV': 'SPORTS.TV.tr',
-  'BEIN SPORTS HABER': 'beIN.SPORTS.HABER.HD.tr',
-  'CARTOON NETWORK': 'CARTOON.NETWORK.tr',
-  'DISNEY CHANNEL': 'DISNEY.CHANNEL.tr',
-  'DISNEY JUNIOR': 'DISNEY.JUNIOR.tr',
-  'DA VINCI': 'DA.VINCI.LEARNING.HD.tr',
-  'NATIONAL GEOGRAPHIC': 'NATIONAL.GEOGRAPHIC.tr',
-  'NATIONAL GEO.': 'NATIONAL.GEOGRAPHIC.tr',
-  'NAT.GEO.WILD': 'NATIONAL.GEOGRAPHIC.WILD.tr',
-  'BEIN SPORTS 1': 'beIN.SPORTS.1.tr',
-  'BEIN SPORTS 3': 'beIN.SPORTS.3.tr',
-  'TRT ÇOCUK': 'TRT.ÇOCUK.tr',
-  'TRT MÜZİK': 'TRT.MÜZİK.tr',
-  'TRT TURK': 'TRT.TÜRK.tr',
-  'TRT KURDI': 'TRT.KURDİ.tr',
-  'TRT AVAZ': 'TRT.AVAZ.HD.tr',
-  'TRT WORLD': 'TRT.WORLD.HD.tr',
-  'TRT 3 / TRT SPOR': 'TRT.SPOR.tr',
-  'BENGÜTÜRK': 'BENGÜ.TÜRK.tr',
-  'ÜLKE TV': 'ÜLKE.TV.tr',
-  'EKOTURK': 'EKOTÜRK.tr',
+  'EUROSPORT 1': 'EUROSPORT1.tr',
+  'EUROSPORT 2': 'EUROSPORT2.tr',
+  'SPORTS TV': 'SPORTSTV.tr',
+  'BEIN SPORTS HABER': 'beINSPORTSHABERHD.tr',
+  'CARTOON NETWORK': 'CARTOONNETWORK.tr',
+  'DISNEY CHANNEL': 'DISNEYCHANNEL.tr',
+  'DISNEY JUNIOR': 'DISNEYJUNIOR.tr',
+  'DA VINCI': 'DAVINCILEARNINGHD.tr',
+  'NATIONAL GEOGRAPHIC': 'NATIONALGEOGRAPHIC.tr',
+  'NATIONAL GEO.': 'NATIONALGEOGRAPHIC.tr',
+  'NAT.GEO.WILD': 'NATIONALGEOGRAPHICWILD.tr',
+  'BEIN SPORTS 1': 'beINSPORTS1.tr',
+  'BEIN SPORTS 3': 'beINSPORTS3.tr',
+  'TRT ÇOCUK': 'TRTCOCUK.tr',
+  'TRT MÜZİK': 'TRTMUZIK.tr',
+  'TRT TURK': 'TRTTURK.tr',
+  'TRT KURDI': 'TRTKURDI.tr',
+  'TRT AVAZ': 'TRTAVAZHD.tr',
+  'TRT WORLD': 'TRTWORLDHD.tr',
+  'TRT 3 / TRT SPOR': 'TRTSPOR.tr',
+  'BENGÜTÜRK': 'BENGUTURK.tr',
+  'ÜLKE TV': 'ULKETV.tr',
+  'EKOTURK': 'EKOTURK.tr',
 };
 
 function collapseWhitespace(text) {
@@ -108,7 +109,7 @@ function matchOne(source, pattern) {
 export { normalizeChannelKey };
 
 export function mapChannelId(name) {
-  return CHANNEL_ID_MAP[normalizeChannelKey(name)] || channelIdFromName(name);
+  return foldChannelId(CHANNEL_ID_MAP[normalizeChannelKey(name)] || channelIdFromName(name));
 }
 
 // Build the URL for a channel's day page.

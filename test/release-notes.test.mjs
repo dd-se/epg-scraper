@@ -27,12 +27,12 @@ const notes = () => buildReleaseNotes({ guidesDir: dir, guideDate: '2026-10-03' 
 
 describe('release notes', () => {
   it('describes every merged guide from its own profile, not a guessed provider', async () => {
-    await write('epg_trt_TR.xml.gz', 'TRT.HABER.tr');
+    await write('epg_trt_TR.xml.gz', 'TRTHABER.tr');
     await write('epg_hurriyet_TR.xml.gz', 'ATV.tr');
-    await write('epg_tvplus_TR.xml.gz', 'TRT.SPOR.tr');
+    await write('epg_tvplus_TR.xml.gz', 'TRTSPOR.tr');
     await write('epg_idmantv_TR.xml.gz', 'IDMAN.tr');
-    await write('epg_hurriyet_trt_merged_TR.xml.gz', 'TRT.HABER.tr');
-    await write('epg_sports_merged_TR.xml.gz', 'TRT.SPOR.tr');
+    await write('epg_hurriyet_trt_merged_TR.xml.gz', 'TRTHABER.tr');
+    await write('epg_sports_merged_TR.xml.gz', 'TRTSPOR.tr');
 
     const body = await notes();
 
@@ -60,14 +60,14 @@ describe('release notes', () => {
   });
 
   it('lists provider guides with their channel lineups', async () => {
-    await write('epg_trt_TR.xml.gz', 'TRT.HABER.tr');
+    await write('epg_trt_TR.xml.gz', 'TRTHABER.tr');
     const body = await notes();
     expect(body).toContain('`epg_trt_TR.xml.gz`</b> — provider `trt`, 1 channels');
-    expect(body).toContain('- TRT.HABER.tr (`TRT.HABER.tr`)');
+    expect(body).toContain('- TRTHABER.tr (`TRTHABER.tr`)');
   });
 
   it('degrades instead of crashing on unreadable and unknown files', async () => {
-    await write('epg_trt_TR.xml.gz', 'TRT.HABER.tr');
+    await write('epg_trt_TR.xml.gz', 'TRTHABER.tr');
     writeFileSync(join(dir, 'epg_broken_TR.xml.gz'), 'not a guide');
     writeFileSync(join(dir, 'epg_handmade_merged_TR.xml.gz'), 'not a guide');
 

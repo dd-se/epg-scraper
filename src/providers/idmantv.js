@@ -66,23 +66,22 @@ export function weekPageUrl() {
   return `${BASE_URL}${WEEK_PAGE_PATH}`;
 }
 
-// Curated channel table: display name -> XMLTV id.  The reference carries no
-// iDMAN TV entry, so the id follows the generic slug of the Latin brand
-// "iDMAN TV" (the dotted capital İ in "İDMAN TELEVİZİYASI" would not survive
-// the ASCII slug rule); the id is acknowledged in reference.json knownGaps.
+// Curated channel table: display name -> XMLTV id.  The id follows the Latin
+// brand "iDMAN TV" (the dotted capital İ in the site's "İDMAN TELEVİZİYASI"
+// spelling would not survive the ASCII id rule), and that spelling maps onto
+// the same id.
 export const CHANNELS = [
   {
     name: 'İdman TV',
-    id: 'IDMAN.TV.tr',
+    id: 'IDMANTV.tr',
   },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 snapshot.  Both the
-// "İdman TV" brand and the site's "İDMAN TELEVİZİYASI" name map to one id.
+// name -> XMLTV id.  Both the "İdman TV" brand and the site's "İDMAN
+// TELEVİZİYASI" name map to one id.
 export const CHANNEL_ID_MAP = {
-  'İDMAN TV': 'IDMAN.TV.tr',
-  'İDMAN TELEVİZİYASI': 'IDMAN.TV.tr',
+  'İDMAN TV': 'IDMANTV.tr',
+  'İDMAN TELEVİZİYASI': 'IDMANTV.tr',
 };
 
 export function mapChannelId(name) {

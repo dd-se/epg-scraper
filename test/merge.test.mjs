@@ -8,12 +8,12 @@ import { createCanonicalizer } from '../src/aliases.js';
 
 const providerA = () => ({
   channels: [
-    { id: 'KANAL.D.tr', name: 'KANAL D' },
+    { id: 'KANALD.tr', name: 'KANAL D' },
     { id: 'ATV.tr', name: 'ATV' },
   ],
   programmes: [
     {
-      channel: 'KANAL.D.tr',
+      channel: 'KANALD.tr',
       start: '2026-09-07T15:00:00+03:00',
       stop: '2026-09-07T17:00:00+03:00',
       title: 'A Show',
@@ -30,12 +30,12 @@ const providerA = () => ({
 
 const providerB = () => ({
   channels: [
-    { id: 'KANAL.D.tr', name: 'KANAL D' }, // shared channel id, other metadata
+    { id: 'KANALD.tr', name: 'KANAL D' }, // shared channel id, other metadata
     { id: 'NTV.tr', name: 'NTV' },
   ],
   programmes: [
     {
-      channel: 'KANAL.D.tr',
+      channel: 'KANALD.tr',
       start: '2026-09-07T15:00:00+03:00',
       stop: '2026-09-07T17:00:00+03:00',
       title: 'B Show', // conflicts with A on the same slot
@@ -55,12 +55,12 @@ describe('mergeResults', () => {
     const merged = mergeResults([providerA(), providerB()]);
     expect(merged.channels.map((c) => c.id).sort()).toEqual([
       'ATV.tr',
-      'KANAL.D.tr',
+      'KANALD.tr',
       'NTV.tr',
     ]);
     // First provider's metadata kept for the shared channel.
-    expect(merged.channels.find((c) => c.id === 'KANAL.D.tr').name).toBe('KANAL D');
-    expect(merged.channels.find((c) => c.id === 'KANAL.D.tr').icon).toBeUndefined();
+    expect(merged.channels.find((c) => c.id === 'KANALD.tr').name).toBe('KANAL D');
+    expect(merged.channels.find((c) => c.id === 'KANALD.tr').icon).toBeUndefined();
     // Both only-in-one programmes present, plus the conflicting slot kept
     // from both sides (the XMLTV writer resolves the conflict, first wins).
     expect(merged.programmes).toHaveLength(4);
@@ -84,9 +84,9 @@ describe('mergeResults', () => {
 
   it('backfills a missing icon/url from a later provider without overwriting', () => {
     const merged = mergeResults([
-      { channels: [{ id: 'KANAL.D.tr', name: 'KANAL D' }], programmes: [] },
+      { channels: [{ id: 'KANALD.tr', name: 'KANAL D' }], programmes: [] },
       {
-        channels: [{ id: 'KANAL.D.tr', name: 'KANAL D', icon: 'https://x/logo.png', url: 'https://x/' }],
+        channels: [{ id: 'KANALD.tr', name: 'KANAL D', icon: 'https://x/logo.png', url: 'https://x/' }],
         programmes: [],
       },
     ]);
@@ -97,8 +97,8 @@ describe('mergeResults', () => {
 
     // ...but never overwrites an icon the first provider already has.
     const kept = mergeResults([
-      { channels: [{ id: 'KANAL.D.tr', name: 'KANAL D', icon: 'https://a/a.png' }], programmes: [] },
-      { channels: [{ id: 'KANAL.D.tr', name: 'KANAL D', icon: 'https://b/b.png' }], programmes: [] },
+      { channels: [{ id: 'KANALD.tr', name: 'KANAL D', icon: 'https://a/a.png' }], programmes: [] },
+      { channels: [{ id: 'KANALD.tr', name: 'KANAL D', icon: 'https://b/b.png' }], programmes: [] },
     ]);
     expect(kept.channels[0].icon).toBe('https://a/a.png');
   });
@@ -111,14 +111,14 @@ describe('mergeResults', () => {
   });
 
   it('collapses alias ids into one canonical channel and rewrites programme refs', () => {
-    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'A.HABER.tr' });
+    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'AHABERX.tr' });
     const merged = mergeResults(
       [
         {
-          channels: [{ id: 'A.HABER.tr', name: 'A Haber' }],
+          channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
           programmes: [
             {
-              channel: 'A.HABER.tr',
+              channel: 'AHABER.tr',
               start: '2026-09-07T15:00:00+03:00',
               stop: '2026-09-07T16:00:00+03:00',
               title: 'From Hurriyet',
@@ -126,10 +126,10 @@ describe('mergeResults', () => {
           ],
         },
         {
-          channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
+          channels: [{ id: 'AHABERX.tr', name: 'A Haber' }],
           programmes: [
             {
-              channel: 'AHABER.tr',
+              channel: 'AHABERX.tr',
               start: '2026-09-07T20:00:00+03:00',
               stop: '2026-09-07T21:00:00+03:00',
               title: 'From Mynet',
@@ -140,9 +140,9 @@ describe('mergeResults', () => {
       canonicalize
     );
     expect(merged.channels).toHaveLength(1);
-    expect(merged.channels[0].id).toBe('A.HABER.tr');
+    expect(merged.channels[0].id).toBe('AHABERX.tr');
     // Every programme points at the canonical channel id.
-    expect(merged.programmes.map((p) => p.channel)).toEqual(['A.HABER.tr', 'A.HABER.tr']);
+    expect(merged.programmes.map((p) => p.channel)).toEqual(['AHABERX.tr', 'AHABERX.tr']);
     expect(merged.programmes.map((p) => p.title)).toEqual(['From Hurriyet', 'From Mynet']);
   });
 
@@ -151,7 +151,7 @@ describe('mergeResults', () => {
     // inherited keys, so `constructor` resolved to Object.prototype.constructor
     // (a function). mergeResults then rejected the non-string id and silently
     // dropped the channel *and* every programme on it. Own-property lookup only.
-    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'A.HABER.tr' });
+    const canonicalize = createCanonicalizer({ 'AHABER.tr': 'AHABERX.tr' });
     const protoKeys = ['constructor', 'toString', '__proto__', 'valueOf', 'hasOwnProperty'];
     const merged = mergeResults(
       [
@@ -174,9 +174,9 @@ describe('mergeResults', () => {
   it('canonicalizes through an alias map with prototype keys as real entries', () => {
     // An alias map may legitimately alias one of those names; an own entry must
     // still win, and must not send resolution off the prototype chain.
-    const canonicalize = createCanonicalizer({ constructor: 'ATV.tr', toString: 'TRT.1.tr' });
+    const canonicalize = createCanonicalizer({ constructor: 'ATV.tr', toString: 'TRT1.tr' });
     expect(canonicalize('constructor')).toBe('ATV.tr');
-    expect(canonicalize('toString')).toBe('TRT.1.tr');
+    expect(canonicalize('toString')).toBe('TRT1.tr');
     expect(canonicalize('__proto__')).toBe('__proto__');
     expect(canonicalize('valueOf')).toBe('valueOf');
   });
@@ -203,7 +203,7 @@ describe('mergeResults', () => {
     // writer resolve the conflict.  Verify order: A before B.
     const merged = mergeResults([providerA(), providerB()]);
     const slot = merged.programmes.filter(
-      (p) => p.channel === 'KANAL.D.tr' && p.start === '2026-09-07T15:00:00+03:00'
+      (p) => p.channel === 'KANALD.tr' && p.start === '2026-09-07T15:00:00+03:00'
     );
     expect(slot[0].title).toBe('A Show');
   });
@@ -251,18 +251,18 @@ describe('cli --merge', () => {
     expect(xml).toContain('<title lang="tr">Only In A</title>');
     expect(xml).toContain('<title lang="tr">Only In B</title>');
     // Conflicting slot keeps the first provider's version.
-    const slot = xml.match(/<programme[^>]*channel="KANAL.D.tr"[^>]*>[\s\S]*?<\/programme>/);
+    const slot = xml.match(/<programme[^>]*channel="KANALD.tr"[^>]*>[\s\S]*?<\/programme>/);
     expect(slot).toBeDefined();
     expect(slot[0]).not.toContain('B Show');
     expect(slot[0]).toContain('A Show');
-    // Only one KANAL.D.tr programme for that slot.
-    expect(xml.match(/channel="KANAL.D.tr"/g)).toHaveLength(1);
+    // Only one KANALD.tr programme for that slot.
+    expect(xml.match(/channel="KANALD.tr"/g)).toHaveLength(1);
   });
 
   it('merges the mynet+sports alias map into canonical channel ids', async () => {
-    // Regression test for aliases.mynet-sports.json: mynet emits FB.TV.tr /
-    // ULUSAL.TV.tr while tvplus / the reference use FENERBAHÇE.TV.tr /
-    // ULUSAL.KANAL.tr. The shipped map must stay valid JSON and collapse both.
+    // Regression test for aliases.mynet-sports.json: mynet emits FBTV.tr /
+    // ULUSALTV.tr while tvplus uses FENERBAHCETV.tr / ULUSALKANAL.tr. The
+    // shipped map must stay valid JSON and collapse both.
     const aliasMap = JSON.parse(
       readFileSync(path.join(process.cwd(), 'aliases.mynet-sports.json'), 'utf8')
     );
@@ -271,10 +271,10 @@ describe('cli --merge', () => {
     const merged = mergeResults(
       [
         {
-          channels: [{ id: 'FB.TV.tr', name: 'FB TV' }],
+          channels: [{ id: 'FBTV.tr', name: 'FB TV' }],
           programmes: [
             {
-              channel: 'FB.TV.tr',
+              channel: 'FBTV.tr',
               start: '2026-09-07T15:00:00+03:00',
               stop: '2026-09-07T16:00:00+03:00',
               title: 'Mynet FB Show',
@@ -283,35 +283,35 @@ describe('cli --merge', () => {
         },
         {
           channels: [
-            { id: 'FENERBAHÇE.TV.tr', name: 'FB TV' },
-            { id: 'ULUSAL.TV.tr', name: 'ULUSAL TV' },
+            { id: 'FENERBAHCETV.tr', name: 'FB TV' },
+            { id: 'ULUSALTV.tr', name: 'ULUSAL TV' },
           ],
           programmes: [],
         },
       ],
       canonicalize
     );
-    // FB collapses onto the canonical tvplus id; ULUSAL onto the reference id.
+    // FB collapses onto the canonical tvplus id; ULUSAL onto the catalog id.
     expect(merged.channels.map((c) => c.id).sort()).toEqual([
-      'FENERBAHÇE.TV.tr',
-      'ULUSAL.KANAL.tr',
+      'FENERBAHCETV.tr',
+      'ULUSALKANAL.tr',
     ]);
-    expect(merged.channels.every((c) => c.id !== 'FB.TV.tr')).toBe(true);
-    expect(merged.programmes[0].channel).toBe('FENERBAHÇE.TV.tr');
+    expect(merged.channels.every((c) => c.id !== 'FBTV.tr')).toBe(true);
+    expect(merged.programmes[0].channel).toBe('FENERBAHCETV.tr');
   });
 
   it('merges aliased channel ids into one canonical channel via --alias-map', async () => {
     const aliasPath = path.join(tmpDir, 'aliases.json');
-    writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'A.HABER.tr' }));
+    writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'AHABERX.tr' }));
     registerProvider({
       id: 'merge-alias-a',
       name: 'Alias A',
       baseUrl: 'https://a',
       scrape: async () => ({
-        channels: [{ id: 'A.HABER.tr', name: 'A Haber' }],
+        channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
         programmes: [
           {
-            channel: 'A.HABER.tr',
+            channel: 'AHABER.tr',
             start: '2026-09-07T15:00:00+03:00',
             stop: '2026-09-07T16:00:00+03:00',
             title: 'From A',
@@ -364,8 +364,8 @@ describe('cli --merge', () => {
     expect(existsSync(out)).toBe(true);
     const xml = readFileSync(out, 'utf8');
     // Exactly one canonical channel, referenced by both programmes.
-    expect(xml.match(/<channel id="A\.HABER\.tr">/g)).toHaveLength(1);
-    expect(xml).not.toContain('AHABER.tr');
+    expect(xml.match(/<channel id="AHABERX\.tr">/g)).toHaveLength(1);
+    expect(xml).not.toContain('id="AHABER.tr"');
     expect(xml).toContain('<title lang="tr">From A</title>');
     expect(xml).toContain('<title lang="tr">From B</title>');
   });

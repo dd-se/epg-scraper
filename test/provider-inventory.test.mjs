@@ -4,7 +4,6 @@ import { loadProviders } from '../src/providers/index.js';
 import {
   COMMAND_PROFILES,
   PROVIDER_CATALOG,
-  REFERENCE_SNAPSHOTS,
   ciSportsProviders,
   curatedChannelIds,
   dailyCiMatrix,
@@ -184,14 +183,5 @@ describe('provider operational inventory', () => {
     expect(packageJson.scripts['scrape:mynet-sports']).toBe(
       'node scripts/provider-inventory.js --run mynetSports'
     );
-  });
-
-  it('groups reference coverage by country', () => {
-    expect(REFERENCE_SNAPSHOTS.map((snapshot) => snapshot.country)).toEqual(['TR', 'SE']);
-    for (const snapshot of REFERENCE_SNAPSHOTS) {
-      expect(PROVIDER_CATALOG.filter((entry) => entry.referenceCountry === snapshot.country)).not.toEqual(
-        []
-      );
-    }
   });
 });

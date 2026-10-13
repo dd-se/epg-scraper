@@ -12,6 +12,7 @@ m3u-report.json
 
 # local scratch / fetched reference files
 .tmp/
+.scratch/
 
 # local Spor Ekranı API protocol notes (may contain credentials — never commit)
 sporekrani-api.md

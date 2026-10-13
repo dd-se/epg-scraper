@@ -147,11 +147,13 @@ describe('tvplus pure parsers', () => {
     expect(extractSessionCookie({})).toBeUndefined();
   });
 
-  it('maps display names to epgshare01 ids', () => {
-    expect(mapChannelId('TRT SPOR')).toBe('TRT.SPOR.tr');
-    expect(mapChannelId('tabii spor')).toBe('TABII.SPOR.tr');
-    expect(mapChannelId('S SPORT 2')).toBe('SSport.2.tr');
-    expect(mapChannelId('TV8,5')).toBe('TV8.5.tr');
+  it('maps display names to curated ids', () => {
+    expect(mapChannelId('TRT SPOR')).toBe('TRTSPOR.tr');
+    expect(mapChannelId('tabii spor')).toBe('TABIISPOR.tr');
+    expect(mapChannelId('S SPORT')).toBe('SSPORT1.tr');
+    expect(mapChannelId('S SPORT 2')).toBe('SSPORT2.tr');
+    expect(mapChannelId('EUROSPORT 1')).toBe('EUROSPORT1.tr');
+    expect(mapChannelId('TV8,5')).toBe('TV85.tr');
     expect(mapChannelId('BEIN SPORTS 1')).toBeUndefined(); // not on TV+
     expect(normalizeChannelKey('  trt   spor ')).toBe('TRT SPOR');
   });
@@ -245,13 +247,13 @@ describe('tvplus scrape (stubbed json api)', () => {
     expect(result.days).toBe(1);
     expect(result.failures).toBe(0);
     expect(result.channels).toHaveLength(1);
-    expect(result.channels[0].id).toBe('TRT.1.tr');
+    expect(result.channels[0].id).toBe('TRT1.tr');
     // TRT 1's channelpic wordmark lands on the channel as its icon.
     expect(result.channels[0].icon).toBe(
       'https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp'
     );
     expect(result.programmes.length).toBe(12);
-    expect(result.programmes.every((p) => p.channel === 'TRT.1.tr')).toBe(true);
+    expect(result.programmes.every((p) => p.channel === 'TRT1.tr')).toBe(true);
     // The session cookie captured at Authenticate must be sent with PlayBillList.
     expect(seenCookies).toHaveLength(1);
     expect(seenCookies[0]).toContain('XSESSIONID=TEST123');

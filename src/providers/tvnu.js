@@ -52,19 +52,18 @@ export const BASE_URL = 'https://www.tv.nu';
 
 // Curated channel table: tv.nu page slug -> XMLTV id + display name.
 //
-// Ids are normalized to the Swedish epgshare01 guide
-// (`epg_ripper_SE1.xml.gz`, vendored as test/fixtures/epgshare01/
-// reference-se.json), whose ids carry a source tag: `[SVT1HD].SVT1.HD.se`.
-// Quality variants (the FHD/HD/SD entries an IPTV playlist carries for one
-// feed) collapse onto the single id the reference has, exactly like the
-// Turkish providers collapse their HD/SD pairs.  The few requested channels
-// the reference does not carry yet keep a generic slug from the curated
-// display name (country `se`) and are acknowledged in
-// reference-se.json `knownGaps`.
+// Swedish ids are the exception to the guide's id format: they keep their
+// source-tagged spelling (`[SVT1HD].SVT1.HD.se`, and the combined
+// `[COMSVHD].SVTB/SVT24.HD.se`) verbatim, because that is how Swedish
+// consumers' lists already name them.  Quality variants (the FHD/HD/SD
+// entries an IPTV playlist carries for one feed) collapse onto the single
+// HD-tagged id, exactly like the Turkish providers collapse their HD/SD
+// pairs.  A channel with no tagged id keeps a generic `.se` slug from the
+// curated display name (see channelIdFromName).
 export const CHANNELS = [
   { slug: 'svt1', name: 'SVT 1', id: '[SVT1HD].SVT1.HD.se' },
   { slug: 'svt2', name: 'SVT 2', id: '[SVT2HD].SVT2.HD.se' },
-  // SVT 24 and SVT Barn share one feed upstream (one combined epgshare01 id).
+  // SVT 24 and SVT Barn share one feed upstream (one combined id).
   { slug: 'svt24', name: 'SVT 24', id: '[COMSVHD].SVTB/SVT24.HD.se' },
   { slug: 'svt-barn', name: 'SVT Barn', id: channelIdFromName('SVT Barn', 'se') },
   { slug: 'kunskapskanalen', name: 'Kunskapskanalen', id: '[KUNSKHD].Kunskapskanalen.HD.se' },
@@ -82,13 +81,10 @@ export const CHANNELS = [
   { slug: 'tv4-sport-live-2', name: 'TV4 Sport Live 2', id: '[TV4SPL2].TV4.Sport.Live.2.se' },
   { slug: 'tv4-sport-live-3', name: 'TV4 Sport Live 3', id: '[TV4SPL3].TV4.Sport.Live.3.se' },
   { slug: 'tv4-sport-live-4', name: 'TV4 Sport Live 4', id: '[TV4SPL4].TV4.Sport.Live.4.se' },
-  // Viaplay/V Sport + Eurosport.  Ids follow the epgshare01 SE snapshot:
-  // HD-only ids where the reference carries no SD variant (V Sport 1 =
-  // [VIASPHD].V.Sport.1.HD.se, ...), the tagged Fight Sports id verbatim.
-  // "Viaplay Sport" (the combined 2024+ feed) has no reference entry yet, so
-  // it keeps a generic .se slug (acknowledged in reference-se.json
-  // knownGaps).  "V Sport Fotboll" ([VIAFOHD].V.Sport.Fotboll.HD.se
-  // upstream) has no tv.nu channel page as of 2026-09-17, so the id is NOT
+  // Viaplay/V Sport + Eurosport: HD-tagged ids, the tagged Fight Sports id
+  // verbatim.  "Viaplay Sport" (the combined 2024+ feed) has no tagged id, so
+  // it keeps a generic .se slug.  "V Sport Fotboll" ([VIAFOHD].V.Sport.Fotboll.HD.se)
+  // has no tv.nu channel page as of 2026-09-17, so the id is NOT
   // mapped to a page — documented in UNSUCCESSFUL.md.
   { slug: 'v-sport-1', name: 'V Sport 1', id: '[VIASPHD].V.Sport.1.HD.se' },
   { slug: 'v-sport-extra', name: 'V Sport Extra', id: '[VSSPXHD].V.Sport.Extra.HD.se' },
@@ -154,9 +150,7 @@ export const CHANNELS = [
   { slug: 'tlc', name: 'TLC', id: '[TLCSWHD].TLC.HD.se' },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 SE snapshot (or is an
-// acknowledged gap).  Keys are normalized (uppercased) like the other
+// name -> XMLTV id.  Keys are normalized (uppercased) like the other
 // providers' maps; the display name lives in CHANNELS[].name.
 export const CHANNEL_ID_MAP = Object.fromEntries(
   CHANNELS.map((c) => [normalizeChannelKey(c.name), c.id])

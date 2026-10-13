@@ -33,7 +33,7 @@ describe('entities', () => {
 });
 
 describe('slug', () => {
-  it('follows the epgshare01 convention', () => {
+  it('slugifies a display name', () => {
     expect(channelIdFromName('KANAL D')).toBe('KANAL.D.tr');
     expect(channelIdFromName('TRT BELGESEL')).toBe('TRT.BELGESEL.tr');
     expect(channelIdFromName('  360  ')).toBe('360.tr');
@@ -60,16 +60,16 @@ describe('xmltv timestamps', () => {
 
 describe('xmltv writer', () => {
   const channels = [
-    { id: 'KANAL.D.tr', name: 'KANAL D', icon: 'https://x/94.png', url: 'https://y/' },
+    { id: 'KANALD.tr', name: 'KANAL D', icon: 'https://x/94.png', url: 'https://y/' },
     { id: 'ATV.tr', name: 'ATV' },
   ];
 
-  it('emits the epgshare01 reference shape', () => {
+  it('emits the documented shape', () => {
     const xml = generateXmltv({
       channels,
       programmes: [
         {
-          channel: 'KANAL.D.tr',
+          channel: 'KANALD.tr',
           start: '2026-09-07T15:00:00+03:00',
           stop: '2026-09-07T17:00:00+03:00',
           title: 'Program Adı',
@@ -86,13 +86,13 @@ describe('xmltv writer', () => {
     });
 
     expect(xml).toContain('<tv generator-info-name="test" generator-info-url="none">');
-    expect(xml).toContain('<channel id="KANAL.D.tr">');
+    expect(xml).toContain('<channel id="KANALD.tr">');
     expect(xml).toContain('<display-name lang="tr">KANAL D</display-name>');
     expect(xml).toContain('<icon src="https://x/94.png" />');
     expect(xml).toContain('<url>https://y/</url>');
     expect(xml).toContain('</channel>');
     expect(xml).toContain(
-      '<programme start="20260907150000 +0300" stop="20260907170000 +0300" channel="KANAL.D.tr">'
+      '<programme start="20260907150000 +0300" stop="20260907170000 +0300" channel="KANALD.tr">'
     );
     expect(xml).toContain('<title lang="tr">Program Adı</title>');
     expect(xml).toContain('<category lang="tr">Dizi</category>');
@@ -138,7 +138,7 @@ describe('xmltv writer', () => {
       channels,
       programmes: [
         {
-          channel: 'KANAL.D.tr',
+          channel: 'KANALD.tr',
           start: '2026-09-07T15:00:00+03:00',
           stop: '2026-09-07T16:00:00+03:00',
           title: 'later',
@@ -150,7 +150,7 @@ describe('xmltv writer', () => {
           title: 'atv',
         },
         {
-          channel: 'KANAL.D.tr',
+          channel: 'KANALD.tr',
           start: '2026-09-07T06:00:00+03:00',
           stop: '2026-09-07T07:00:00+03:00',
           title: 'earlier',

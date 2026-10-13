@@ -2,7 +2,7 @@
 // fed from the open web can legitimately encounter.  The contract under test
 // (see AGENTS.md): malformed remote data degrades to an empty/warned result —
 // never a crash — and the emitted XMLTV stays well-formed and matches the
-// epgshare01 reference shape even when scraped content tries to break out of
+// the documented shape even when scraped content tries to break out of
 // the markup.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, existsSync, writeFileSync } from 'node:fs';
@@ -228,23 +228,30 @@ describe('adversarial: generateXmltv', () => {
   });
 
   it('neutralizes attribute-injection through quoted text and attributes', () => {
-    const evilId = 'X" onclick="evil()';
     const xml = generateXmltv({
       channels: [
-        { id: evilId, name: 'A&B <b>', icon: 'https://x/" onload="evil()' },
+        { id: 'XTR.tr', name: 'A&B <b>" onclick="evil()', icon: 'https://x/" onload="evil()' },
       ],
       programmes: [
-        { channel: evilId, start: '2026-09-07T00:00:00+03:00', stop: '2026-09-07T01:00:00+03:00', title: '" onmouseover="alert(1)' },
+        { channel: 'XTR.tr', start: '2026-09-07T00:00:00+03:00', stop: '2026-09-07T01:00:00+03:00', title: '" onmouseover="alert(1)' },
       ],
       generatorInfoName: '"><script>alert(1)</script>',
     });
     expect(xml).not.toContain('onmouseover="alert(1)"');
+    expect(xml).not.toContain('onclick="evil()"');
     expect(xml).not.toContain('<script>');
     expect(xml).toContain('&quot; onmouseover=&quot;alert(1)');
-    expect(xml).toContain('A&amp;B &lt;b&gt;');
-    expect(xml).toContain('id="X&quot; onclick=&quot;evil()"');
+    expect(xml).toContain('A&amp;B &lt;b&gt;&quot; onclick=&quot;evil()');
     expect(xml).toContain('src="https://x/&quot; onload=&quot;evil()"');
     expect(xml).toContain('generator-info-name="&quot;&gt;&lt;script&gt;');
+  });
+
+  it('refuses to write a channel id that is not canonical', () => {
+    for (const id of ['X" onclick="evil()', 'A.B.tr', 'ATV']) {
+      expect(() =>
+        generateXmltv({ channels: [{ id, name: 'X' }], programmes: [] })
+      ).toThrow(/channel id .* is not in canonical form/);
+    }
   });
 
   it('escapes CDATA-close sequences', () => {
@@ -1118,20 +1125,20 @@ describe('adversarial: scrape against hostile responses', () => {
 describe('adversarial: createCanonicalizer', () => {
   it('resolves single-level aliases like before', async () => {
     const { createCanonicalizer } = await import('../src/aliases.js');
-    const canon = createCanonicalizer({ 'AHABER.tr': 'A.HABER.tr' });
-    expect(canon('AHABER.tr')).toBe('A.HABER.tr');
-    expect(canon('A.HABER.tr')).toBe('A.HABER.tr');
+    const canon = createCanonicalizer({ 'AHABER.tr': 'AHABERX.tr' });
+    expect(canon('AHABER.tr')).toBe('AHABERX.tr');
+    expect(canon('AHABERX.tr')).toBe('AHABERX.tr');
     expect(canon('NTV.tr')).toBe('NTV.tr');
   });
 
   it('collapses alias chains onto one canonical id', async () => {
     const { createCanonicalizer } = await import('../src/aliases.js');
     const canon = createCanonicalizer({
-      'AHABER.tr': 'A.HABER.tr',
-      'A.HABER.tr': 'A.HABER.ALT.tr',
+      'AHABER.tr': 'AHABERX.tr',
+      'AHABERX.tr': 'AHABERALT.tr',
     });
-    expect(canon('AHABER.tr')).toBe('A.HABER.ALT.tr');
-    expect(canon('A.HABER.tr')).toBe('A.HABER.ALT.tr');
+    expect(canon('AHABER.tr')).toBe('AHABERALT.tr');
+    expect(canon('AHABERX.tr')).toBe('AHABERALT.tr');
   });
 
   it('terminates on alias cycles instead of looping forever', async () => {
@@ -1599,16 +1606,19 @@ describe('adversarial: CLI flags', () => {
 
   it('applies an alias chain so merged programmes land on one canonical channel', async () => {
     const aliasPath = path.join(tmpDir, 'chain-aliases.json');
-    writeFileSync(aliasPath, JSON.stringify({ 'AHABER.tr': 'A.HABER.tr', 'A.HABER.tr': 'A.HABER.ALT.tr' }));
+    writeFileSync(
+      aliasPath,
+      JSON.stringify({ 'AHABER.tr': 'AHABERX.tr', 'AHABERX.tr': 'AHABERALT.tr' })
+    );
     registerProvider({
       id: 'adv-chain-a',
       name: 'Chain A',
       baseUrl: 'https://example.invalid',
       scrape: async () => ({
-        channels: [{ id: 'A.HABER.tr', name: 'A Haber' }],
+        channels: [{ id: 'AHABERX.tr', name: 'A Haber' }],
         programmes: [
           {
-            channel: 'A.HABER.tr',
+            channel: 'AHABERX.tr',
             start: '2026-09-08T15:00:00+03:00',
             stop: '2026-09-08T16:00:00+03:00',
             title: 'From A',
@@ -1623,10 +1633,10 @@ describe('adversarial: CLI flags', () => {
       name: 'Chain B',
       baseUrl: 'https://example.invalid',
       scrape: async () => ({
-        channels: [{ id: 'AHABER.tr', name: 'A Haber' }],
+        channels: [{ id: 'AHABERALT.tr', name: 'A Haber' }],
         programmes: [
           {
-            channel: 'AHABER.tr',
+            channel: 'AHABERALT.tr',
             start: '2026-09-08T20:00:00+03:00',
             stop: '2026-09-08T21:00:00+03:00',
             title: 'From B',
@@ -1658,9 +1668,9 @@ describe('adversarial: CLI flags', () => {
     const xml = readFileSync(out, 'utf8');
     // Both providers' ids resolve through the chain onto the final canonical
     // id — one channel, both programmes referencing it.
-    expect(xml.match(/<channel id="A\.HABER\.ALT\.tr">/g)).toHaveLength(1);
-    expect(xml.match(/channel="A\.HABER\.ALT\.tr"/g)).toHaveLength(2);
-    expect(xml).not.toContain('AHABER.tr');
+    expect(xml.match(/<channel id="AHABERALT\.tr">/g)).toHaveLength(1);
+    expect(xml.match(/channel="AHABERALT\.tr"/g)).toHaveLength(2);
+    expect(xml).not.toContain('AHABERX.tr');
   });
 
   it('fails cleanly when --alias-map points at a missing or malformed file', async () => {

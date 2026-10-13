@@ -26,12 +26,13 @@ export const CHANNEL_CATALOG = [
   { pattern: 'TRT 1', id: 'trt1.tr', group: 'ULUSAL', note: 'national general-interest' },
   { pattern: 'Kanal D', id: 'kanald.tr', group: 'ULUSAL', note: 'national general-interest' },
   { pattern: 'Star TV', id: 'startv.tr', group: 'ULUSAL', note: 'national general-interest' },
-  // The source publishes `SHOW TV HD`; the Hürriyet guide spells the channel
-  // `SHOW TV`, and a name-keyed consumer only finds the guide under that
-  // spelling.  Declared here so the id/name pair stays stable if the source
-  // re-spells it.  See `EPG_NAME_CONTRACT` below for the rename contract.
-  { pattern: 'Show TV', id: 'showtvhd.tr', name: 'SHOW TV', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'FOX', id: 'fox.tr', group: 'ULUSAL', note: 'national general-interest' },
+  // The source publishes `SHOW TV HD`, but the channel's canonical name — and
+  // the spelling both guides use — is `SHOW TV`, so the id follows it too
+  // (`showtv.tr`, guide id `SHOWTV.tr`): id and name agree here rather than
+  // the id carrying the source's "HD".  See `EPG_NAME_CONTRACT` below.
+  { pattern: 'Show TV', id: 'showtv.tr', name: 'SHOW TV', group: 'ULUSAL', note: 'national general-interest' },
+  // FOX rebranded to NOW: no source publishes a `FOX` row any more, so the
+  // catalog carries one channel, not two.
   { pattern: 'NOW TV', id: 'nowtv.tr', name: 'NOW', group: 'DİZİ', note: 'national entertainment; guide spells it NOW' },
   { pattern: 'Show Turk', id: 'showturk.tr', group: 'ULUSAL', note: 'national general-interest' },
   { pattern: 'Show Max', id: 'showmax.tr', group: 'DİZİ', note: 'national entertainment' },
@@ -87,14 +88,17 @@ export const CHANNEL_CATALOG = [
  * breaks — so `TV 8` and `TV8` are *different* channels and only one of them
  * has a guide.  Each entry pairs the source's spelling with the guide's.
  *
- * The `tvg-id` deliberately keeps its ORIGINAL slug: the id is the stored
- * identity for a viewer's selection and must never change once published, while
- * the name is only a label.
+ * The name is the join key, so it must follow the guide.  The `tvg-id`
+ * normally keeps the source's ORIGINAL slug — the id is the stored identity
+ * for a viewer's selection and must not change once published, while the name
+ * is only a label — but where the source spelling is just a variant of the
+ * canonical channel (SHOW TV HD), the id follows the canonical name instead so
+ * id and guide agree.
  */
 export const EPG_NAME_CONTRACT = [
-  { from: 'NOW TV', to: 'NOW', guide: 'NOW', epgId: 'FOX.tr' },
+  { from: 'NOW TV', to: 'NOW', guide: 'NOW', epgId: 'NOWTV.tr' },
   { from: 'TV 8', to: 'TV8', guide: 'TV8', epgId: 'TV8.tr' },
-  { from: 'SHOW TV HD', to: 'SHOW TV', guide: 'SHOW TV', epgId: 'SHOW.TV.tr' },
+  { from: 'SHOW TV HD', to: 'SHOW TV', guide: 'SHOW TV', epgId: 'SHOWTV.tr' },
 ];
 
 /**
@@ -104,7 +108,7 @@ export const EPG_NAME_CONTRACT = [
  * than a silent omission.
  */
 export const CATALOG_EPG_GAPS = [
-  { name: 'TRT 4K', reason: 'no provider serves it and the upstream epgshare01 reference carries no TRT 4K id' },
+  { name: 'TRT 4K', reason: 'no provider serves it' },
 ];
 
 /** The catalog as plain `want` patterns. */

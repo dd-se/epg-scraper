@@ -33,8 +33,8 @@ import {
 
 export const BASE_URL = 'https://www.digiturkburada.com.tr';
 
-// Curated channel table: display name -> page slug + XMLTV id (normalized to
-// the epgshare01 reference where the reference carries the channel).
+// Curated channel table: display name -> page slug + XMLTV id (see src/slug.js
+// for the format).
 // beIN Sports 1-4 duplicate the beinsports provider's feeds on purpose:
 // this source keeps full-day schedules (and its own logos) while
 // beinsports.com.tr prunes already-aired slots intraday, so either side can
@@ -43,47 +43,46 @@ export const CHANNELS = [
   {
     name: 'beIN Sports 1',
     page: '/bein-sports-1-hd-yayin-akisi-60.html',
-    id: 'beIN.SPORTS.1.tr',
+    id: 'beINSPORTS1.tr',
   },
   {
     name: 'beIN Sports 2',
     page: '/bein-sports-2-hd-yayin-akisi-61.html',
-    id: 'beIN.SPORTS.2.tr',
+    id: 'beINSPORTS2.tr',
   },
   {
     name: 'beIN Sports 3',
     page: '/bein-sports-3-hd-yayin-akisi-62.html',
-    id: 'beIN.SPORTS.3.tr',
+    id: 'beINSPORTS3.tr',
   },
   {
     name: 'beIN Sports 4',
     page: '/bein-sports-4-hd-yayin-akisi-63.html',
-    id: 'beIN.SPORTS.4.tr',
+    id: 'beINSPORTS4.tr',
   },
   {
     name: 'beIN Sports 5',
     page: '/bein-sports-5-hd-yayin-akisi-154.html',
-    id: 'beIN.SPORTS.5.tr',
+    id: 'beINSPORTS5.tr',
   },
   {
     name: 'beIN Sports Max 1',
     page: '/bein-sports-max-1-hd-yayin-akisi-64.html',
-    id: 'beIN.SPORTS.MAX.1.tr',
+    id: 'beINSPORTSMAX1.tr',
   },
   {
     name: 'beIN Sports Max 2',
     page: '/bein-sports-max-2-hd-yayin-akisi-65.html',
-    id: 'beIN.SPORTS.MAX.2.tr',
+    id: 'beINSPORTSMAX2.tr',
   },
   {
     name: 'GS TV',
     page: '/gs-tv-hd-yayin-akisi-58.html',
-    id: 'GS.TV.tr',
+    id: 'GSTV.tr',
   },
 ];
 
-// name -> XMLTV id, exported so test/reference.test.mjs can enforce that
-// every curated id exists in the vendored epgshare01 snapshot.
+// name -> XMLTV id.
 export const CHANNEL_ID_MAP = Object.fromEntries(CHANNELS.map((c) => [c.name, c.id]));
 
 export function normalizeChannelKey(name) {
