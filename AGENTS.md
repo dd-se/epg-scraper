@@ -370,8 +370,15 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
       `group-title` (Turkish labels that outrank the sources' own), permanent
       `tvg-id`, and display `name` (pinned to the EPG guide's spelling).  Also
       exports `EPG_NAME_CONTRACT` (the three EPG-matching renames) and
-      `CATALOG_EPG_GAPS` (channels with no programme data — only `TRT 4K` now;
-      `TRT Haber` is served by both the `trt` and `mynet` guides).
+      `CATALOG_EPG_GAPS` (channels with no programme data at all, keyed by
+      catalog `id` — `TRT 4K`, `Show Türk`, `Show Max`, `TV8 Haber`,
+      `Minika Go`, `Baby TV`, `Nickelodeon`, `Flash TV`, `Investigation`,
+      `Discovery Channel`, `History`; `TRT Haber` is served by both the `trt`
+      and `mynet` guides, so it is not one).  `test/channel-id.test.mjs`
+      asserts every catalog `tvg-id` has a curated guide counterpart (folded,
+      case-insensitively) unless it is in `CATALOG_EPG_GAPS`, and fails the
+      other way on a stale gap — so a new catalog entry cannot ship a channel
+      no guide serves.
 17. `src/aliases.js` — optional channel-id alias map: `loadAliasMap(path)`
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
@@ -604,8 +611,12 @@ There is no upstream id list any more: channel ids are **curated here** and
 enforced by `test/channel-id.test.mjs`.
 
 - Turkish (`.tr`) ids: ASCII, every Turkish diacritic folded to its Latin
-  letter, **no separators**, case preserved (`beINSPORTS1.tr`, `SSport.tr`),
-  and the `.tr` suffix — the suffix's dot is the only dot in the id.
+  letter, **no separators**, case preserved (`beINSPORTS1.tr`, `SSPORT1.tr`),
+  and the `.tr` suffix — the suffix's dot is the only dot in the id.  An
+  `HD`/`TRHD` qualifier is never part of the identity (`EUROSPORT1.tr`, not
+  `EUROSPORT1HD.tr`); a station available *only* in HD keeps it
+  (`TRTAVAZHD.tr`).  An id names the channel's **current** name, so a rebrand
+  is a rename: `NOWTV.tr`, not the dead `FOX.tr`.
   `foldChannelId()` is idempotent, so applying it at any seam is safe.
 - Swedish (`.se`) ids: **exempt**. tvnu keeps its source-tagged upstream
   spelling (`[SVT1HD].SVT1.HD.se`, `[COMSVHD].SVTB/SVT24.HD.se`) verbatim.

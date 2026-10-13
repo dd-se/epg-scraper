@@ -561,13 +561,20 @@ it does not recognise. Three rules follow, and the config satisfies them via
    `channels.js` (`EPG_NAME_CONTRACT`): `NOW TV`→`NOW`, `TV 8`→`TV8`,
    `SHOW TV HD`→`SHOW TV`. Each keeps its **original** id slug
    (`nowtv.tr`, `tv8.tr`, `showtv.tr`) — the id is the identity, the name is
-   only a label.
+   only a label. Where the source spelling is merely a variant of the canonical
+   channel, the id follows the canonical name instead, so id and guide agree.
 
-One channel ships with **no programme data**: `TRT 4K` is in no published
-guide. This is
-**accepted, not fixed** — a viewer picking it gets a channel with no NOW/NEXT.
-It is recorded in `CATALOG_EPG_GAPS` (`channels.js`) so the gap is a decision on
-record rather than a silent omission.
+**Every catalog channel has a guide counterpart** — `test/channel-id.test.mjs`
+folds both namespaces the way a player does and fails on a `tvg-id` no guide
+answers to. Eleven channels ship with **no programme data**: `TRT 4K`, `Show
+Türk`, `Show Max`, `TV8 Haber`, `Minika Go`, `Baby TV`, `Nickelodeon`, `Flash
+TV`, `Investigation`, `Discovery Channel` and `History` are in no published
+guide's channel list (verified against live runs of the broad Turkish guides,
+not merely spelled differently). This is **accepted, not fixed** — a viewer
+picking one gets a channel with no NOW/NEXT. Each is recorded in
+`CATALOG_EPG_GAPS` (`channels.js`) with a reason, keyed by catalog `id`, so
+the gap is a decision on record rather than a silent omission; give one of them
+a real guide id and its entry goes with it.
 
 `TRT Haber` used to sit beside it. Both the `trt` and `mynet` guides list the
 channel (`TRTHABER.tr`), and its `<display-name>` folds onto the playlist's
@@ -694,12 +701,17 @@ Conventions every provider must follow:
   own format: the name in ASCII with every Turkish diacritic folded to its
   Latin letter (`CNN TÜRK` → `CNNTURK.tr`, `TRT Çocuk` → `TRTCOCUK.tr`),
   no separators at all, case preserved (`beIN Sports 1` → `beINSPORTS1.tr`,
-  `S Sport` → `SSport.tr`), plus the `.tr` suffix — only the suffix may
+  `S Sport` → `SSPORT1.tr`), plus the `.tr` suffix — only the suffix may
   contain a dot. `foldChannelId()` in `src/slug.js` implements the rule and
-  the writer refuses any id that is not already in final form. Providers pin
-  the ids a slug cannot recover: HD-only stations (`ANEWSHD.tr`,
-  `TRTAVAZHD.tr`) and renamed/split feeds that collapse onto one id
-  (`NOW` → `FOX.tr`, `TV2` → `TEVE2.tr`, `TRT 3 / TRT SPOR` → `TRTSPOR.tr`).
+  the writer refuses any id that is not already in final form. An `HD`/`TRHD`
+  qualifier is **not** part of a channel's identity, so it never reaches the id
+  (`Eurosport 1` → `EUROSPORT1.tr`, not `EUROSPORT1HD.tr`); a station that is
+  *only* available in HD keeps the qualifier, because there the slug cannot
+  recover it (`ANEWSHD.tr`, `TRTAVAZHD.tr`). Providers pin the ids a slug
+  cannot otherwise recover: renamed/split feeds that collapse onto one id
+  (`TV2` → `TEVE2.tr`, `TRT 3 / TRT SPOR` → `TRTSPOR.tr`) and the FOX rebrand,
+  where mynet still lists the old name and hurriyet the new one
+  (`FOX`/`NOW` → `NOWTV.tr`, the id both the guide and the playlist publish).
   Unknown channels fall back to the generic slug of their display name,
   folded at the same seam. Swedish (`tvnu`) ids are the exception: they keep
   their source-tagged upstream spelling (`[SVT1HD].SVT1.HD.se`) verbatim.

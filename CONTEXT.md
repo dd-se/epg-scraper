@@ -17,8 +17,8 @@ One time-bounded listing on a channel, carrying a title and optional subtitle, d
 _Avoid_: Programme record, event
 
 **Channel Identity**:
-The stable XMLTV channel id used to recognize the same television feed across provider names and guide sources.
-_Avoid_: Channel name, slug
+The stable XMLTV channel id used to recognize the same television feed across provider names and guide sources. It names the channel's *current* name and carries no qualifier that is not the channel's own (no `HD`, no legacy brand), so a rebrand is a rename and the identity survives a spelling change on any one source.
+_Avoid_: Channel name, slug, source slug
 
 **Guide Window**:
 The ordered set of calendar dates a provider run is expected to cover.
