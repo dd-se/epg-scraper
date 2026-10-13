@@ -74,6 +74,30 @@ describe('channelIdFromName', () => {
     expect(foldChannelId(channelIdFromName('Yeni Kanal 9'))).toBe('YENIKANAL9.tr');
     expect(channelIdFromName('SVT Barn', 'se')).toBe('SVT.BARN.se');
   });
+
+  it('folds Turkish diacritics instead of dropping the letter', () => {
+    // Regression: `toUpperCase` leaves `İ` alone, the slug rule turned it into a
+    // dot, and the dot was later removed — so an unmapped "DİYANET TV" shipped
+    // as `DYANETTV.tr` and "SİNEMA TV" as `SNEMATV.tr`.  Every diacritic must
+    // fold to its Latin letter here, exactly as `foldChannelId` does.
+    for (const [name, id] of [
+      ['SİNEMA TV', 'SINEMATV.tr'],
+      ['DİYANET TV', 'DIYANETTV.tr'],
+      ['SÖZCÜ TV', 'SOZCUTV.tr'],
+      ['TARİH TV', 'TARIHTV.tr'],
+      ['LİDER HABER TV', 'LIDERHABERTV.tr'],
+      ['beIN İZ', 'BEINIZ.tr'],
+      ['MİNİKAGO', 'MINIKAGO.tr'],
+      ['ŞÖMİNE PLUS', 'SOMINEPLUS.tr'],
+    ]) {
+      expect(foldChannelId(channelIdFromName(name)), name).toBe(id);
+    }
+  });
+
+  it('folds before slugging, so no dot ever stands in for a letter', () => {
+    expect(channelIdFromName('İstanbul TV')).toBe('ISTANBUL.TV.tr');
+    expect(channelIdFromName('Çocuk TV')).toBe('COCUK.TV.tr');
+  });
 });
 
 describe('the curated provider maps are the database', () => {

@@ -63,7 +63,14 @@ export function isCanonicalChannelId(id) {
 }
 
 export function channelIdFromName(name, country = 'tr') {
-  const upper = String(name == null ? '' : name).trim().toUpperCase();
+  // Fold the Turkish diacritics *before* slugging: `String.toUpperCase` leaves
+  // `İ` alone, and the slug rule replaces every non `[A-Z0-9]` char with a dot
+  // — so an unfolded `İ` became a dot and the letter vanished, shipping
+  // "DİYANET TV" as `DYANETTV.tr` and "SİNEMA TV" as `SNEMATV.tr`.  Folding
+  // first is what makes the fallback agree with `foldChannelId`.
+  const upper = [...String(name == null ? '' : name).trim().toUpperCase()]
+    .map((char) => TURKISH_FOLD.get(char) ?? char)
+    .join('');
   const slug = upper
     .replace(/[^A-Z0-9]+/g, '.')
     .replace(/^\.+/, '')

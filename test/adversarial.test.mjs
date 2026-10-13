@@ -106,7 +106,10 @@ describe('adversarial: channelIdFromName', () => {
   it('degrades unicode-only names deterministically instead of crashing', () => {
     expect(channelIdFromName('СТС')).toBe('UNKNOWN.tr'); // Cyrillic
     expect(channelIdFromName('📺 TV')).toBe('TV.tr'); // emoji collapses
-    expect(channelIdFromName('İSTANBUL')).toBe('STANBUL.tr'); // dotted İ is non-ASCII
+    // Turkish diacritics fold to their Latin letter; scripts outside the
+    // Turkish set still degrade to UNKNOWN rather than transliterating.
+    expect(channelIdFromName('İSTANBUL')).toBe('ISTANBUL.tr');
+    expect(channelIdFromName('ÖŞ')).toBe('OS.tr');
   });
 
   it('collapses different spellings of the same name onto one id', () => {
@@ -122,8 +125,10 @@ describe('adversarial: channelIdFromName', () => {
     const id = channelIdFromName('X'.repeat(100_000) + ' '.repeat(50_000));
     expect(id.endsWith('.tr')).toBe(true);
     expect(id.length).toBe(100_000 + 3); // the X-run survives, the space run collapses
+    // A Ü run folds to a U run: long, but finite and correctly spelled.
     const unicode = channelIdFromName('Ü'.repeat(10_000));
-    expect(unicode).toBe('UNKNOWN.tr');
+    expect(unicode).toBe(`${'U'.repeat(10_000)}.tr`);
+    expect(channelIdFromName('СТС'.repeat(1_000))).toBe('UNKNOWN.tr'); // non-Turkish script
   });
 });
 
