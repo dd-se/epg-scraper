@@ -227,7 +227,7 @@ describe('the curated provider maps are the database', () => {
       PROVIDER_CATALOG.filter((entry) => entry.sports?.live)
         .flatMap((entry) => sportsChannelIds(entry))
     );
-    expect(sports.size).toBe(33);
+    expect(sports.size).toBe(34);
     // Every declared sports id is a real curated id of that same provider.
     for (const entry of PROVIDER_CATALOG.filter((candidate) => candidate.sports?.live)) {
       const curated = new Set(curatedChannelIds(entry));

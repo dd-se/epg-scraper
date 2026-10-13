@@ -109,10 +109,11 @@ a channel display name at `finishResult()`) — lives in
   channel. Stops chain across the rolling list. It remains registered for
   provider-to-provider benchmarking but is excluded from CI because sparse
   lists can extend a programme for days.
-- `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor 1-4 via
+- `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor and Tivibu Spor 1-4 via
   `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
   and its plain-HTTP JSON API.  One session GET per channel captures the
-  ASP.NET antiforgery cookie, hidden-input token and channel code; a
+  ASP.NET antiforgery cookie, hidden-input token, channel code and logo from
+  `img.channellogo`; the logo is emitted as the XMLTV channel icon. A
   `POST /Channel/GetPrevueList` per channel-day returns
   `mobilPrevueViewModel[]` with **explicit start/stop** (+ `genre`,
   `description`).  `parseChannelPage()` / `parsePrevueResponse()` /

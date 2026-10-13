@@ -1,4 +1,4 @@
-// Tivibu provider — Tivibu Spor 1, Tivibu Spor 2, Tivibu Spor 3, Tivibu Spor 4.
+// Tivibu provider — Tivibu Spor and Tivibu Spor 1-4.
 //
 // Source: https://www.tivibu.com.tr/kanallar/{slug}  (Tivibu GO, Türk Telekom)
 //
@@ -48,6 +48,7 @@ export const CHANNELS = [
   { name: 'Tivibu Spor 2', slug: 'tivibu-spor-2', id: 'TIVIBUSPOR2.tr' },
   { name: 'Tivibu Spor 3', slug: 'tivibu-spor-3', id: 'TIVIBUSPOR3.tr' },
   { name: 'Tivibu Spor 4', slug: 'tivibu-spor-4', id: 'TIVIBUSPOR4.tr' },
+  { name: 'Tivibu Spor', slug: 'tivibu-spor', id: 'TIVIBUSPOR.tr' },
 ];
 
 export { normalizeChannelKey };
@@ -89,15 +90,27 @@ function parseWallTime(value) {
   return { date: `${match[1]}-${match[2]}-${match[3]}`, min: minutes };
 }
 
-// Parse a channel page into { channelCode, token }.  Degrades to undefined
-// fields on missing/malformed markup, never a crash.
+// Parse a channel page into { channelCode, token, icon }.  Degrades to
+// undefined fields on missing/malformed markup, never a crash.
 export function parseChannelPage(html) {
   const source = html == null ? '' : String(html);
   const tokenMatch = /class="token"[^>]*value="([^"]+)"/.exec(source);
   const codeMatch = /\/rv\?i=[^"]*?(ch\d{20})/.exec(source);
+  const logoTag = /<img\b(?=[^>]*\bclass=["'][^"']*\bchannellogo\b[^"']*["'])[^>]*>/i.exec(source);
+  const logoSrc = logoTag && /\bsrc=["']([^"']+)["']/i.exec(logoTag[0]);
+  let icon;
+  if (logoSrc) {
+    try {
+      const logoUrl = new URL(logoSrc[1].replaceAll('&amp;', '&'), BASE_URL);
+      if (logoUrl.protocol === 'http:' || logoUrl.protocol === 'https:') icon = logoUrl.href;
+    } catch {
+      // Ignore malformed logo URLs; a missing logo does not invalidate a guide.
+    }
+  }
   return {
     token: tokenMatch ? tokenMatch[1] : undefined,
     channelCode: codeMatch ? codeMatch[1] : undefined,
+    icon,
   };
 }
 
@@ -226,6 +239,7 @@ export async function scrape({
 
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];
+  const channelIcons = new Map();
   let failures = 0;
 
   for (const channel of channels) {
@@ -238,12 +252,13 @@ export async function scrape({
       log(`warn: ${channel.name} session failed: ${error.message}`);
       continue;
     }
-    const { channelCode, token } = parseChannelPage(session.html);
+    const { channelCode, token, icon } = parseChannelPage(session.html);
     if (!channelCode || !token) {
       failures++;
       log(`warn: ${channel.name} page missing channel code or token`);
       continue;
     }
+    if (icon) channelIcons.set(channel.id, icon);
 
     for (const date of activeDates) {
       let json;
@@ -290,7 +305,11 @@ export async function scrape({
 
   // Dedupe exact repeats and return in the canonical (channel, start) order.
   return finishResult({
-    channels: channels.map((c) => ({ id: c.id, name: c.name })),
+    channels: channels.map((c) => ({
+      id: c.id,
+      name: c.name,
+      ...(channelIcons.has(c.id) ? { icon: channelIcons.get(c.id) } : {}),
+    })),
     programmes,
     days: activeDates.length,
     failures,

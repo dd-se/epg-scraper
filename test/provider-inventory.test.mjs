@@ -108,8 +108,8 @@ describe('provider operational inventory', () => {
     const union = (entries) => new Set(entries.flatMap((entry) => sportsChannelIds(entry)));
     const liveIds = union(liveSportsProviders());
     const ciIds = union(ciSportsProviders());
-    expect(liveIds.size).toBe(33);
-    expect(ciIds.size).toBe(33);
+    expect(liveIds.size).toBe(34);
+    expect(ciIds.size).toBe(34);
     for (const id of curatedChannelIds(PROVIDER_CATALOG.find((entry) => entry.id === 'beinsports'))) {
       expect(ciIds.has(id)).toBe(true);
     }

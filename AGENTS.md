@@ -263,7 +263,7 @@ catalog/registry/http/xmltv/model/time/slug → env-file → cli.
 ### Sports coverage
 
 `tvplus` + `beinsports` + `digiturkburada` + `sporekraniapi` + `tivibu` +
-`idmantv` merged with `--merge --sports-only` cover **33 distinct sports feeds**:
+`idmantv` merged with `--merge --sports-only` cover **34 distinct sports feeds**:
 each provider contributes only its sports subset (`sportsChannelIds()` in the
 catalog), because tvplus also curates a general-interest lineup.  The rest —
 Exxen stays login-walled, the others are platform-exclusive — are tracked in
@@ -273,7 +273,7 @@ The daily CI merge skips `beinsports` (its 1-4 feeds are covered by
 `digiturkburada`, which keeps full-day schedules) and the rolling SSR
 `sporekrani` baseline (the day-scoped `sporekraniapi` adapter matches starts and
 bounds final stops at midnight).  `sporekraniapi` adds the tabii spor 1-8
-simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv` adds
+simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor and Tivibu Spor 1-4; `idmantv` adds
 İdman TV (an Azerbaijani charter).
 
 ## CLI modes

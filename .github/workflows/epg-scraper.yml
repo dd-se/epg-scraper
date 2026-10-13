@@ -192,7 +192,7 @@ jobs:
           if-no-files-found: warn
 
   # One combined sports guide: union of tvplus (16), digiturkburada (8),
-  # sporekraniapi (9), tivibu (4) and idmantv (1) channels.
+  # sporekraniapi (9), tivibu (5) and idmantv (1) channels.
   # Reuses the per-provider guides scraped above — zero live-server hits: the
   # artifacts are downloaded and merged offline with --merge --from.
   # Runs even when some providers failed (`!cancelled()`): merges whatever

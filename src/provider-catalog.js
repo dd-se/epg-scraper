@@ -91,7 +91,7 @@ export const PROVIDER_CATALOG = [
   },
   {
     id: 'tivibu',
-    name: 'Tivibu Yayın Akışı (Tivibu Spor 1-4)',
+    name: 'Tivibu Yayın Akışı (Tivibu Spor, 1-4)',
     module: tivibu,
     browserCompatible: false,
     ci: { enabled: true, args: [], order: 70 },

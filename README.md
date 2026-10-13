@@ -78,7 +78,7 @@ masks sensitive query values (`app_id`, `api_key`, `token`, …) and userinfo, s
 a credential-bearing URL cannot leak into output or CI logs.
 
 The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
-`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (33 sports channels together,
+`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (34 sports channels together,
 with `--sports-only` — TV+ also curates the general-interest lineup, and only its sports
 subset belongs in this feed).
 Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
@@ -935,12 +935,13 @@ failed requests and every stop inside its own day.
 ## Provider: tivibu
 
 - Source: `https://www.tivibu.com.tr/kanallar/{slug}` (Tivibu GO, Türk
-  Telekom) — covers **Tivibu Spor 1-4** (the old `tivibu.com.tr/yayin-akisi`
+  Telekom) — covers **Tivibu Spor and Tivibu Spor 1-4** (the old `tivibu.com.tr/yayin-akisi`
   path is dead; the new site moved to `/kanallar/<slug>`).
 - Transport: the day-grid's date switcher is client-side, but behind it is a
   plain-HTTP JSON API (discovered via chrome-devtools): one GET of the
   channel page captures the ASP.NET antiforgery cookie, the hidden-input
-  request token, and the channel's code (`ch…` in the `/rv?i=2|ch…` links);
+  request token, the channel's code (`ch…` in the `/rv?i=2|ch…` links), and
+  the channel logo (`img.channellogo`);
   a `POST /Channel/GetPrevueList` per channel-day then returns
   `mobilPrevueViewModel[]` with `{ prevueName, genre, beginTime, endTime,
   description }` — **explicit start/stop on every slot**, so no stop
@@ -956,7 +957,7 @@ failed requests and every stop inside its own day.
   so it cannot run under `--browser`.
 
 ```bash
-# All 4 channels, today
+# All 5 channels, today
 node bin/epg-scraper.js --provider tivibu --date 2026-09-08
 ```
 
@@ -1132,7 +1133,7 @@ merge:sports` is the same run, offline).
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
 `digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV
 exist nowhere else); `sporekraniapi` adds
-tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv`
+tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor and Tivibu Spor 1-4; `idmantv`
 adds İdman TV (Azerbaijani titles).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
 

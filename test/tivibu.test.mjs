@@ -25,6 +25,19 @@ const day1_09 = fixture('tivibu-spor-1-2026-09-09.json');
 const day2_09 = fixture('tivibu-spor-2-2026-09-09.json');
 const day3_09 = fixture('tivibu-spor-3-2026-09-09.json');
 const day4_09 = fixture('tivibu-spor-4-2026-09-09.json');
+const originalPage = page1
+  .replace('ch00000000000000001356', 'ch00000000000000001355')
+  .replace(
+    '</body>',
+    '<img class="channellogo" src="https://itv224226.tmp.tivibu.com.tr:6430/images/poster/original.png"></body>'
+  );
+const channelPages = {
+  'tivibu-spor': originalPage,
+  'tivibu-spor-1': page1,
+  'tivibu-spor-2': page2,
+  'tivibu-spor-3': page2,
+  'tivibu-spor-4': page2,
+};
 
 const pageResponse = (html, setCookie) => ({
   ok: true,
@@ -42,9 +55,30 @@ describe('tivibu pure parsers', () => {
     expect(token).toMatch(/^CfDJ8/);
   });
 
+  it('extracts and resolves the channel logo URL from the page', () => {
+    const html = page1.replace(
+      '</body>',
+      '<img class="channellogo" src="/images/poster/sport.png?x=1&amp;y=2"></body>'
+    );
+    expect(parseChannelPage(html).icon).toBe(
+      'https://www.tivibu.com.tr/images/poster/sport.png?x=1&y=2'
+    );
+  });
+
   it('degrades gracefully on missing markup', () => {
     expect(parseChannelPage('<html>nothing</html>')).toEqual({ channelCode: undefined, token: undefined });
     expect(parseChannelPage(undefined)).toEqual({ channelCode: undefined, token: undefined });
+  });
+
+  it('ignores malformed logo URLs without losing the session fields', () => {
+    const html = page1.replace(
+      '</body>',
+      '<img class="channellogo" src="javascript:alert(1)"></body>'
+    );
+    const parsed = parseChannelPage(html);
+    expect(parsed.channelCode).toBe('ch00000000000000001356');
+    expect(parsed.token).toMatch(/^CfDJ8/);
+    expect(parsed.icon).toBeUndefined();
   });
 
   it('parses a day response into explicit begin/end slots', () => {
@@ -163,13 +197,14 @@ describe('tivibu pure parsers', () => {
   it('maps display names to slugs and ids', () => {
     expect(mapChannelId('Tivibu Spor 1')).toBe('TIVIBUSPOR1.tr');
     expect(mapChannelId('TIVIBU SPOR 4')).toBe('TIVIBUSPOR4.tr');
+    expect(mapChannelId('Tivibu Spor')).toBe('TIVIBUSPOR.tr');
     expect(mapChannelId('Tivibu Spor 5')).toBeUndefined();
     expect(normalizeChannelKey('  tivibu   spor 2 ')).toBe('TIVIBU SPOR 2');
     expect(channelPageUrl('tivibu-spor-1')).toBe('https://www.tivibu.com.tr/kanallar/tivibu-spor-1');
-    expect(CHANNELS).toHaveLength(4);
+    expect(CHANNELS).toHaveLength(5);
     for (const channel of CHANNELS) {
       expect(channel.id.endsWith('.tr')).toBe(true);
-      expect(channel.slug.startsWith('tivibu-spor-')).toBe(true);
+      expect(channel.slug.startsWith('tivibu-spor')).toBe(true);
     }
   });
 });
@@ -237,12 +272,12 @@ describe('tivibu scrape (stubbed fetch)', () => {
         if (body.includes('ch00000000000000001270')) return jsonResponse(parse(day2_09));
         if (body.includes('ch00000000000000001357')) return jsonResponse(parse(day3_09));
         if (body.includes('ch00000000000000001971')) return jsonResponse(parse(day4_09));
+        if (body.includes('ch00000000000000001355')) return jsonResponse(parse(day1_09));
       }
       return jsonResponse({ mobilPrevueViewModel: [] });
     }
-    const page = /kanallar\/(tivibu-spor-[1-4])/.exec(u);
-    const bySlug = { 'tivibu-spor-1': page1, 'tivibu-spor-2': page2, 'tivibu-spor-3': page2, 'tivibu-spor-4': page2 };
-    return pageResponse(bySlug[page?.[1]] || page1, 'X-CSRF-TOKEN-TVBUDNBX=cookie123; path=/');
+    const page = /kanallar\/(tivibu-spor(?:-[1-4])?)$/.exec(u);
+    return pageResponse(channelPages[page?.[1]] || page1, 'X-CSRF-TOKEN-TVBUDNBX=cookie123; path=/');
   };
 
   it('scrapes every channel-day with explicit start/stop', async () => {
@@ -263,9 +298,10 @@ describe('tivibu scrape (stubbed fetch)', () => {
       'TIVIBUSPOR2.tr',
       'TIVIBUSPOR3.tr',
       'TIVIBUSPOR4.tr',
+      'TIVIBUSPOR.tr',
     ]);
-    expect(posts).toHaveLength(4);
-    expect(result.programmes).toHaveLength(11 + 5 + 5 + 5); // spor-1 keeps 11 of 12 (drops yesterday's tail)
+    expect(posts).toHaveLength(5);
+    expect(result.programmes).toHaveLength(11 + 5 + 5 + 5 + 11);
 
     const t1 = result.programmes.filter((p) => p.channel === 'TIVIBUSPOR1.tr');
     expect(t1).toHaveLength(11);
@@ -278,6 +314,10 @@ describe('tivibu scrape (stubbed fetch)', () => {
       desc: expect.stringContaining('eSüper Lig'),
     });
     expect(result.programmes.every((p) => p.start.endsWith('+03:00'))).toBe(true);
+    expect(result.programmes.filter((p) => p.channel === 'TIVIBUSPOR.tr')).toHaveLength(11);
+    expect(result.channels.find((c) => c.id === 'TIVIBUSPOR.tr').icon).toBe(
+      'https://itv224226.tmp.tivibu.com.tr:6430/images/poster/original.png'
+    );
 
     const promo = result.programmes.filter((p) => p.title === 'Tivibu Spor Tanıtım');
     expect(promo).toHaveLength(15); // 2, 3, 4 are idle promo loops today — emitted as-is
@@ -331,7 +371,7 @@ describe('tivibu scrape (stubbed fetch)', () => {
       politenessDelayMs: 0,
     });
     expect(result.programmes).toEqual([]);
-    expect(result.failures).toBe(4);
+    expect(result.failures).toBe(5);
   });
 
   it('counts a page without a token or code as a failure', async () => {
@@ -342,7 +382,7 @@ describe('tivibu scrape (stubbed fetch)', () => {
       politenessDelayMs: 0,
     });
     expect(result.programmes).toEqual([]);
-    expect(result.failures).toBe(4);
+    expect(result.failures).toBe(5);
   });
 });
 
@@ -368,11 +408,11 @@ describe('tivibu cli integration (stubbed fetch, temp output)', () => {
         if (body.includes('ch00000000000000001270')) return jsonResponse(parse(day2_09));
         if (body.includes('ch00000000000000001357')) return jsonResponse(parse(day3_09));
         if (body.includes('ch00000000000000001971')) return jsonResponse(parse(day4_09));
+        if (body.includes('ch00000000000000001355')) return jsonResponse(parse(day1_09));
         return jsonResponse({ mobilPrevueViewModel: [] });
       }
-      const page = /kanallar\/(tivibu-spor-[1-4])/.exec(u);
-      const bySlug = { 'tivibu-spor-1': page1, 'tivibu-spor-2': page2, 'tivibu-spor-3': page2, 'tivibu-spor-4': page2 };
-      return pageResponse(bySlug[page?.[1]] || page1, 'X-CSRF-TOKEN-TVBUDNBX=cookie123; path=/');
+      const page = /kanallar\/(tivibu-spor(?:-[1-4])?)$/.exec(u);
+      return pageResponse(channelPages[page?.[1]] || page1, 'X-CSRF-TOKEN-TVBUDNBX=cookie123; path=/');
     };
     return originalFetch;
   };

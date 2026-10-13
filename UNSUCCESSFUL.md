@@ -9,7 +9,7 @@ fixture/test is cited instead; the `idmantv.az` weekly page was re-fetched
 live on 2026-09-12 when the `idmantv` provider landed, and the Swedish
 `tv.nu` channel pages on 2026-09-17 when the `tvnu` provider landed.
 
-Covered today (33 sports channels — TV+'s general-interest channels are excluded,
+Covered today (34 sports channels — TV+'s general-interest channels are excluded,
 because the sports merge takes only each provider's sports subset):
 
 | Provider | Channels |
@@ -18,7 +18,7 @@ because the sports merge takes only each provider's sports subset):
 | `beinsports` | beIN Sports 1, beIN Sports 2, beIN Sports 3, beIN Sports 4 |
 | `digiturkburada` | beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV |
 | `sporekraniapi` | tabii spor 1, tabii spor 2, tabii spor 3, tabii spor 4, tabii spor 5, tabii spor 6, tabii spor 7, tabii spor 8, S Sport Plus |
-| `tivibu` | Tivibu Spor 1, Tivibu Spor 2, Tivibu Spor 3, Tivibu Spor 4 |
+| `tivibu` | Tivibu Spor, Tivibu Spor 1, Tivibu Spor 2, Tivibu Spor 3, Tivibu Spor 4 |
 | `idmantv` | İdman TV |
 
 Run all six and merge into one guide:
@@ -62,7 +62,7 @@ no provider exists yet, the row is a verified candidate for future work:
 | Source | Channels it covers | Status |
 | --- | --- | --- |
 | `api.sporekrani.com/v3/events?day=` | tabii spor 1-8, S Sport Plus | **IMPLEMENTED** as the active `sporekraniapi` provider (one JSON request per requested day, all nine exact channel owners filtered locally, start-only slots bounded at the response day's midnight). The original `sporekrani` SSR adapter remains registered as a benchmark baseline. |
-| `tivibu.com.tr/kanallar/tivibu-spor-{1,2,3,4}` | Tivibu Spor 1-4 | **IMPLEMENTED** as the `tivibu` provider (session GET for cookie/token/channel-code, then `POST /Channel/GetPrevueList` per channel-day; explicit start/stop, any date).  Spor 2-4 carry only a repeating "Tivibu Spor Tanıtım" promo loop in the 2026-09-09 fixtures (5 slots each, emitted as-is).  The general grid `tivibu.com.tr/canli-tv/spor` (re-verified live 2026-09-09: date chips 02–16.09.2026 plus Dün/Bugün/Yarın, per-slot `start → stop` ranges for the same four channels) uses the same backend but the provider drives the per-channel `/kanallar/<slug>` pages + `GetPrevueList` API directly. |
+| `tivibu.com.tr/kanallar/tivibu-spor{-1,-2,-3,-4}` | Tivibu Spor and Tivibu Spor 1-4 | **IMPLEMENTED** as the `tivibu` provider (session GET for cookie/token/channel-code, then `POST /Channel/GetPrevueList` per channel-day; explicit start/stop, any date). The unnumbered page was verified live on 2026-10-13 and returned 19 slots for that day. Spor 2-4 carry only a repeating "Tivibu Spor Tanıtım" promo loop in the 2026-09-09 fixtures (5 slots each, emitted as-is). The general grid `tivibu.com.tr/canli-tv/spor` uses the same backend but the provider drives the per-channel pages + API directly. |
 | `idmantv.az/az/program` | iDMAN TV | **IMPLEMENTED** as the `idmantv` provider (re-verified live 2026-09-09 + fixture 2026-09-07: static SSR weekly programme "Həftənin bütün günlərinin TV proqramları (07.09.2026 - 13.09.2026)" with HH:MM start times per weekday (Bazar ertəsi / 07.09.2026, Ç. axşamı / 08.09.2026, … Bazar / 13.09.2026), Azerbaijani titles, no login wall).  One fetch covers the whole Mon–Sun week; dates outside it are skipped with a warning (the site only publishes the current week, like beinsports).  Stops derive from the next slot (24:00 for the last).  (The old `idmantv.com.tr` domain is dead; the real site is `idmantv.az`.) |
 | `cbcsport.az/teleproqram/` | CBC Sport | Re-check result (2026-09-09): page is live (165 KB HTML) but the fetched markup contains the `Teleproqram` heading/nav and news/verilişler lists with **no dated programme rows** — schedule content is not in the static HTML (JS-rendered or auth-gated: page also embeds a login form "Sizin hesabınıza daxil"). Still needs `--browser` verification before trusting it; the old "no TR feed page found" note is dropped (there is exactly one CBC Sport feed; the strikethrough was misleading). |
 | `trt.net.tr/yayin-akisi` | tabii spor (joint TRT feed, already via tvplus) | First-party sanity check, re-verified live 2026-09-09: the page renders full dated grids for TRT 1/2/Belgesel/Haber/Spor/Spor Yıldız/Çocuk/… **and** a "Tabii Spor Yayın Akışı" grid (09.30 Futbolun En Büyük Sahnesi, 10.20 CLUB BRUGGE - ASTON VILLA, 12.00 AEK - LASK, …) matching the same UCL fixtures the `sporekrani` tabii-spor-1/2/3 fixtures carry. Confirms tvplus id 4399 covers the joint feed; per-feed tabii spor 1-8 detail still comes only from `sporekraniapi`. |
@@ -85,6 +85,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 | ~~BeIN Sports Max 1~~ | ~~digiturk.com.tr~~ (403) | **NOW COVERED** via `digiturkburada`. |
 | ~~BeIN Sports Max 2~~ | ~~digiturk.com.tr~~ (403) | **NOW COVERED** via `digiturkburada`. |
 | ~~S Sport Plus~~ | ~~ssportplus.com.tr~~ (timeout / TLS drop — wrong domain, the real one is `.com`) | **NOW COVERED** via the active `sporekraniapi` provider (day-scoped Spor Ekranı API, start-only slots bounded at midnight).  The official `ssportplus.com/yayin-akisi/` page also renders a schedule (re-verified live 2026-09-09: dated day chips 9–15 Eylül with timed rows, e.g. MotoGP practice sessions, FIBA Women's World Cup, LaLiga/Serie A/Bundesliga) — it was kept out of the pipeline as a *second* source for the same feed, not for data-quality reasons (no data-quality defect is evidenced in the repo). (`ssport.tv` TLS failure not re-verified 2026-09-09.) |
+| ~~Tivibu Spor~~ | ~~not previously configured~~ | **NOW COVERED** via the `tivibu` provider (`/kanallar/tivibu-spor`, live probe 2026-10-13: 19 programme slots). |
 | ~~Tivibu Spor 1~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path; the new site moved to `/kanallar/<slug>`) | **NOW COVERED** via the `tivibu` provider (first-party JSON API, explicit start/stop). |
 | ~~Tivibu Spor 2~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× "Tivibu Spor Tanıtım" promo loop, emitted as-is — idle feed, not a failure). |
 | ~~Tivibu Spor 3~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× promo loop, same as Spor 2). |
@@ -144,7 +145,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   8 promo slots/day, no provider serves it), and 16 VOD genre
   rails (FANTASTİK DÜNYALAR, SAVAŞ FİLMLERİ, … ids 2004–2439) whose
   PlayBillList responses are empty.  **None of the channels above
-  (beIN Sports 1-5/Max, S Sport Plus, Smart Spor 1-2, Tivibu Spor 1-4,
+  (beIN Sports 1-5/Max, S Sport Plus, Smart Spor 1-2, Tivibu Spor and 1-4,
   tabii spor 1-8, GS TV, iDMAN TV, TJK TV, NBA TV, CBC Sport, Exxen*)
   is carried** — unknown ids (1, 4, 9, 33, 150, 200, 4395, 4397, 4398,
   4401, 4402, …) also return `{"counttotal":"0","playbilllist":[]}`, so
