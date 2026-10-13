@@ -64,13 +64,21 @@ export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
 // A channel's id is the one the other providers publish, never a new spelling:
 // the whole point is that the three guides agree without an alias map.
 //
-// The rest of the platform (pay tiers, the ~90 channels only TV+ carries, the
+// Five entries exist only because the platform spells a channel differently
+// from our guides — `24 HD`, `TVNET HD`, `HABER GLOBAL HD`,
+// `NATIONAL GEOGRAPHIC WILD HD` and `NICKELODEON` (mynet's `NICKELODEON SD`).
+// A name match alone misses those, so `test/fixtures/tvplus/coverage.json`
+// records every TV+ channel our other guides also serve and the id it must land
+// on, and the suite fails when the table loses one.
+//
+// The rest of the platform (pay tiers, the ~85 channels only TV+ carries, the
 // two `TV+ Keşet` promo shelves) is deliberately not curated: it would triple
 // the per-run request count for channels the other guides do not carry.
 export const CHANNELS = [
   // Ulusal genel yayın — the terrestrial platforms, plus the local channels
   // the same sources carry.
   { name: '360 HD', tvId: '86', id: '360.tr' },
+  { name: '24 HD', tvId: '32', id: '24TV.tr' },
   { name: 'A NEWS HD', tvId: '101', id: 'ANEWSHD.tr' },
   { name: 'A PARA HD', tvId: '79', id: 'APARA.tr' },
   { name: 'A2 HD', tvId: '2', id: 'A2.tr' },
@@ -108,6 +116,7 @@ export const CHANNELS = [
   // TRT family.  TRT 3 is the SD twin of TRT Spor (same schedule, one id),
   // as hurriyet already publishes it.
   { name: 'TRT 2 HD', tvId: '83', id: 'TRT2.tr' },
+  { name: 'TRT EBA', tvId: '2300', id: 'TRTEBA.tr' },
   { name: 'TRT 3', tvId: '116', id: 'TRTSPOR.tr' },
   { name: 'TRT ARABI', tvId: '76', id: 'TRTARABI.tr' },
   { name: 'TRT AVAZ', tvId: '193', id: 'TRTAVAZHD.tr' },
@@ -130,8 +139,11 @@ export const CHANNELS = [
   { name: 'DISCOVERY CHANNEL HD', tvId: '8', id: 'DISCOVERYCHANNEL.tr' },
   { name: 'DISNEY JUNIOR', tvId: '149', id: 'DISNEYJUNIOR.tr' },
   { name: 'DİYANET TV', tvId: '175', id: 'DIYANETTV.tr' },
+  { name: 'NATIONAL GEOGRAPHIC WILD HD', tvId: '139', id: 'NATIONALGEOGRAPHICWILD.tr' },
+  { name: 'NICKELODEON', tvId: '4487', id: 'NICKELODEON.tr' },
   { name: 'NATIONAL GEOGRAPHIC HD', tvId: '2799', id: 'NATIONALGEOGRAPHIC.tr' },
   { name: 'Nick JR', tvId: '4353', id: 'NICKJR.tr' },
+  { name: 'TVNET HD', tvId: '92', id: 'TVNET.tr' },
   // Not carried by hurriyet/mynet: this is the one channel TV+ serves that
   // closes a catalog gap (the sources spell the channel "Viasat History",
   // which the catalog's old `History` pattern could never match).
@@ -149,6 +161,7 @@ export const CHANNELS = [
   { name: 'HALK TV', tvId: '91', id: 'HALKTV.tr' },
   { name: 'KRT TV', tvId: '111', id: 'KRTTV.tr' },
   { name: 'NTV HD', tvId: '81', id: 'NTV.tr' },
+  { name: 'HABER GLOBAL HD', tvId: '5', id: 'HABERGLOBAL.tr' },
   { name: 'SÖZCÜ TV', tvId: '4294', id: 'SOZCUTV.tr' },
   { name: 'TARIH TV', tvId: '4253', id: 'TARIHTV.tr' },
   { name: 'TELE1', tvId: '189', id: 'TELE1.tr' },

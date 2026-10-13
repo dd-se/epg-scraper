@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync, mkdirSync } from 'node:fs';
+import { isCanonicalChannelId } from '../src/slug.js';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -223,6 +224,52 @@ describe('tvplus pure parsers', () => {
     expect(parseChannelListLogos('{"channellist": [{"id": null, "picture": {}}]}')).toEqual({});
     // A channel without usable picture fields is simply absent.
     expect(parseChannelListLogos('{"channellist": [{"id": "99", "picture": {"ad": "https://x/ad.png"}}]}')).toEqual({});
+  });
+});
+
+describe('tvplus curated coverage', () => {
+  // The channel table is not allowed to lose a channel another published guide
+  // serves.  The rows come from a live ChannelList probe (2026-10-13); a row is
+  // a channel the platform publishes under a spelling our guides do not use
+  // (`24 HD` vs `24 TV`, `NICKELODEON` vs mynet's `NICKELODEON SD`), which is
+  // exactly how a table edit silently dropped five channels once.
+  const coverage = JSON.parse(
+    readFileSync(fileURLToPath(new URL('./fixtures/tvplus/coverage.json', import.meta.url)), 'utf8')
+  );
+
+  it('carries every channel another guide serves', () => {
+    const byTvId = new Map(CHANNELS.map((c) => [String(c.tvId), c]));
+    expect(coverage.rows.length).toBeGreaterThan(50);
+    for (const row of coverage.rows) {
+      const entry = byTvId.get(row.tvId);
+      expect(entry, `tvId ${row.tvId} (${row.name}) is no longer curated`).toBeDefined();
+      expect(entry.id, `${row.name}: id drifted`).toBe(row.id);
+    }
+  });
+
+  it('keeps every curated id canonical, and each id names one channel', () => {
+    const namesById = new Map();
+    for (const { id, name } of CHANNELS) {
+      expect(isCanonicalChannelId(id), `${name} -> ${id}`).toBe(true);
+      if (!namesById.has(id)) namesById.set(id, []);
+      namesById.get(id).push(name);
+    }
+    const shared = [...namesById].filter(([, names]) => names.length > 1);
+    // TRT 3 is the SD twin of TRT Spor and shares its id, exactly as hurriyet
+    // publishes the pair; any other id naming two channels is a copy/paste error.
+    expect(shared.map(([id, names]) => [id, names.sort()])).toEqual([
+      ['TRTSPOR.tr', ['TRT 3', 'TRT SPOR HD']],
+    ]);
+    // One row per platform channel, and each platform channel once.
+    expect(new Set(CHANNELS.map((c) => c.tvId)).size).toBe(CHANNELS.length);
+  });
+
+  it('declares its sports subset out of the curated table', () => {
+    expect(SPORTS_CHANNEL_IDS.length).toBeGreaterThan(5);
+    const curated = new Set(CHANNELS.map((c) => c.id));
+    for (const id of SPORTS_CHANNEL_IDS) expect(curated.has(id), id).toBe(true);
+    // TRT 3 collapses onto TRT Spor, so it is not a separate sports feed.
+    expect(SPORTS_CHANNEL_IDS).not.toContain('TRT3.tr');
   });
 });
 

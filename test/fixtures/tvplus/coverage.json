@@ -1,0 +1,340 @@
+{
+ "comment": "Every channel TV+ serves that another published guide also serves, with the id\nthat guide publishes it under.  Captured from a live `ChannelList` probe on\n2026-10-13; `test/tvplus.test.mjs` asserts the curated table still carries each\none, which is what keeps a spelling variant (`24 HD` for `24TV.tr`, `NICKELODEON`\nfor mynet's `NICKELODEON SD`) from silently dropping a channel when the table is\nedited.  Re-capture after a probe that shows the platform adding a channel.",
+ "rows": [
+  {
+   "name": "24 HD",
+   "tvId": "32",
+   "id": "24TV.tr"
+  },
+  {
+   "name": "360 HD",
+   "tvId": "86",
+   "id": "360.tr"
+  },
+  {
+   "name": "A2 HD",
+   "tvId": "2",
+   "id": "A2.tr"
+  },
+  {
+   "name": "A HABER HD",
+   "tvId": "160",
+   "id": "AHABER.tr"
+  },
+  {
+   "name": "A NEWS HD",
+   "tvId": "101",
+   "id": "ANEWSHD.tr"
+  },
+  {
+   "name": "A PARA HD",
+   "tvId": "79",
+   "id": "APARA.tr"
+  },
+  {
+   "name": "A SPOR HD",
+   "tvId": "3",
+   "id": "ASPOR.tr"
+  },
+  {
+   "name": "ATV HD",
+   "tvId": "124",
+   "id": "ATV.tr"
+  },
+  {
+   "name": "BABYTV",
+   "tvId": "29",
+   "id": "BABYTV.tr"
+  },
+  {
+   "name": "BENGÜTÜRK",
+   "tvId": "47",
+   "id": "BENGUTURK.tr"
+  },
+  {
+   "name": "BEYAZ TV HD",
+   "tvId": "135",
+   "id": "BEYAZTV.tr"
+  },
+  {
+   "name": "BLOOMBERG HT HD",
+   "tvId": "96",
+   "id": "BLOOMBERGHT.tr"
+  },
+  {
+   "name": "Bloomberg",
+   "tvId": "4459",
+   "id": "BLOOMBERGTV.tr"
+  },
+  {
+   "name": "CARTOON NETWORK",
+   "tvId": "20",
+   "id": "CARTOONNETWORK.tr"
+  },
+  {
+   "name": "CBEEBIES",
+   "tvId": "4520",
+   "id": "CBEEBIES.tr"
+  },
+  {
+   "name": "CNN International",
+   "tvId": "4454",
+   "id": "CNNINTERNATIONAL.tr"
+  },
+  {
+   "name": "CNN TÜRK HD",
+   "tvId": "158",
+   "id": "CNNTURK.tr"
+  },
+  {
+   "name": "DA VINCI HD",
+   "tvId": "208",
+   "id": "DAVINCILEARNINGHD.tr"
+  },
+  {
+   "name": "DISCOVERY CHANNEL HD",
+   "tvId": "8",
+   "id": "DISCOVERYCHANNEL.tr"
+  },
+  {
+   "name": "DISNEY JUNIOR",
+   "tvId": "149",
+   "id": "DISNEYJUNIOR.tr"
+  },
+  {
+   "name": "DMAX HD",
+   "tvId": "180",
+   "id": "DMAX.tr"
+  },
+  {
+   "name": "EKOTÜRK HD",
+   "tvId": "100",
+   "id": "EKOTURK.tr"
+  },
+  {
+   "name": "EURONEWS",
+   "tvId": "171",
+   "id": "EURONEWS.tr"
+  },
+  {
+   "name": "EUROSPORT 1 HD",
+   "tvId": "77",
+   "id": "EUROSPORT1.tr"
+  },
+  {
+   "name": "EUROSPORT 2 HD",
+   "tvId": "106",
+   "id": "EUROSPORT2.tr"
+  },
+  {
+   "name": "FB TV",
+   "tvId": "148",
+   "id": "FENERBAHCETV.tr"
+  },
+  {
+   "name": "HABER GLOBAL HD",
+   "tvId": "5",
+   "id": "HABERGLOBAL.tr"
+  },
+  {
+   "name": "HABERTÜRK HD",
+   "tvId": "87",
+   "id": "HABERTURK.tr"
+  },
+  {
+   "name": "HALK TV",
+   "tvId": "91",
+   "id": "HALKTV.tr"
+  },
+  {
+   "name": "KANAL 7 HD",
+   "tvId": "90",
+   "id": "KANAL7.tr"
+  },
+  {
+   "name": "KANAL D HD",
+   "tvId": "88",
+   "id": "KANALD.tr"
+  },
+  {
+   "name": "KRT TV",
+   "tvId": "111",
+   "id": "KRTTV.tr"
+  },
+  {
+   "name": "MİNİKA GO",
+   "tvId": "7",
+   "id": "MINIKAGO.tr"
+  },
+  {
+   "name": "NATIONAL GEOGRAPHIC HD",
+   "tvId": "2799",
+   "id": "NATIONALGEOGRAPHIC.tr"
+  },
+  {
+   "name": "NATIONAL GEOGRAPHIC WILD HD",
+   "tvId": "139",
+   "id": "NATIONALGEOGRAPHICWILD.tr"
+  },
+  {
+   "name": "NICKELODEON",
+   "tvId": "4487",
+   "id": "NICKELODEON.tr"
+  },
+  {
+   "name": "Nick JR",
+   "tvId": "4353",
+   "id": "NICKJR.tr"
+  },
+  {
+   "name": "NOW",
+   "tvId": "93",
+   "id": "NOWTV.tr"
+  },
+  {
+   "name": "NTV HD",
+   "tvId": "81",
+   "id": "NTV.tr"
+  },
+  {
+   "name": "SHOW TV HD",
+   "tvId": "130",
+   "id": "SHOWTV.tr"
+  },
+  {
+   "name": "SİNEMA TV HD",
+   "tvId": "166",
+   "id": "SINEMATVHD.tr"
+  },
+  {
+   "name": "SPORTS TV HD",
+   "tvId": "173",
+   "id": "SPORTSTV.tr"
+  },
+  {
+   "name": "STAR TV HD",
+   "tvId": "89",
+   "id": "STARTV.tr"
+  },
+  {
+   "name": "TELE1",
+   "tvId": "189",
+   "id": "TELE1.tr"
+  },
+  {
+   "name": "TV2 HD",
+   "tvId": "95",
+   "id": "TEVE2.tr"
+  },
+  {
+   "name": "TGRT HABER HD",
+   "tvId": "34",
+   "id": "TGRTHABER.tr"
+  },
+  {
+   "name": "TLC",
+   "tvId": "174",
+   "id": "TLC.tr"
+  },
+  {
+   "name": "TRT1 HD",
+   "tvId": "144",
+   "id": "TRT1.tr"
+  },
+  {
+   "name": "TRT 2 HD",
+   "tvId": "83",
+   "id": "TRT2.tr"
+  },
+  {
+   "name": "TRT ARABI",
+   "tvId": "76",
+   "id": "TRTARABI.tr"
+  },
+  {
+   "name": "TRT AVAZ",
+   "tvId": "193",
+   "id": "TRTAVAZHD.tr"
+  },
+  {
+   "name": "TRT BELGESEL HD",
+   "tvId": "21",
+   "id": "TRTBELGESEL.tr"
+  },
+  {
+   "name": "TRT ÇOCUK HD",
+   "tvId": "99",
+   "id": "TRTCOCUK.tr"
+  },
+  {
+   "name": "TRT HABER HD",
+   "tvId": "30",
+   "id": "TRTHABER.tr"
+  },
+  {
+   "name": "TRT KURDİ",
+   "tvId": "10",
+   "id": "TRTKURDI.tr"
+  },
+  {
+   "name": "TRT MÜZİK",
+   "tvId": "159",
+   "id": "TRTMUZIK.tr"
+  },
+  {
+   "name": "TRT 3",
+   "tvId": "116",
+   "id": "TRTSPOR.tr"
+  },
+  {
+   "name": "TRT SPOR HD",
+   "tvId": "31",
+   "id": "TRTSPOR.tr"
+  },
+  {
+   "name": "TRT SPOR YILDIZ",
+   "tvId": "205",
+   "id": "TRTSPORYILDIZ.tr"
+  },
+  {
+   "name": "TRT TÜRK",
+   "tvId": "156",
+   "id": "TRTTURK.tr"
+  },
+  {
+   "name": "TRT World HD",
+   "tvId": "38",
+   "id": "TRTWORLDHD.tr"
+  },
+  {
+   "name": "TV100",
+   "tvId": "179",
+   "id": "TV100.tr"
+  },
+  {
+   "name": "TV8 HD",
+   "tvId": "134",
+   "id": "TV8.tr"
+  },
+  {
+   "name": "TV8,5 HD",
+   "tvId": "188",
+   "id": "TV85.tr"
+  },
+  {
+   "name": "TVNET HD",
+   "tvId": "92",
+   "id": "TVNET.tr"
+  },
+  {
+   "name": "ÜLKE TV HD",
+   "tvId": "145",
+   "id": "ULKETV.tr"
+  },
+  {
+   "name": "VAV TV",
+   "tvId": "2859",
+   "id": "VAVTV.tr"
+  }
+ ]
+}
