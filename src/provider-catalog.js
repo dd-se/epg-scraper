@@ -42,6 +42,11 @@ export const PROVIDER_CATALOG = [
     module: tvplus,
     browserCompatible: false,
     ci: { enabled: true, args: ['--days-forward', '2'], order: 30 },
+    // A sports-profile provider that now curates the whole hurriyet/mynet lineup
+    // too, so it declares which of its ids are the sports feeds the profile is
+    // there for.  Without this the sports merge would republish ~50 national,
+    // news and children's channels as if they were sports coverage.
+    sportsIds: tvplus.SPORTS_CHANNEL_IDS,
     sports: { live: true },
   },
   {
@@ -129,7 +134,9 @@ export const COMMAND_PROFILES = {
   // day-scoped `sporekraniapi` adapter covers instead.
   sports: {
     providerIds: ciSportsProviders().map((entry) => entry.id),
-    args: [],
+    // Each input contributes only its sports channels (see `sportsChannelIds`),
+    // so TV+'s national/news/kids lineup does not widen the sports feed.
+    args: ['--sports-only'],
     output: 'epg_sports_merged_TR.xml.gz',
   },
   // No `aliasMap`: the providers curate the same id for every channel they
@@ -204,6 +211,19 @@ export function profileInputFiles(profile) {
     if (!entry) throw new Error(`Merge profile references unknown provider: ${id}`);
     return `epg_${id}_${resolveProviderContext(entry).country}.xml.gz`;
   });
+}
+
+/**
+ * The ids a provider contributes to the sports profile.  A sports-only provider
+ * contributes everything it curates; one that also curates general-interest
+ * channels declares `sportsIds` and contributes that list.
+ *
+ * @param {object} entry
+ * @returns {string[]}
+ */
+export function sportsChannelIds(entry) {
+  const declared = entry?.sportsIds;
+  return Array.isArray(declared) && declared.length > 0 ? declared : curatedChannelIds(entry);
 }
 
 export function curatedChannelIds(entry) {

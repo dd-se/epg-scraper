@@ -111,13 +111,17 @@ describe('firstFlagViolation', () => {
     expect(firstFlagViolation(flags({ provider: 'a,b', compare: true }))).toBeNull();
   });
 
-  it('requires --merge for --from, --exclusive-channels', () => {
+  it('requires --merge for --from, --exclusive-channels, --sports-only', () => {
     expect(firstFlagViolation(flags({ from: 'a.xml.gz' }))).toBe(
       '--from requires --merge (it merges already-scraped XMLTV files)'
     );
     expect(firstFlagViolation(flags({ 'exclusive-channels': true }))).toBe(
       '--exclusive-channels requires --merge (it only changes how providers are combined)'
     );
+    expect(firstFlagViolation(flags({ 'sports-only': true }))).toBe(
+      '--sports-only requires --merge (it only changes which channels are merged)'
+    );
+    expect(firstFlagViolation(flags({ 'sports-only': true, merge: true }))).toBeNull();
   });
 
   it('defers the --from complaints to --m3u, which reports them in one line', () => {

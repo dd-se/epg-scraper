@@ -107,6 +107,10 @@ export const FLAG_VALIDATORS = [
     message: () =>
       '--exclusive-channels requires --merge (it only changes how providers are combined)',
   },
+  {
+    when: ({ values }) => values['sports-only'] && !values.merge && values.m3u == null,
+    message: () => '--sports-only requires --merge (it only changes which channels are merged)',
+  },
 ];
 
 // The first flag error, or null when the request is well-formed.  Callers report

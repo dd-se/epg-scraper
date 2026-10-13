@@ -6,7 +6,11 @@ import { describe, it, expect } from 'vitest';
 import { channelIdFromName, foldChannelId, isCanonicalChannelId } from '../src/slug.js';
 import { createGuideResult, validateGuideResult } from '../src/model.js';
 import { generateXmltv } from '../src/xmltv.js';
-import { PROVIDER_CATALOG, curatedChannelIds } from '../src/provider-catalog.js';
+import {
+  PROVIDER_CATALOG,
+  curatedChannelIds,
+  sportsChannelIds,
+} from '../src/provider-catalog.js';
 import { CHANNEL_CATALOG, CATALOG_EPG_GAPS } from '../src/m3u/channels.js';
 
 describe('foldChannelId', () => {
@@ -160,11 +164,19 @@ describe('the curated provider maps are the database', () => {
   });
 
   it('gives the Turkish sports feeds distinct ids', () => {
+    // The sports profile's own subset, not every curated id: TV+ is a sports
+    // provider that also curates the general-interest lineup, and counting its
+    // whole table here would report national channels as sports coverage.
     const sports = new Set(
       PROVIDER_CATALOG.filter((entry) => entry.sports?.live)
-        .flatMap((entry) => curatedChannelIds(entry))
+        .flatMap((entry) => sportsChannelIds(entry))
     );
-    expect(sports.size).toBe(38);
+    expect(sports.size).toBe(33);
+    // Every declared sports id is a real curated id of that same provider.
+    for (const entry of PROVIDER_CATALOG.filter((candidate) => candidate.sports?.live)) {
+      const curated = new Set(curatedChannelIds(entry));
+      for (const id of sportsChannelIds(entry)) expect(curated.has(id), `${entry.id}: ${id}`).toBe(true);
+    }
   });
 });
 

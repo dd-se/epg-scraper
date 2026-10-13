@@ -77,7 +77,10 @@ export const CHANNEL_CATALOG = [
   { pattern: 'Investigation', id: 'investigation.tr', group: 'BELGESEL', note: 'documentary' },
   { pattern: 'National Geographic', id: 'nationalgeographic.tr', group: 'BELGESEL', note: 'documentary' },
   { pattern: 'Discovery Channel', id: 'discoverychannel.tr', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'History', id: 'history.tr', group: 'BELGESEL', note: 'documentary' },
+  // Every source spells this channel "Viasat History"; the bare `History`
+  // pattern could never match it (patterns are anchored), so the channel had
+  // no guide and no playlist entry until tvplus started serving it.
+  { pattern: 'Viasat History', id: 'history.tr', name: 'Viasat History', group: 'BELGESEL', note: 'documentary' },
 ];
 
 /**
@@ -122,7 +125,6 @@ export const CATALOG_EPG_GAPS = [
   { id: 'trt4k.tr', name: 'TRT 4K', reason: 'no provider serves it' },
   { id: 'flashtv.tr', name: 'Flash TV', reason: 'no guide lists Flash TV' },
   { id: 'investigation.tr', name: 'Investigation', reason: 'no guide lists Investigation Discovery' },
-  { id: 'history.tr', name: 'History', reason: 'no guide lists History' },
 ];
 
 /** The catalog as plain `want` patterns. */

@@ -6,6 +6,7 @@ import {
   PROVIDER_CATALOG,
   ciSportsProviders,
   curatedChannelIds,
+  sportsChannelIds,
   dailyCiMatrix,
   liveSportsProviders,
   profileInputFiles,
@@ -101,12 +102,14 @@ describe('provider operational inventory', () => {
       'idmantv',
     ]);
 
-    const union = (entries) =>
-      new Set(entries.flatMap((entry) => curatedChannelIds(entry)));
+    // The sports profile's contribution is each provider's *sports* subset:
+    // TV+ is in the profile for its sports feeds but also curates the whole
+    // general-interest lineup, and the merge must not republish those here.
+    const union = (entries) => new Set(entries.flatMap((entry) => sportsChannelIds(entry)));
     const liveIds = union(liveSportsProviders());
     const ciIds = union(ciSportsProviders());
-    expect(liveIds.size).toBe(38);
-    expect(ciIds.size).toBe(38);
+    expect(liveIds.size).toBe(33);
+    expect(ciIds.size).toBe(33);
     for (const id of curatedChannelIds(PROVIDER_CATALOG.find((entry) => entry.id === 'beinsports'))) {
       expect(ciIds.has(id)).toBe(true);
     }
@@ -137,7 +140,7 @@ describe('provider operational inventory', () => {
   it('owns the sports command profile the CI sports merge rebuilds from', () => {
     expect(COMMAND_PROFILES.sports).toEqual({
       providerIds: ciSportsProviders().map((entry) => entry.id),
-      args: [],
+      args: ['--sports-only'],
       output: 'epg_sports_merged_TR.xml.gz',
     });
     const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -145,6 +148,7 @@ describe('provider operational inventory', () => {
     // conflicting slots as the winner.
     const fromList = /--from (\S+)/.exec(packageJson.scripts['merge:sports'])[1];
     expect(fromList.split(',')).toEqual(profileInputFiles(COMMAND_PROFILES.sports));
+    expect(packageJson.scripts['merge:sports']).toContain('--sports-only');
     expect(packageJson.scripts['merge:sports']).toContain('--out epg_sports_merged_TR.xml.gz');
   });
 

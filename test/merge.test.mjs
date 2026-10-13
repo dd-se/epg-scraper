@@ -5,6 +5,7 @@ import { mergeResults } from '../src/merge.js';
 import { registerProvider } from '../src/registry.js';
 import { runCli } from '../src/cli.js';
 import { createCanonicalizer } from '../src/aliases.js';
+import { readXmltvFile } from '../src/xmltv.js';
 import { mapChannelId as mynetMapChannelId } from '../src/providers/mynet.js';
 import { mapChannelId as tvplusMapChannelId } from '../src/providers/tvplus.js';
 
@@ -285,6 +286,83 @@ describe('cli --merge', () => {
     ]);
     expect(merged.channels.map((c) => c.id)).toEqual(['FENERBAHCETV.tr']);
     expect(merged.programmes[0].channel).toBe('FENERBAHCETV.tr');
+  });
+
+  it('keeps only each provider\'s sports channels with --sports-only', async () => {
+    // The real case: tvplus is a sports-profile provider that also curates the
+    // general-interest lineup, so the sports merge must take its sports subset
+    // (SSPORT1.tr) and leave the national channels (ATV.tr) behind.  Driven
+    // through the real catalog ids rather than a fake provider, because the
+    // allow-list is catalog data.
+    const { CHANNELS, SPORTS_CHANNEL_IDS } = await import('../src/providers/tvplus.js');
+    const sportsId = SPORTS_CHANNEL_IDS[0];
+    const generalId = CHANNELS.find((c) => !SPORTS_CHANNEL_IDS.includes(c.id)).id;
+    const guide = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<tv generator-info-name="test">',
+      ...[sportsId, generalId].map(
+        (id) => `<channel id="${id}"><display-name>${id}</display-name></channel>`
+      ),
+      ...[sportsId, generalId].map(
+        (id) =>
+          `<programme start="20260907150000 +0300" stop="20260907160000 +0300" channel="${id}">` +
+          `<title>Show ${id}</title></programme>`
+      ),
+      '</tv>',
+    ].join('\n');
+    const input = path.join(tmpDir, 'epg_tvplus_TR.xml');
+    writeFileSync(input, guide);
+
+    const run = async (argv) => {
+      const out = path.join(tmpDir, `sports-${argv.includes('--sports-only') ? 'on' : 'off'}.xml`);
+      const lines = [];
+      const exit = await runCli({
+        // No --quiet: the per-provider "N sports channels" line is part of
+        // what this test pins.
+        argv: [...argv, '--from', input, '--out', out, '--no-gzip'],
+        stdout: { write: (s) => lines.push(s) },
+        stderr: { write: (s) => lines.push(s) },
+        cwd: tmpDir,
+      });
+      return { exit, out, log: lines.join('\n') };
+    };
+
+    const all = await run(['--merge']);
+    expect(all.exit).toBe(0);
+    const allProgrammes = (await readXmltvFile(all.out)).programmes;
+    expect(allProgrammes.map((p) => p.channel)).toContain(generalId);
+
+    const sports = await run(['--merge', '--sports-only']);
+    expect(sports.exit).toBe(0);
+    const sportsGuide = await readXmltvFile(sports.out);
+    expect(sportsGuide.channels.map((c) => c.id)).toEqual([sportsId]);
+    expect(sportsGuide.programmes.map((p) => p.channel)).toEqual([sportsId]);
+    expect(sports.log).toMatch(/sports channels/);
+  });
+
+  it('passes an unknown input file through --sports-only untouched', async () => {
+    const out = path.join(tmpDir, 'unknown.xml');
+    const input = path.join(tmpDir, 'third-party.xml');
+    writeFileSync(
+      input,
+      '<?xml version="1.0" encoding="UTF-8"?><tv>' +
+        '<channel id="WHATEVER.tr"><display-name>Third party</display-name></channel>' +
+        '<programme start="20260907150000 +0300" stop="20260907160000 +0300" channel="WHATEVER.tr">' +
+        '<title>Show</title></programme></tv>'
+    );
+    const lines = [];
+    const exit = await runCli({
+      argv: ['--merge', '--sports-only', '--from', input, '--out', out, '--no-gzip'],
+      stdout: { write: (s) => lines.push(s) },
+      stderr: { write: (s) => lines.push(s) },
+      cwd: tmpDir,
+    });
+    expect(exit).toBe(0);
+    // A file we cannot attribute to a provider is kept whole rather than emptied.
+    const merged = await readXmltvFile(out);
+    expect(merged.channels.map((c) => c.id)).toEqual(['WHATEVER.tr']);
+    expect(merged.programmes.map((p) => p.channel)).toEqual(['WHATEVER.tr']);
+    expect(lines.join('\n')).toMatch(/not a known provider/);
   });
 
   it('merges aliased channel ids into one canonical channel via --alias-map', async () => {

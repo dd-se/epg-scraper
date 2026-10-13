@@ -49,7 +49,7 @@ node bin/epg-scraper.js --provider sporekraniapi --date 2026-09-30
 ```
 
 `--delay-ms` overrides the per-request politeness delay (ms between page
-fetches; defaults: hurriyet 250, mynet 500, tvplus 400, beinsports 300,
+fetches; defaults: hurriyet 250, mynet 500, tvplus 500, beinsports 300,
 digiturkburada 400, sporekrani 500, sporekraniapi 300, tivibu 400, tvnu 400 —
 mynet fetches ~90 channel pages per day and tvnu one page per channel **and
 day**, so keep this polite).
@@ -78,7 +78,9 @@ masks sensitive query values (`app_id`, `api_key`, `token`, …) and userinfo, s
 a credential-bearing URL cannot leak into output or CI logs.
 
 The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
-`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (38 channels together).
+`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (33 sports channels together,
+with `--sports-only` — TV+ also curates the general-interest lineup, and only its sports
+subset belongs in this feed).
 Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
 sections below and `UNSUCCESSFUL.md` for channels still lacking a usable source.
 
@@ -799,18 +801,25 @@ browser transport to them.
      `endtime` → the day's programmes with explicit `starttime`/`endtime`
      (already stamped `UTC+03:00`)
 - Coverage: **any requested date range** (the API serves past and future
-  days), for the channels TV+ carries:
-  TRT 1, TRT Spor, TRT Spor Yıldız, A Spor, HT Spor, FB TV, tabii spor,
-  S Sport, S Sport 2, Eurosport 1, Eurosport 2, Sports TV, ATV, TV8, TV8,5, A2.
+  days).  **70 channels are curated**: the platform's `ChannelList` publishes
+  172 channels (155 with programme data, 17 are its movie-collection VOD rails)
+  and the table keeps every channel TV+ serves that hürriyet or mynet also
+  curates — so the provider stands alone for that lineup — plus Viasat History,
+  which closes the catalog's `history.tr` gap.  Each id is the one the other
+  providers publish, never a new spelling.
 - **Plain HTTP only** — this provider POSTs JSON, so it cannot run under
   `--browser` (the Playwright fetcher renders pages and cannot POST).  Do not
   pass `--browser` with `--provider tvplus`.
 - Categories: the API's `genres` value (already a Turkish label like
   "Spor", "Dizi") is emitted as `<category lang="tr">` when present.
-- The `--max-channels N` flag caps how many of the 16 channels are scraped.
+- The `--max-channels N` flag caps how many of the curated channels are scraped
+  (they are scraped in table order, not in the order shown above).
+- The sports feeds are declared separately as `SPORTS_CHANNEL_IDS`, which the
+  sports merge asks for.  Merge sports guides with `--sports-only` (`npm run
+  merge:sports`) or TV+'s national/news/kids channels would ride along.
 
 ```bash
-# All 16 channels, today
+# All curated channels, today
 node bin/epg-scraper.js --provider tvplus --date 2026-09-09 --days-forward 0
 
 # A whole week
@@ -1099,9 +1108,13 @@ node bin/epg-scraper.js --provider tvnu --alias-map aliases.tvnu.json --merge --
 
 ### Sports guide from the sports providers
 ```bash
-# One guide with all 38 scrapeable sports channels
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --out epg_sports_merged_TR.xml.gz
+# One guide with all 33 scrapeable sports channels
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --sports-only --out epg_sports_merged_TR.xml.gz
 ```
+
+`--sports-only` keeps each provider's sports subset, so TV+'s general-interest
+channels stay in their own guide and do not widen this one (`npm run
+merge:sports` is the same run, offline).
 
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
 `digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV

@@ -21,12 +21,12 @@
 //             "2026-09-09 00:00:00 UTC+03:00", "endtime": "...",
 //             "name":"TRT Spor Yıldız Ortak Yayın", "genres":"Spor", ... }]}
 //
-//   Channel discovery (used once to enumerate the lineup, 2026-09-09):
-//   POST {base}/EPG/JSON/ChannelList {"fromIndex":"0","toIndex":"200"}
-//   returns the full platform list — 154 public channels + the TV+ promo
-//   channel (177) + 16 empty VOD rails.  Re-run it when looking for newly
-//   added channels (see UNSUCCESSFUL.md "Notes for future work"); unknown
-//   channel ids simply return counttotal 0 from PlayBillList.
+//   Channel discovery (used once to enumerate the lineup, 2026-10-13):
+//   POST {base}/EPG/JSON/ChannelList {"fromIndex":"0","toIndex":"400"}
+//   returns the full platform list — 172 channels, 155 of them with programme
+//   data; the 17 without are its movie-collection VOD rails.  Unknown channel
+//   ids simply return counttotal 0 from PlayBillList.  Re-run it when looking
+//   for newly added channels (see UNSUCCESSFUL.md "Notes for future work").
 //
 // Times come pre-stamped with the fixed +03:00 offset, so the provider emits
 // them verbatim (after normalizing the literal " UTC+03:00" suffix).
@@ -55,37 +55,154 @@ export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
 
 // Curated channel table: display name -> { tvId (TV+ numeric id), id (XMLTV
 // id, see src/slug.js for the format) }.
+// Curated channel table: the platform's own display name -> { tvId (TV+ numeric
+// id), id (XMLTV id, see src/slug.js for the format) }.
+//
+// Curated from a live `ChannelList` probe (2026-10-13): the platform publishes
+// 172 channels, 155 of them with programme data; the 17 without are its
+// movie-collection VOD rails.  This table keeps every channel TV+ serves that
+// hurriyet or mynet also curates — so this provider stands alone for that
+// lineup — plus Viasat History, which closes the catalog's `history.tr` gap.
+// A channel's id is the one the other providers publish, never a new spelling:
+// the whole point is that the three guides agree without an alias map.
+//
+// The rest of the platform (pay tiers, the ~90 channels only TV+ carries, the
+// two `TV+ Keşet` promo shelves) is deliberately not curated: it would triple
+// the per-run request count for channels the other guides do not carry.
 export const CHANNELS = [
-  { name: 'TRT 1', tvId: '144', id: 'TRT1.tr' },
-  { name: 'TRT Spor', tvId: '31', id: 'TRTSPOR.tr' },
-  { name: 'TRT Spor Yıldız', tvId: '205', id: 'TRTSPORYILDIZ.tr' },
-  { name: 'A Spor', tvId: '3', id: 'ASPOR.tr' },
-  { name: 'HT Spor', tvId: '4396', id: 'HTSPOR.tr' },
+  // Ulusal genel yayın — the terrestrial platforms, plus the local channels
+  // the same sources carry.
+  { name: '360 HD', tvId: '86', id: '360.tr' },
+  { name: 'A NEWS HD', tvId: '101', id: 'ANEWSHD.tr' },
+  { name: 'A PARA HD', tvId: '79', id: 'APARA.tr' },
+  { name: 'A2 HD', tvId: '2', id: 'A2.tr' },
+  { name: 'ATV HD', tvId: '124', id: 'ATV.tr' },
+  { name: 'BENGÜTÜRK', tvId: '47', id: 'BENGUTURK.tr' },
+  { name: 'BEYAZ TV HD', tvId: '135', id: 'BEYAZTV.tr' },
+  { name: 'CNN TÜRK HD', tvId: '158', id: 'CNNTURK.tr' },
+  { name: 'DMAX HD', tvId: '180', id: 'DMAX.tr' },
+  { name: 'EKOTÜRK HD', tvId: '100', id: 'EKOTURK.tr' },
+  { name: 'KANAL 7 HD', tvId: '90', id: 'KANAL7.tr' },
+  { name: 'KANAL D HD', tvId: '88', id: 'KANALD.tr' },
+  { name: 'MİNİKA GO', tvId: '7', id: 'MINIKAGO.tr' },
+  { name: 'NOW', tvId: '93', id: 'NOWTV.tr' },
+  { name: 'SHOW TV HD', tvId: '130', id: 'SHOWTV.tr' },
+  { name: 'STAR TV HD', tvId: '89', id: 'STARTV.tr' },
+  { name: 'SİNEMA TV HD', tvId: '166', id: 'SINEMATVHD.tr' },
+  { name: 'TLC', tvId: '174', id: 'TLC.tr' },
+  { name: 'TV2 HD', tvId: '95', id: 'TEVE2.tr' },
+  { name: 'TV8 HD', tvId: '134', id: 'TV8.tr' },
+  { name: 'TV8,5 HD', tvId: '188', id: 'TV85.tr' },
+  { name: 'ÜLKE TV HD', tvId: '145', id: 'ULKETV.tr' },
+
+  // Spor — several of these no other provider carries, which is most of why
+  // this provider is in the sports profile.
+  { name: 'A SPOR HD', tvId: '3', id: 'ASPOR.tr' },
+  { name: 'EUROSPORT 1 HD', tvId: '77', id: 'EUROSPORT1.tr' },
+  { name: 'EUROSPORT 2 HD', tvId: '106', id: 'EUROSPORT2.tr' },
   { name: 'FB TV', tvId: '148', id: 'FENERBAHCETV.tr' },
+  { name: 'HT SPOR', tvId: '4396', id: 'HTSPOR.tr' },
+  { name: 'S SPORT', tvId: '11', id: 'SSPORT1.tr' },
+  { name: 'S SPORT 2', tvId: '170', id: 'SSPORT2.tr' },
+  { name: 'SPORTS TV HD', tvId: '173', id: 'SPORTSTV.tr' },
   { name: 'tabii spor', tvId: '4399', id: 'TABIISPOR.tr' },
-  { name: 'S Sport', tvId: '11', id: 'SSPORT1.tr' },
-  { name: 'S Sport 2', tvId: '170', id: 'SSPORT2.tr' },
-  { name: 'Eurosport 1', tvId: '77', id: 'EUROSPORT1.tr' },
-  { name: 'Eurosport 2', tvId: '106', id: 'EUROSPORT2.tr' },
-  { name: 'Sports TV', tvId: '173', id: 'SPORTSTV.tr' },
-  { name: 'ATV', tvId: '124', id: 'ATV.tr' },
-  { name: 'TV8', tvId: '134', id: 'TV8.tr' },
-  { name: 'TV8,5', tvId: '188', id: 'TV85.tr' },
-  { name: 'A2', tvId: '2', id: 'A2.tr' },
+
+  // TRT family.  TRT 3 is the SD twin of TRT Spor (same schedule, one id),
+  // as hurriyet already publishes it.
+  { name: 'TRT 2 HD', tvId: '83', id: 'TRT2.tr' },
+  { name: 'TRT 3', tvId: '116', id: 'TRTSPOR.tr' },
+  { name: 'TRT ARABI', tvId: '76', id: 'TRTARABI.tr' },
+  { name: 'TRT AVAZ', tvId: '193', id: 'TRTAVAZHD.tr' },
+  { name: 'TRT BELGESEL HD', tvId: '21', id: 'TRTBELGESEL.tr' },
+  { name: 'TRT HABER HD', tvId: '30', id: 'TRTHABER.tr' },
+  { name: 'TRT KURDİ', tvId: '10', id: 'TRTKURDI.tr' },
+  { name: 'TRT MÜZİK', tvId: '159', id: 'TRTMUZIK.tr' },
+  { name: 'TRT SPOR HD', tvId: '31', id: 'TRTSPOR.tr' },
+  { name: 'TRT SPOR YILDIZ', tvId: '205', id: 'TRTSPORYILDIZ.tr' },
+  { name: 'TRT TÜRK', tvId: '156', id: 'TRTTURK.tr' },
+  { name: 'TRT World HD', tvId: '38', id: 'TRTWORLDHD.tr' },
+  { name: 'TRT ÇOCUK HD', tvId: '99', id: 'TRTCOCUK.tr' },
+  { name: 'TRT1 HD', tvId: '144', id: 'TRT1.tr' },
+
+  // Çocuk ve belgesel
+  { name: 'BABYTV', tvId: '29', id: 'BABYTV.tr' },
+  { name: 'CARTOON NETWORK', tvId: '20', id: 'CARTOONNETWORK.tr' },
+  { name: 'CBEEBIES', tvId: '4520', id: 'CBEEBIES.tr' },
+  { name: 'DA VINCI HD', tvId: '208', id: 'DAVINCILEARNINGHD.tr' },
+  { name: 'DISCOVERY CHANNEL HD', tvId: '8', id: 'DISCOVERYCHANNEL.tr' },
+  { name: 'DISNEY JUNIOR', tvId: '149', id: 'DISNEYJUNIOR.tr' },
+  { name: 'DİYANET TV', tvId: '175', id: 'DIYANETTV.tr' },
+  { name: 'NATIONAL GEOGRAPHIC HD', tvId: '2799', id: 'NATIONALGEOGRAPHIC.tr' },
+  { name: 'Nick JR', tvId: '4353', id: 'NICKJR.tr' },
+  // Not carried by hurriyet/mynet: this is the one channel TV+ serves that
+  // closes a catalog gap (the sources spell the channel "Viasat History",
+  // which the catalog's old `History` pattern could never match).
+  { name: 'VIASAT HISTORY HD', tvId: '44', id: 'history.tr' },
+
+  // Uluslararası
+  { name: 'Bloomberg', tvId: '4459', id: 'BLOOMBERGTV.tr' },
+  { name: 'BLOOMBERG HT HD', tvId: '96', id: 'BLOOMBERGHT.tr' },
+  { name: 'CNN International', tvId: '4454', id: 'CNNINTERNATIONAL.tr' },
+  { name: 'EURONEWS', tvId: '171', id: 'EURONEWS.tr' },
+
+  // Haber ve yerel
+  { name: 'A HABER HD', tvId: '160', id: 'AHABER.tr' },
+  { name: 'HABERTÜRK HD', tvId: '87', id: 'HABERTURK.tr' },
+  { name: 'HALK TV', tvId: '91', id: 'HALKTV.tr' },
+  { name: 'KRT TV', tvId: '111', id: 'KRTTV.tr' },
+  { name: 'NTV HD', tvId: '81', id: 'NTV.tr' },
+  { name: 'SÖZCÜ TV', tvId: '4294', id: 'SOZCUTV.tr' },
+  { name: 'TARIH TV', tvId: '4253', id: 'TARIHTV.tr' },
+  { name: 'TELE1', tvId: '189', id: 'TELE1.tr' },
+  { name: 'TGRT HABER HD', tvId: '34', id: 'TGRTHABER.tr' },
+  { name: 'TV100', tvId: '179', id: 'TV100.tr' },
+  { name: 'VAV TV', tvId: '2859', id: 'VAVTV.tr' },
 ];
 
+/**
+ * The sports subset of `CHANNELS`, by id.  TV+ is a sports-profile provider but
+ * now curates general-interest channels too, so the sports merge and the
+ * sports-coverage assertions must ask for this list rather than assuming every
+ * curated id is a sports feed.  `TRT 3` is deliberately absent: it is the SD
+ * twin of TRT Spor and shares its id.
+ */
+export const SPORTS_CHANNEL_IDS = [
+  'ASPOR.tr',
+  'EUROSPORT1.tr',
+  'EUROSPORT2.tr',
+  'FENERBAHCETV.tr',
+  'HTSPOR.tr',
+  'SPORTSTV.tr',
+  'SSPORT1.tr',
+  'SSPORT2.tr',
+  'TABIISPOR.tr',
+  'TRTSPOR.tr',
+  'TRTSPORYILDIZ.tr',
+];
 // name -> XMLTV id.
 export const CHANNEL_ID_MAP = Object.fromEntries(CHANNELS.map((c) => [c.name, c.id]));
 
 export { normalizeChannelKey };
 
+// The platform writes its own spelling in the table (`TRT SPOR HD`), so a
+// lookup by the bare channel name has to ignore the qualifier — the same rule
+// the cross-provider id comparison applies, and the same one ids follow.
+function findChannel(name) {
+  const key = lookupKey(name);
+  return CHANNELS.find((c) => lookupKey(c.name) === key);
+}
+
+function lookupKey(name) {
+  return normalizeChannelKey(name).replace(/\b(HD|4K)\b/g, '').trim();
+}
+
 export function mapChannelId(name) {
-  const entry = CHANNELS.find((c) => normalizeChannelKey(c.name) === normalizeChannelKey(name));
+  const entry = findChannel(name);
   return entry ? entry.id : undefined;
 }
 
 export function channelTvId(name) {
-  const entry = CHANNELS.find((c) => normalizeChannelKey(c.name) === normalizeChannelKey(name));
+  const entry = findChannel(name);
   return entry ? entry.tvId : undefined;
 }
 
@@ -321,7 +438,10 @@ export async function scrape({
   dates,
   fetchImpl,
   log = () => {},
-  politenessDelayMs = 400,
+  // 65 channels per day is one PlayBillList request each, so the run is ~4x
+  // what it was at 16 channels: 500ms between requests (mynet's default) keeps
+  // the platform's load as low as the volume allows.
+  politenessDelayMs = 500,
   fetchOptions: inputFetchOptions = {},
   maxChannels = Infinity,
 } = {}) {

@@ -14,6 +14,7 @@ import {
   normalizeChannelKey,
   scrape,
   CHANNELS,
+  SPORTS_CHANNEL_IDS,
 } from '../src/providers/tvplus.js';
 import { runCli } from '../src/cli.js';
 
@@ -23,6 +24,20 @@ const fixture = (name) =>
 const platformInfo = fixture('platform-info.json');
 const playbill4399 = fixture('playbill-4399-2026-09-09.json');
 const channellist = fixture('channellist.json');
+
+// `--max-channels 1` scrapes whatever the table lists first, and the table is
+// ordered by category rather than by importance, so the ChannelList stub also
+// carries an entry for that channel: the logo assertions below stay about the
+// first channel instead of about a hardcoded tvId.
+const FIRST_TV_ID = CHANNELS[0].tvId;
+const FIRST_LOGO = 'https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/stub/first_op.webp';
+const channellistWithFirst = JSON.stringify({
+  ...JSON.parse(channellist),
+  channellist: [
+    ...JSON.parse(channellist).channellist,
+    { id: FIRST_TV_ID, name: CHANNELS[0].name, picture: { channelpic: FIRST_LOGO } },
+  ],
+});
 
 // Response-like object with optional headers (getSetCookie) — mirrors the
 // convention that fetchImpl stubs return { ok, status, text }.
@@ -221,12 +236,12 @@ describe('tvplus scrape (stubbed json api)', () => {
       if (url.endsWith('/EPG/JSON/ChannelList')) {
         // The logo lookup must reuse the authenticated session.
         expect(options.headers.cookie).toContain('XSESSIONID=TEST123');
-        return jsonResponse(channellist);
+        return jsonResponse(channellistWithFirst);
       }
       if (url.endsWith('/EPG/JSON/PlayBillList')) {
         const body = JSON.parse(options.body);
-        // maxChannels 1 -> the first configured channel (TRT 1, tvId 144).
-        expect(body.channelid).toBe('144');
+        // maxChannels 1 -> the first configured channel.
+        expect(body.channelid).toBe(FIRST_TV_ID);
         expect(body.begintime).toBe('20260909000000');
         expect(body.endtime).toBe('20260909235959');
         seenCookies.push(options.headers.cookie);
@@ -247,13 +262,14 @@ describe('tvplus scrape (stubbed json api)', () => {
     expect(result.days).toBe(1);
     expect(result.failures).toBe(0);
     expect(result.channels).toHaveLength(1);
-    expect(result.channels[0].id).toBe('TRT1.tr');
-    // TRT 1's channelpic wordmark lands on the channel as its icon.
-    expect(result.channels[0].icon).toBe(
-      'https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp'
-    );
+    // Whatever the table lists first: the table is the platform's own lineup,
+    // ordered by category, so the assertions below follow it rather than a
+    // channel that moved when the table grew.
+    expect(result.channels[0].id).toBe(CHANNELS[0].id);
+    // The ChannelList wordmark lands on the channel as its icon.
+    expect(result.channels[0].icon).toBe(FIRST_LOGO);
     expect(result.programmes.length).toBe(12);
-    expect(result.programmes.every((p) => p.channel === 'TRT1.tr')).toBe(true);
+    expect(result.programmes.every((p) => p.channel === CHANNELS[0].id)).toBe(true);
     // The session cookie captured at Authenticate must be sent with PlayBillList.
     expect(seenCookies).toHaveLength(1);
     expect(seenCookies[0]).toContain('XSESSIONID=TEST123');
@@ -313,7 +329,7 @@ describe('tvplus cli integration (stubbed fetch, temp output)', () => {
     globalThis.fetch = async (url, options) => {
       if (url.includes('/get-platform-info')) return jsonResponse(platformInfo);
       if (url.endsWith('/EPG/JSON/Authenticate')) return jsonResponse('{}', SESSION_HEADERS);
-      if (url.endsWith('/EPG/JSON/ChannelList')) return jsonResponse(channellist);
+      if (url.endsWith('/EPG/JSON/ChannelList')) return jsonResponse(channellistWithFirst);
       if (url.endsWith('/EPG/JSON/PlayBillList')) return jsonResponse(playbill4399);
       throw new Error(`unexpected url ${url}`);
     };
@@ -339,9 +355,7 @@ describe('tvplus cli integration (stubbed fetch, temp output)', () => {
       expect(fs.statSync(out).size).toBeGreaterThan(500);
       // The scraped icon survives the whole pipeline into the XMLTV <icon>.
       const xml = gunzipSync(fs.readFileSync(out)).toString('utf8');
-      expect(xml).toContain(
-        '<icon src="https://izmottvsc27.tvplus.com.tr:33207/CPS/images/universal/film/logo/202510/20251030/58/0915123165535eb88428_op.webp" />'
-      );
+      expect(xml).toContain(`<icon src="${FIRST_LOGO}" />`);
     } finally {
       globalThis.fetch = originalFetch;
     }

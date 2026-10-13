@@ -9,11 +9,12 @@ fixture/test is cited instead; the `idmantv.az` weekly page was re-fetched
 live on 2026-09-12 when the `idmantv` provider landed, and the Swedish
 `tv.nu` channel pages on 2026-09-17 when the `tvnu` provider landed.
 
-Covered today (38 channels):
+Covered today (33 sports channels — TV+'s general-interest channels are excluded,
+because the sports merge takes only each provider's sports subset):
 
 | Provider | Channels |
 | --- | --- |
-| `tvplus` | TRT 1, TRT Spor, TRT Spor Yıldız, A Spor, HT Spor, FB TV, tabii spor, S Sport, S Sport 2, Eurosport 1, Eurosport 2, Sports TV, ATV, TV8, TV8,5, A2 |
+| `tvplus` | TRT Spor, TRT Spor Yıldız, A Spor, HT Spor, FB TV, tabii spor, S Sport, S Sport 2, Eurosport 1, Eurosport 2, Sports TV |
 | `beinsports` | beIN Sports 1, beIN Sports 2, beIN Sports 3, beIN Sports 4 |
 | `digiturkburada` | beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV |
 | `sporekraniapi` | tabii spor 1, tabii spor 2, tabii spor 3, tabii spor 4, tabii spor 5, tabii spor 6, tabii spor 7, tabii spor 8, S Sport Plus |
@@ -23,8 +24,11 @@ Covered today (38 channels):
 Run all six and merge into one guide:
 
 ```bash
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --sports-only
 ```
+
+(The offline rebuild from the CI artifacts is `npm run merge:sports`, which
+already carries `--sports-only`.)
 
 Notes:
 - **beIN Sports 5, Max 1-2** were originally unsupported: digiturk.com.tr is

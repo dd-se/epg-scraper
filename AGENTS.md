@@ -165,9 +165,16 @@ Development tooling includes a static file server in
       Authoritative for every TRT channel, which is why the merged
       `hurriyetTrt` feed lists it first. Browser-compatible (GET pages only).
     - `tvplus.js` — TV+ (Turkcell) Yayın Akışı: a **plain-HTTP JSON API**
-      provider (16 channels incl. TRT Spor/Yıldız, A Spor, HT Spor, FB TV,
-      tabii spor, S Sport 1/2, Eurosport 1/2, Sports TV, TRT 1, ATV, TV8,
-      TV8,5, A2).  Flow: `POST /get-platform-info` → rotating API base,
+      provider curating **70 channels** — the platform's 172-channel lineup has
+      155 with programme data (the other 17 are movie-collection VOD rails), and
+      the table keeps every channel TV+ serves that hurriyet or mynet also
+      curate (so this provider stands alone for that lineup) plus Viasat
+      History, which closes the catalog's `history.tr` gap.  The sports feeds
+      (TRT Spor/Yıldız, A Spor, HT Spor, FB TV, tabii spor, S Sport 1/2,
+      Eurosport 1/2, Sports TV) are declared separately as `SPORTS_CHANNEL_IDS`
+      because tvplus is in the sports profile.  Channel ids are the ones the
+      other providers publish, never new spellings.  Flow:
+      `POST /get-platform-info` → rotating API base,
       `POST {base}/EPG/JSON/Authenticate` → session cookie, one
       `POST {base}/EPG/JSON/ChannelList` for all channel logos, then
       `POST {base}/EPG/JSON/PlayBillList` per channel+day (explicit
@@ -312,9 +319,12 @@ Development tooling includes a static file server in
     reports into text lines.
 
 Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekraniapi` +
-`tivibu` + `idmantv` merged (`--provider tvplus,beinsports,digiturkburada,
-sporekraniapi,tivibu,idmantv --merge`) cover 38 of the 50 sports channels; the
-rest are tracked in `UNSUCCESSFUL.md`. The daily CI merge skips
+`tivibu` + `idmantv` merged with `--sports-only` (`--merge --sports-only`) cover
+**33 distinct sports feeds** — each provider contributes only its sports subset
+(`sportsChannelIds()` in the catalog), because tvplus now curates a
+general-interest lineup too; the previous "38" counted tvplus's ATV/TRT 1/TV8
+channels as sports, which they never were.  The rest are tracked in
+`UNSUCCESSFUL.md`. The daily CI merge skips
 `beinsports` (its 1-4 feeds are covered by `digiturkburada`, which keeps
 full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
 `sporekraniapi` adapter matches starts and bounds final stops at midnight).

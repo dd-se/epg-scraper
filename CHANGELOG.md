@@ -47,6 +47,39 @@ package is private and never published; releases are version bumps plus tags.
   Baby TV, Discovery Channel, Minika Go and Nickelodeon all turn out to be
   served by mynet (see `docs/research/channels-without-guides.md`).
 
+- **TV+ now curates 70 channels instead of 16.** A live `ChannelList` probe
+  (172 channels, 155 with programme data, 17 are its movie-collection VOD
+  rails) was compared slot-by-slot against the hürriyet guide: 26 shared
+  channels, titles agreeing 89–100% on 24 of them, the residual being the
+  overnight carry-over tvplus returns and hürriyet leaves as a repeats block.
+  TV+ is therefore trusted as a guide, and the table now keeps every channel it
+  serves that hürriyet or mynet also curates — so the provider stands alone for
+  that lineup — plus Viasat History, the one channel that closes the playlist
+  catalog's `history.tr` gap.  The id for each channel is the one the other
+  providers already publish: `NOWTV.tr`, `FENERBAHCETV.tr`, `SOZCUTV.tr`,
+  `TABIISPOR.tr` and 66 more, not new spellings.  The sports feeds are
+  declared as `SPORTS_CHANNEL_IDS` so the sports merge can ask for them.
+- **New**: `--sports-only` (`--merge` only) keeps each provider's curated sports
+  subset, so a sports-profile provider that also curates general-interest
+  channels cannot widen a sports feed.  `npm run merge:sports` and the CI sports
+  merge job both carry it.
+- **Fixed**: the playlist catalog's `History` pattern never matched anything —
+  every source spells the channel `Viasat History`, which is why tvplus serving
+  it closed the gap and the pattern does not.  The pattern is now
+  `Viasat History`, so the channel reaches playlists.
+- **Fixed**: `channelIdFromName` dropped every Turkish diacritic instead of
+  folding it, so an unmapped channel shipped a letter short — `DİYANET TV` as
+  `DYANETTV.tr`, `SÖZCÜ TV` as `SZCTV.tr`.  Folding first makes the fallback
+  agree with `foldChannelId`.
+
+### Changed
+
+- The sports coverage count changes from 38 to **33** distinct sports feeds: the
+  old figure counted TV+'s ATV, TRT 1, TV8, TV8,5 and A2 as sports, which they
+  never were.  Those channels are still in TV+'s own guide.
+- tvplus's default politeness delay is 500 ms (was 400): it is now one
+  `PlayBillList` request per curated channel per day.
+
 ### Added
 
 - `foldChannelId()` and `isCanonicalChannelId()` in `src/slug.js`, plus the

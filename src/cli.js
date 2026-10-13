@@ -16,7 +16,11 @@ import { mergeResults } from './merge.js';
 import { loadAliasMap, createCanonicalizer } from './aliases.js';
 import { DEFAULT_ENV_FILE, applyEnv, readEnvFile } from './env-file.js';
 import { createGuideResult } from './model.js';
-import { resolveProviderContext } from './provider-catalog.js';
+import {
+  PROVIDER_CATALOG,
+  resolveProviderContext,
+  sportsChannelIds,
+} from './provider-catalog.js';
 import {
   DELAY_FLAG,
   MAX_CHANNELS_FLAG,
@@ -68,6 +72,9 @@ const HELP_TEXT = `Usage: epg-scraper [options]
                        XMLTV files instead (comma-separated .xml/.xml.gz
                        paths) — reuses earlier outputs without hitting live
                        servers again
+  --sports-only with --merge, keep only each provider's curated sports
+  channels, so a provider that also curates general-interest channels does not
+  widen a sports feed;
   --exclusive-channels with --merge, the first provider that lists a channel
                        owns it: later providers contribute nothing for that
                        channel, so a duplicate feed's differing slot
@@ -203,6 +210,7 @@ export async function runCli({
         from: { type: 'string' },
         'alias-map': { type: 'string' },
         'exclusive-channels': { type: 'boolean', default: false },
+        'sports-only': { type: 'boolean', default: false },
         // `--dotenv`, not `--env-file`: Node parses `--env-file` (and
         // `--env-file-if-exists`) anywhere in argv — even after the script
         // path — so a flag with that name never reaches this parser.
@@ -433,6 +441,7 @@ export async function runCli({
     fromFiles,
     canonicalize,
     exclusiveChannels: values['exclusive-channels'] === true,
+    sportsOnly: values['sports-only'] === true,
     dates,
     cwd,
     gzip: values.gzip,
@@ -900,6 +909,44 @@ async function runHttpBrowserCompareMode(context) {
   return 0;
 }
 
+/**
+ * The provider an offline input belongs to, from its published filename
+ * (`epg_<id>_<COUNTRY>.xml[.gz]`).  Unknown names return undefined so the
+ * sports filter can say so and pass the file through.
+ */
+function providerIdFromFilename(label) {
+  const match = /^epg_([a-z0-9-]+)_[A-Z]{2}\.xml(?:\.gz)?$/.exec(String(label));
+  return match ? match[1] : undefined;
+}
+
+/**
+ * `--sports-only`: keep just the channels a provider contributes to the sports
+ * profile.  A provider that is sports-only by nature contributes everything it
+ * curates; one that also curates general-interest channels (TV+) declares which
+ * of its ids are the sports feeds.  An input whose provider we do not recognise
+ * (an arbitrary file handed to `--from`) passes through untouched rather than
+ * being emptied.
+ */
+function sportsOnlyFilter(result, providerId, log) {
+  const entry = PROVIDER_CATALOG.find((candidate) => candidate.id === providerId);
+  if (!entry) {
+    log(`merge: ${providerId} is not a known provider — kept all channels (--sports-only)`);
+    return result;
+  }
+  const sports = new Set(sportsChannelIds(entry));
+  const channels = result.channels.filter((channel) => sports.has(channel.id));
+  const ids = new Set(channels.map((channel) => channel.id));
+  const programmes = result.programmes.filter((programme) => ids.has(programme.channel));
+  const dropped = result.channels.length - channels.length;
+  if (dropped > 0) {
+    log(
+      `merge: ${providerId} contributed ${channels.length} sports channels ` +
+        `(${dropped} non-sports dropped by --sports-only)`
+    );
+  }
+  return { ...result, channels, programmes };
+}
+
 async function runMergeMode(context) {
   const offline = context.mode === 'offline-merge';
   const results = [];
@@ -914,7 +961,12 @@ async function runMergeMode(context) {
         return 1;
       }
       const label = path.basename(file);
-      results.push({ providerId: label, ...parsed });
+      const providerId = providerIdFromFilename(label);
+      results.push(
+        context.sportsOnly
+          ? sportsOnlyFilter({ providerId: label, ...parsed }, providerId, context.log)
+          : { providerId: label, ...parsed }
+      );
       context.log(
         `merge: ${label} loaded ${parsed.channels.length} channels, ` +
           `${parsed.programmes.length} programmes`
@@ -930,7 +982,11 @@ async function runMergeMode(context) {
         useBrowser,
         logPrefix: `${provider.id}: `,
       });
-      results.push({ providerId: provider.id, ...result });
+      results.push(
+        context.sportsOnly
+          ? sportsOnlyFilter({ providerId: provider.id, ...result }, provider.id, context.log)
+          : { providerId: provider.id, ...result }
+      );
       context.log(
         `merge: ${provider.id} contributed ${result.channels.length} channels, ` +
           `${result.programmes.length} programmes (${result.failures} failed page(s))`

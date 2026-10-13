@@ -95,3 +95,12 @@ alias map.
   by parsing actual programme slots, not just a channel card.
 - hurriyet's inventory is the union over its seven day pages for the requested
   window; mynet's is one day's index.
+
+## TV+ probe follow-up (2026-10-13, later the same day)
+
+A full `ChannelList` probe found 155 channels with programme data, of which TV+
+now curates 70.  Comparing the shared channels slot-by-slot against the live
+hürriyet guide settled the accuracy question: titles agree 89–100% on 24 of the
+26 shared channels, and the residual difference is boundary handling (tvplus
+returns the tail of the previous day's programme where hürriyet shows a repeats
+block).  Details: `docs/research/tvplus-lineup.md`.
