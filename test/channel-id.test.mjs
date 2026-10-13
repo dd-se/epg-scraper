@@ -7,6 +7,7 @@ import { channelIdFromName, foldChannelId, isCanonicalChannelId } from '../src/s
 import { createGuideResult, validateGuideResult } from '../src/model.js';
 import { generateXmltv } from '../src/xmltv.js';
 import { PROVIDER_CATALOG, curatedChannelIds } from '../src/provider-catalog.js';
+import { CHANNEL_CATALOG, CATALOG_EPG_GAPS } from '../src/m3u/channels.js';
 
 describe('foldChannelId', () => {
   it('folds Turkish diacritics and removes separators', () => {
@@ -113,6 +114,50 @@ describe('the curated provider maps are the database', () => {
         .flatMap((entry) => curatedChannelIds(entry))
     );
     expect(sports.size).toBe(38);
+  });
+});
+
+// The playlist builder keeps its own lowercase `tvg-id` namespace, deliberately
+// not aligned with the guide ids — but a viewer joins the two by id, so every
+// catalog id needs a guide counterpart (compared folded and case-insensitively,
+// the way a consumer folds both sides).  Channels no guide serves are listed in
+// `CATALOG_EPG_GAPS` with a reason, so the exception is a decision on record.
+describe('the playlist catalog and the guides agree on channel identity', () => {
+  const guideIds = new Set(
+    PROVIDER_CATALOG.flatMap((entry) => curatedChannelIds(entry)).map((id) => foldChannelId(id).toLowerCase())
+  );
+  const catalogIds = CHANNEL_CATALOG.map((item) => item.id);
+  const gaps = CATALOG_EPG_GAPS.map((gap) => gap.id);
+
+  it('gives every catalog channel a guide counterpart or a recorded reason', () => {
+    const orphans = catalogIds.filter(
+      (id) => !guideIds.has(foldChannelId(id).toLowerCase()) && !gaps.includes(id)
+    );
+    expect(orphans).toEqual([]);
+  });
+
+  it('records a reason for every gap', () => {
+    for (const gap of CATALOG_EPG_GAPS) {
+      expect(typeof gap.id, JSON.stringify(gap)).toBe('string');
+      expect(typeof gap.reason, gap.id).toBe('string');
+      expect(gap.reason.trim().length, gap.id).toBeGreaterThan(10);
+    }
+  });
+
+  it('never excuses a channel a guide does serve', () => {
+    // Give one of these channels a real guide id and its entry has to go with
+    // it, or this list rots into a blanket excuse.
+    const stale = gaps.filter((id) => guideIds.has(foldChannelId(id).toLowerCase()));
+    expect(stale).toEqual([]);
+  });
+
+  it('never excuses a channel the catalog no longer carries', () => {
+    const unknown = gaps.filter((id) => !catalogIds.includes(id));
+    expect(unknown).toEqual([]);
+  });
+
+  it('keeps the gap list free of duplicates', () => {
+    expect(new Set(gaps).size).toBe(gaps.length);
   });
 });
 
