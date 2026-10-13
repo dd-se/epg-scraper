@@ -140,8 +140,7 @@ export const COMMAND_PROFILES = {
     output: 'epg_sports_merged_TR.xml.gz',
   },
   // No `aliasMap`: the providers curate the same id for every channel they
-  // share, so a merged guide needs no id reconciliation (see
-  // `docs/research/channels-without-guides.md`).
+  // share, so a merged guide needs no id reconciliation.
   mynetSports: {
     providerIds: ['mynet', ...PROVIDER_CATALOG.filter((entry) => entry.sports.live).map((entry) => entry.id)],
     args: ['--days-forward', '2', '--delay-ms', '300'],

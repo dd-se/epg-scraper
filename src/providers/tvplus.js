@@ -53,8 +53,6 @@ import {
 export const BASE_URL = 'https://tvplus.com.tr';
 export const PLATFORM_INFO_URL = `${BASE_URL}/get-platform-info`;
 
-// Curated channel table: display name -> { tvId (TV+ numeric id), id (XMLTV
-// id, see src/slug.js for the format) }.
 // Curated channel table: the platform's own display name -> { tvId (TV+ numeric
 // id), id (XMLTV id, see src/slug.js for the format) }.
 //

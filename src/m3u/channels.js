@@ -114,9 +114,8 @@ export const EPG_NAME_CONTRACT = [
  * Every entry was verified against a live run of all four Turkish guides
  * (hürriyet, mynet, tvplus, trt) by display name, not by id: the channel is
  * absent from their channel lists altogether, not merely spelled differently
- * or served under a qualified variant.  A per-provider breakdown lives in
- * `docs/research/channels-without-guides.md`; give any of these channels a real
- * guide id and its entry goes with it.
+ * or served under a qualified variant.  Give any of these channels a real guide
+ * id and its entry goes with it.
  */
 export const CATALOG_EPG_GAPS = [
   { id: 'showturk.tr', name: 'Show Turk', reason: 'no guide lists Show Türk; the guides carry neither spelling' },

@@ -45,7 +45,11 @@ package is private and never published; releases are version bumps plus tags.
   unchanged but are now curated rather than accidental.
 - The playlist catalog's no-guide list drops from eleven channels to seven:
   Baby TV, Discovery Channel, Minika Go and Nickelodeon all turn out to be
-  served by mynet (see `docs/research/channels-without-guides.md`).
+  served by mynet (`minika.go.tr` and `nickelodeon.tr` after curating them).
+
+  The four were found by comparing the providers' channel lists by name rather
+  than by id, because three of them reach the guide through the generic-slug
+  fallback and one is spelled with a Turkish dotted capital.
 
 - **TV+ now curates 70 channels instead of 16.** A live `ChannelList` probe
   (172 channels, 155 with programme data, 17 are its movie-collection VOD

@@ -187,9 +187,10 @@ describe('the curated provider maps are the database', () => {
 // `CATALOG_EPG_GAPS` with a reason, so the exception is a decision on record.
 //
 // The comparison is over *curated* ids, so a channel a provider serves only
-// through the generic slug still reads as a gap.  Two entries currently do
-// (Baby TV, Discovery Channel, both served by mynet); see
-// `docs/research/channels-without-guides.md` for the evidence and the fix.
+// through the generic slug still reads as a gap.  Two entries once did (Baby TV
+// and Discovery Channel, both served by mynet); they are curated now, which is
+// how they stopped being gaps.  A curated id for a channel no source lists any
+// more is the same trap in reverse.
 describe('the playlist catalog and the guides agree on channel identity', () => {
   const guideIds = new Set(
     PROVIDER_CATALOG.flatMap((entry) => curatedChannelIds(entry)).map((id) => foldChannelId(id).toLowerCase())
