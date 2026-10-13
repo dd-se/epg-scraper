@@ -28,6 +28,25 @@ package is private and never published; releases are version bumps plus tags.
 - Playlist (`--m3u`) `tvg-id`s are unchanged (`trt1.tr`, `cnnturk.tr`, …); the
   playlist namespace stays separate from the guide ids.
 
+- **The shipped channel-id alias map is gone; the providers agree by
+  curation.** Every channel two providers share now carries the same id in both
+  curated maps — mynet pinned `FB TV` to `FENERBAHCETV.tr` (tvplus's id) and
+  `TV2` to `TEVE2.tr` (hurriyet's, for a pair that publishes byte-identical
+  schedules) — so no merge needs id reconciliation.
+  `aliases.mynet-sports.json` is deleted; one of its two entries pointed at an
+  id no guide ever published, which renamed a channel in the mynet+sports merge
+  rather than reconciling it. `--alias-map` itself is unchanged: it remains the
+  tool for reconciling a third-party guide with ours, and no shipped guide uses
+  it.
+- mynet now curates four channels it served only through the generic slug, so
+  their published ids change: `MNKAGO.tr` → `MINIKAGO.tr` and
+  `NICKELODEONSD.tr` → `NICKELODEON.tr` (dropping the `SD` qualifier, like
+  every other qualifier in an id). `BABYTV.tr` and `DISCOVERYCHANNEL.tr` are
+  unchanged but are now curated rather than accidental.
+- The playlist catalog's no-guide list drops from eleven channels to seven:
+  Baby TV, Discovery Channel, Minika Go and Nickelodeon all turn out to be
+  served by mynet (see `docs/research/channels-without-guides.md`).
+
 ### Added
 
 - `foldChannelId()` and `isCanonicalChannelId()` in `src/slug.js`, plus the

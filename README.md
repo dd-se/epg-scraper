@@ -305,14 +305,14 @@ provider name guessed from its filename.
 
 ## Channel-id aliases
 
-Providers sometimes emit different XMLTV ids for the same channel — e.g.
-mynet's `FBTV.tr` vs tvplus's curated `FENERBAHCETV.tr`.  Without
-help, `--compare` reports them as two unrelated channels and `--merge` writes
-both into the guide.  An optional alias map tells the tool they are the same
-channel:
+Every provider curates the same id for a channel they share, so this tool's own
+guides never need an alias map — `test/channel-id.test.mjs` fails if two
+providers disagree about one channel.  The flag stays for the case the flag is
+actually for: reconciling **someone else's** guide with ours, where ids you do
+not control may not match:
 
 ```json
-// aliases.json
+// aliases.json — e.g. mapping a third-party guide's ids onto ours
 {
   "FBTV.tr": "FENERBAHCETV.tr",
   "TV8HD.tr": "TV8.tr"

@@ -420,8 +420,10 @@ the dependency chain flows upward: providers → catalog/registry/http/xmltv/mod
   country still defaults to `_TR` because XMLTV filenames do not carry it.
   CI uses offline merge to avoid scraping the sports providers twice.
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
-  canonicalizes channel ids in compare and merge (e.g. mynet's `FBTV.tr`
-  and tvplus's `FENERBAHCETV.tr` collapse onto one channel).
+  canonicalizes channel ids in compare and merge.  No shipped guide uses it:
+  every channel two providers share is curated to one id on both sides
+  (`test/channel-id.test.mjs` fails otherwise), so the flag is for reconciling a
+  third-party guide with ours, not for fixing our own providers.
 - **Credentials (`--dotenv <path>`)** — providers that need secrets read
   them from the environment; for local live runs the CLI loads `<cwd>/.env`
   when it exists, or the named file (`--dotenv` names a file that must

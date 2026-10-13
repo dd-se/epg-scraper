@@ -60,10 +60,29 @@ export const CHANNEL_ID_MAP = {
   '360': '360.tr',
   'TEVE2': 'TEVE2.tr',
   'BEYAZ TV': 'BEYAZTV.tr',
-  'TV2': 'TV2.tr',
-  // mynet still lists the channel under its old name; the id follows the
-  // current name (the playlist spells it `nowtv.tr`).
+  // TV2 and teve2 are separate rows in mynet's index but one feed: hurriyet
+  // publishes both rows with byte-identical schedules on every day of the week
+  // (checked), so both providers pin the pair to the one id.
+  'TV2': 'TEVE2.tr',
+  // Channels mynet lists under a name the generic slug cannot recover, or
+  // where another provider curates the same channel: curating them here is
+  // what lets two guides agree on one id without an alias map.
+  //   FOX          - mynet still lists the pre-rebrand name; the id follows
+  //                  the current name (the playlist spells it `nowtv.tr`).
+  //   FB TV        - tvplus curates the same feed as FENERBAHCETV.tr.
+  //   MİNİKAGO  - the catalog's `minika.go.tr`.
+  //   NICKELODEON SD - the `SD` qualifier is not part of the identity.
+  //   ULUSAL TV    - kept as the channel's own id rather than renamed by an
+  //                  alias into one no guide publishes.
   'FOX': 'NOWTV.tr',
+  'FB TV': 'FENERBAHCETV.tr',
+  'MİNİKAGO': 'MINIKAGO.tr',
+  'NICKELODEON SD': 'NICKELODEON.tr',
+  'ULUSAL TV': 'ULUSALTV.tr',
+  //   BABY TV / DISCOVERY CHANNEL - served by the generic slug otherwise, so
+  //                  the catalog's ids had no curated counterpart.
+  'BABY TV': 'BABYTV.tr',
+  'DISCOVERY CHANNEL': 'DISCOVERYCHANNEL.tr',
   '24 TV': '24TV.tr',
   'BLOOMBERG HT': 'BLOOMBERGHT.tr',
   'BLOOMBERG': 'BLOOMBERGTV.tr',

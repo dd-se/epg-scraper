@@ -108,6 +108,33 @@ describe('the curated provider maps are the database', () => {
     }
   });
 
+  // The reason the shipped alias map could be deleted: every channel two
+  // providers share is curated to the same id on both sides, so a merged guide
+  // needs no id reconciliation.  Compare the maps by display name (the thing
+  // they key on) rather than by id, which is how the clash appeared in the
+  // first place: mynet's `FB TV` and tvplus's `FB TV` disagreed.
+  it('never lets two providers curate one channel under different ids', () => {
+    const byChannel = new Map();
+    // Turkish guides only: a Swedish id shares no namespace with a Turkish one
+    // (the two never merge), so `Disney Channel` existing on both sides is not
+    // a clash.
+    for (const entry of PROVIDER_CATALOG.filter((e) => e.country !== 'SE')) {
+      for (const [name, id] of Object.entries(entry.module.CHANNEL_ID_MAP)) {
+        const channel = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!byChannel.has(channel)) byChannel.set(channel, new Map());
+        byChannel.get(channel).set(entry.id, id);
+      }
+    }
+    const clashes = [];
+    for (const [channel, perProvider] of byChannel) {
+      if (perProvider.size < 2) continue;
+      if (new Set(perProvider.values()).size > 1) {
+        clashes.push(`${channel}: ${[...perProvider].map(([id, ch]) => `${id}=${ch}`).join(' vs ')}`);
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+
   it('gives the Turkish sports feeds distinct ids', () => {
     const sports = new Set(
       PROVIDER_CATALOG.filter((entry) => entry.sports?.live)

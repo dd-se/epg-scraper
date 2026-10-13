@@ -1,12 +1,15 @@
 # Channels the playlist ships that no guide served — findings
 
 **Date:** 2026-10-13 · **Scope:** the eleven catalog channels recorded in
-`CATALOG_EPG_GAPS` (`src/m3u/channels.js`) · **Changes made:** none
+`CATALOG_EPG_GAPS` (`src/m3u/channels.js`)
 
-This is the research note the gap list points at. Nothing here changed a channel
-id, a catalog entry or a published artifact; it only records what each provider
-actually lists, so a later decision to serve or drop one of these channels is
-made from evidence.
+This is the research note the gap list points at. It records what each provider
+actually lists. **Update:** checking by display name rather than by id found that
+four of the eleven were served after all — mynet lists Baby TV, Discovery
+Channel, Minika Go and Nickelodeon (as `NICKELODEON SD`) — and they are now
+curated in mynet, which took the gap list from eleven to seven and made the
+shipped alias map unnecessary. The findings and reasoning below are kept as
+written, with the corrections appended.
 
 ## How this was checked
 
@@ -45,40 +48,45 @@ Serving any of these needs new source work: the fallback path already emits the
 right id, so a provider that starts listing the channel would satisfy the
 agreement assertion with no curation change at all.
 
-## The two the gap list gets wrong
+## The four the gap list got wrong (and how the check missed them)
 
-**`babytv.tr` (Baby TV) and `discoverychannel.tr` (Discovery Channel) are served
-by mynet, today, with programme data.** Their two gap entries in
-`CATALOG_EPG_GAPS` ("no guide lists Baby TV" / "no guide lists Discovery
-Channel") are false and are left in place pending a decision.
+All four are served by mynet, with real programme slots. Three of the four were
+missed because they reach the guide through the **generic-slug fallback** rather
+than a curated id, so an id-based comparison could not see them; one was missed
+because the source spells it `MİNİKAGO`, whose Turkish dotted capital
+survives a naive fold.
 
-Evidence, fetched live on 2026-10-13:
+| Channel | mynet slug | mynet display name | Slots today | Fallback id | Catalog id |
+| --- | --- | --- | --- | --- | --- |
+| Baby TV | `baby-tv` | BABY TV | 287 | `BABYTV.tr` | `babytv.tr` — matched |
+| Discovery Channel | `discovery-channel` | DISCOVERY CHANNEL | 31 | `DISCOVERYCHANNEL.tr` | `discoverychannel.tr` — matched |
+| Minika Go | `minikago` | MİNİKAGO | 232 | `MNKAGO.tr` | `minika.go.tr` — mismatched |
+| Nickelodeon | `nickelodeon-sd` | NICKELODEON SD | 93 | `NICKELODEONSD.tr` | `nickelodeon.tr` — mismatched |
 
-| Channel | mynet slug | Slots parsed for today | Emitted id |
-| --- | --- | --- | --- |
-| Baby TV | `baby-tv` | 287 | `BABYTV.tr` |
-| Discovery Channel | `discovery-channel` | 31 | `DISCOVERYCHANNEL.tr` |
+### Applied
 
-Both ids already equal the catalog ids, and the slots are real, so a viewer
-picking either channel from `playlist.m3u` gets NOW/NEXT from the published
-mynet guide.
+All four are now curated in mynet's `CHANNEL_ID_MAP`, so their ids are
+final-form (`BABYTV.tr`, `DISCOVERYCHANNEL.tr`, `MINIKAGO.tr`,
+`NICKELODEON.tr`), and the four gap entries are gone. For Minika Go and
+Nickelodeon this **changes the published id** (the fallback spellings were
+mismatched); for Baby TV and Discovery Channel the id is unchanged, only now
+curated.
 
-### Why the assertion did not catch it
+### The lesson: compare by channel, not by id
 
-`test/channel-id.test.mjs` compares the catalog against the **curated** guide
-ids (`CHANNEL_ID_MAP` values). These two channels reach the guide through the
-generic-slug fallback, which no curated id represents, so the assertion read
-them as orphans and the entries were written to silence it. The hole is
-documented in the test's own comment: the check covers curation, not coverage.
+Two checks had to be made name-based to get a true answer — one against each
+live guide's display names, one across the providers' curated maps
+(`test/channel-id.test.mjs`). Matching ids alone answers "is this spelling
+curated?", which is not the question; "does a guide serve this channel at all?"
+was the question, and the `SD`/`MİNİKAGO` qualifiers hid the answer.
 
-### The fix, when someone applies it
+### A second same-channel disagreement, found on the way
 
-1. Curate the two ids in mynet's `CHANNEL_ID_MAP` — `'BABY TV': 'BABYTV.tr'`
-   and `'DISCOVERY CHANNEL': 'DISCOVERYCHANNEL.tr'`. The values are exactly
-   what the fallback already emits, so **no published output changes**; the
-   assertion then sees the channels and fails on the stale gap entries.
-2. Delete the `babytv.tr` and `discoverychannel.tr` rows from
-   `CATALOG_EPG_GAPS`, leaving nine gaps.
+The cross-provider check also caught **TV2**: hurriyet publishes TV2 and teve2 as
+separate rows carrying byte-identical schedules on every day of the week, and
+collapses them onto `TEVE2.tr`; mynet curated the same row as `TV2.tr`. Both now
+pin the pair to `TEVE2.tr`, which is what removed the last entry in the shipped
+alias map.
 
 ## Caveats
 

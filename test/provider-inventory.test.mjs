@@ -163,6 +163,14 @@ describe('provider operational inventory', () => {
     );
   });
 
+  it('gives no command profile an alias map to apply', () => {
+    // Providers curate the same id for every channel they share, so a profile
+    // that needed reconciliation would mean a curation gap, not a missing map.
+    for (const [name, profile] of Object.entries(COMMAND_PROFILES)) {
+      expect(profile.aliasMap, name).toBeUndefined();
+    }
+  });
+
   it('owns the special mynet-sports command profile', () => {
     const profile = COMMAND_PROFILES.mynetSports;
     expect(profile).toEqual({
@@ -175,7 +183,6 @@ describe('provider operational inventory', () => {
         'tivibu',
         'idmantv',
       ],
-      aliasMap: 'aliases.mynet-sports.json',
       args: ['--days-forward', '2', '--delay-ms', '300'],
       output: 'epg_mynet_sports_merged_TR.xml.gz',
     });

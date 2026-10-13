@@ -51,7 +51,8 @@ export const CHANNEL_ID_MAP = {
   'TRT SPOR': 'TRTSPOR.tr',
   // Station aliases: these stations are published under one id — NOW is the
   // FOX rebrand (its id follows the current name, like the playlist's
-  // `nowtv.tr`), TV2 shares teve2's logo/feed.
+  // `nowtv.tr`), and TV2 is a separate row carrying byte-identical slots to
+  // teve2's on every day of the published week, so the pair is one id.
   'NOW': 'NOWTV.tr',
   'TV2': 'TEVE2.tr',
   'TV8': 'TV8.tr',

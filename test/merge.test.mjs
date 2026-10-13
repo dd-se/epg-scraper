@@ -5,6 +5,8 @@ import { mergeResults } from '../src/merge.js';
 import { registerProvider } from '../src/registry.js';
 import { runCli } from '../src/cli.js';
 import { createCanonicalizer } from '../src/aliases.js';
+import { mapChannelId as mynetMapChannelId } from '../src/providers/mynet.js';
+import { mapChannelId as tvplusMapChannelId } from '../src/providers/tvplus.js';
 
 const providerA = () => ({
   channels: [
@@ -259,44 +261,29 @@ describe('cli --merge', () => {
     expect(xml.match(/channel="KANALD.tr"/g)).toHaveLength(1);
   });
 
-  it('merges the mynet+sports alias map into canonical channel ids', async () => {
-    // Regression test for aliases.mynet-sports.json: mynet emits FBTV.tr /
-    // ULUSALTV.tr while tvplus uses FENERBAHCETV.tr / ULUSALKANAL.tr. The
-    // shipped map must stay valid JSON and collapse both.
-    const aliasMap = JSON.parse(
-      readFileSync(path.join(process.cwd(), 'aliases.mynet-sports.json'), 'utf8')
-    );
-    const canonicalize = createCanonicalizer(aliasMap);
+  it('needs no alias map for mynet+tvplus: both curate the same FB TV id', () => {
+    // Regression test for the deleted aliases.mynet-sports.json: mynet used to
+    // emit FBTV.tr where tvplus curates FENERBAHCETV.tr, and the map papered
+    // over it. Both adapters now curate one id, so a merge needs no
+    // canonicalizer at all.
+    expect(mynetMapChannelId('FB TV')).toBe(tvplusMapChannelId('FB TV'));
+    expect(mynetMapChannelId('ULUSAL TV')).toBe('ULUSALTV.tr');
 
-    const merged = mergeResults(
-      [
-        {
-          channels: [{ id: 'FBTV.tr', name: 'FB TV' }],
-          programmes: [
-            {
-              channel: 'FBTV.tr',
-              start: '2026-09-07T15:00:00+03:00',
-              stop: '2026-09-07T16:00:00+03:00',
-              title: 'Mynet FB Show',
-            },
-          ],
-        },
-        {
-          channels: [
-            { id: 'FENERBAHCETV.tr', name: 'FB TV' },
-            { id: 'ULUSALTV.tr', name: 'ULUSAL TV' },
-          ],
-          programmes: [],
-        },
-      ],
-      canonicalize
-    );
-    // FB collapses onto the canonical tvplus id; ULUSAL onto the catalog id.
-    expect(merged.channels.map((c) => c.id).sort()).toEqual([
-      'FENERBAHCETV.tr',
-      'ULUSALKANAL.tr',
+    const merged = mergeResults([
+      {
+        channels: [{ id: 'FENERBAHCETV.tr', name: 'FB TV' }],
+        programmes: [
+          {
+            channel: 'FENERBAHCETV.tr',
+            start: '2026-09-07T15:00:00+03:00',
+            stop: '2026-09-07T16:00:00+03:00',
+            title: 'Mynet FB Show',
+          },
+        ],
+      },
+      { channels: [{ id: 'FENERBAHCETV.tr', name: 'FB TV' }], programmes: [] },
     ]);
-    expect(merged.channels.every((c) => c.id !== 'FBTV.tr')).toBe(true);
+    expect(merged.channels.map((c) => c.id)).toEqual(['FENERBAHCETV.tr']);
     expect(merged.programmes[0].channel).toBe('FENERBAHCETV.tr');
   });
 

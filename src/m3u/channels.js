@@ -108,25 +108,20 @@ export const EPG_NAME_CONTRACT = [
  * silent omission, and keyed by the catalog's own `id` so the channel-id suite
  * can fail a catalog entry that no guide answers to unless it is listed here.
  *
- * Every entry was verified against a live run of the broad Turkish guides
- * (hürriyet, mynet, tvplus): the channel is absent from their channel lists
- * altogether, not merely spelled differently.  A per-provider breakdown of each
- * gap lives in `docs/research/channels-without-guides.md`, which also records
- * the two entries (Baby TV, Discovery Channel) that mynet *does* serve through
- * the generic slug and that are therefore false until curated; give any of
- * these channels a real guide id and its entry goes with it.
+ * Every entry was verified against a live run of all four Turkish guides
+ * (hürriyet, mynet, tvplus, trt) by display name, not by id: the channel is
+ * absent from their channel lists altogether, not merely spelled differently
+ * or served under a qualified variant.  A per-provider breakdown lives in
+ * `docs/research/channels-without-guides.md`; give any of these channels a real
+ * guide id and its entry goes with it.
  */
 export const CATALOG_EPG_GAPS = [
   { id: 'showturk.tr', name: 'Show Turk', reason: 'no guide lists Show Türk; the guides carry neither spelling' },
   { id: 'showmax.tr', name: 'Show Max', reason: 'no guide lists Show Max; Show TV is the only Show-family channel served' },
   { id: 'tv8haber.tr', name: 'TV8 Haber', reason: 'only TV8 itself is served; the news sibling is in no channel list' },
   { id: 'trt4k.tr', name: 'TRT 4K', reason: 'no provider serves it' },
-  { id: 'minika.go.tr', name: 'Minika Go', reason: 'no guide lists Minika Go; the id follows the source slug' },
-  { id: 'babytv.tr', name: 'Baby TV', reason: 'no guide lists Baby TV' },
-  { id: 'nickelodeon.tr', name: 'Nickelodeon', reason: 'no guide lists Nickelodeon' },
   { id: 'flashtv.tr', name: 'Flash TV', reason: 'no guide lists Flash TV' },
   { id: 'investigation.tr', name: 'Investigation', reason: 'no guide lists Investigation Discovery' },
-  { id: 'discoverychannel.tr', name: 'Discovery Channel', reason: 'no guide lists Discovery Channel' },
   { id: 'history.tr', name: 'History', reason: 'no guide lists History' },
 ];
 
