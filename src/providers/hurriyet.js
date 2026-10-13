@@ -35,11 +35,12 @@ export const DAY_SLUGS = [
   'cumartesi',
   'pazar',
 ];
-// Curated channel-id map: ids for the channels that do
-// not survive the generic slug rule (case-sensitive ids, aliases, HD
-// suffixes). Keys are normalized (uppercase, whitespace collapsed).
-// Ids are authored in final form: ASCII, Turkish diacritics folded, no
-// separators, `.tr` (see src/slug.js).
+// Curated channel-id map: ids for the channels that do not survive the generic
+// slug rule (case-sensitive brand tokens, station aliases). Keys are normalized
+// (uppercase, whitespace collapsed). Ids are authored in final form: ASCII,
+// Turkish diacritics folded, no separators, `.tr` (see src/slug.js) — and never
+// a quality qualifier, because HD/SD/4K is a variant of a channel, not the
+// channel's identity.
 export const CHANNEL_ID_MAP = {
   'KANAL D': 'KANALD.tr',
   'CNN TÜRK': 'CNNTURK.tr',
@@ -63,14 +64,14 @@ export const CHANNEL_ID_MAP = {
   '24 TV': '24TV.tr',
   'HABERTÜRK': 'HABERTURK.tr',
   'BEYAZ TV': 'BEYAZTV.tr',
-  'SİNEMA TV': 'SINEMATVHD.tr',
+  'SİNEMA TV': 'SINEMATV.tr',
   'EUROSPORT 1': 'EUROSPORT1.tr',
   'EUROSPORT 2 INT': 'EUROSPORT2.tr',
   'NATIONAL GEOGRAPHIC': 'NATIONALGEOGRAPHIC.tr',
   // Map KEYS are normalized (uppercased) by mapChannelId; VALUES keep their
   // case (the `beIN` brand token stays lowercase-mixed).
-  'BEIN SPORTS 1': 'beINSPORTS1.tr',
-  'BEIN SPORTS 3': 'beINSPORTS3.tr',
+  'BEIN SPORTS 1': 'BEINSPORTS1.tr',
+  'BEIN SPORTS 3': 'BEINSPORTS3.tr',
   'SPORTS TV': 'SPORTSTV.tr',
   'TLC': 'TLC.tr',
   'NTV': 'NTV.tr',

@@ -79,7 +79,7 @@ export const CHANNELS = [
   // the same sources carry.
   { name: '360 HD', tvId: '86', id: '360.tr' },
   { name: '24 HD', tvId: '32', id: '24TV.tr' },
-  { name: 'A NEWS HD', tvId: '101', id: 'ANEWSHD.tr' },
+  { name: 'A NEWS HD', tvId: '101', id: 'ANEWS.tr' },
   { name: 'A PARA HD', tvId: '79', id: 'APARA.tr' },
   { name: 'A2 HD', tvId: '2', id: 'A2.tr' },
   { name: 'ATV HD', tvId: '124', id: 'ATV.tr' },
@@ -94,7 +94,7 @@ export const CHANNELS = [
   { name: 'NOW', tvId: '93', id: 'NOWTV.tr' },
   { name: 'SHOW TV HD', tvId: '130', id: 'SHOWTV.tr' },
   { name: 'STAR TV HD', tvId: '89', id: 'STARTV.tr' },
-  { name: 'SİNEMA TV HD', tvId: '166', id: 'SINEMATVHD.tr' },
+  { name: 'SİNEMA TV HD', tvId: '166', id: 'SINEMATV.tr' },
   { name: 'TLC', tvId: '174', id: 'TLC.tr' },
   { name: 'TV2 HD', tvId: '95', id: 'TEVE2.tr' },
   { name: 'TV8 HD', tvId: '134', id: 'TV8.tr' },
@@ -119,7 +119,7 @@ export const CHANNELS = [
   { name: 'TRT EBA', tvId: '2300', id: 'TRTEBA.tr' },
   { name: 'TRT 3', tvId: '116', id: 'TRTSPOR.tr' },
   { name: 'TRT ARABI', tvId: '76', id: 'TRTARABI.tr' },
-  { name: 'TRT AVAZ', tvId: '193', id: 'TRTAVAZHD.tr' },
+  { name: 'TRT AVAZ', tvId: '193', id: 'TRTAVAZ.tr' },
   { name: 'TRT BELGESEL HD', tvId: '21', id: 'TRTBELGESEL.tr' },
   { name: 'TRT HABER HD', tvId: '30', id: 'TRTHABER.tr' },
   { name: 'TRT KURDİ', tvId: '10', id: 'TRTKURDI.tr' },
@@ -127,7 +127,7 @@ export const CHANNELS = [
   { name: 'TRT SPOR HD', tvId: '31', id: 'TRTSPOR.tr' },
   { name: 'TRT SPOR YILDIZ', tvId: '205', id: 'TRTSPORYILDIZ.tr' },
   { name: 'TRT TÜRK', tvId: '156', id: 'TRTTURK.tr' },
-  { name: 'TRT World HD', tvId: '38', id: 'TRTWORLDHD.tr' },
+  { name: 'TRT World HD', tvId: '38', id: 'TRTWORLD.tr' },
   { name: 'TRT ÇOCUK HD', tvId: '99', id: 'TRTCOCUK.tr' },
   { name: 'TRT1 HD', tvId: '144', id: 'TRT1.tr' },
 
@@ -135,7 +135,7 @@ export const CHANNELS = [
   { name: 'BABYTV', tvId: '29', id: 'BABYTV.tr' },
   { name: 'CARTOON NETWORK', tvId: '20', id: 'CARTOONNETWORK.tr' },
   { name: 'CBEEBIES', tvId: '4520', id: 'CBEEBIES.tr' },
-  { name: 'DA VINCI HD', tvId: '208', id: 'DAVINCILEARNINGHD.tr' },
+  { name: 'DA VINCI HD', tvId: '208', id: 'DAVINCILEARNING.tr' },
   { name: 'DISCOVERY CHANNEL HD', tvId: '8', id: 'DISCOVERYCHANNEL.tr' },
   { name: 'DISNEY JUNIOR', tvId: '149', id: 'DISNEYJUNIOR.tr' },
   { name: 'DİYANET TV', tvId: '175', id: 'DIYANETTV.tr' },
@@ -147,7 +147,7 @@ export const CHANNELS = [
   // Not carried by hurriyet/mynet: this is the one channel TV+ serves that
   // closes a catalog gap (the sources spell the channel "Viasat History",
   // which the catalog's old `History` pattern could never match).
-  { name: 'VIASAT HISTORY HD', tvId: '44', id: 'history.tr' },
+  { name: 'VIASAT HISTORY HD', tvId: '44', id: 'HISTORY.tr' },
 
   // Uluslararası
   { name: 'Bloomberg', tvId: '4459', id: 'BLOOMBERGTV.tr' },

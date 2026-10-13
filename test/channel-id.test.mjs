@@ -1,9 +1,14 @@
-// The channel-id format: Turkish ids are ASCII, carry no separators, keep their
-// case and end in `.tr`; Swedish ids pass through untouched.  These tests are
+// The channel-id format: Turkish ids are uppercase ASCII, carry no separators
+// and end in `.tr`; Swedish ids pass through untouched.  These tests are
 // the contract now that no upstream guide is used as a reference — the curated
 // provider maps ARE the database, so nothing but this file guards their shape.
 import { describe, it, expect } from 'vitest';
-import { channelIdFromName, foldChannelId, isCanonicalChannelId } from '../src/slug.js';
+import {
+  channelIdFromName,
+  channelIdMatchKey,
+  foldChannelId,
+  isCanonicalChannelId,
+} from '../src/slug.js';
 import { createGuideResult, validateGuideResult } from '../src/model.js';
 import { generateXmltv } from '../src/xmltv.js';
 import {
@@ -20,13 +25,23 @@ describe('foldChannelId', () => {
     expect(foldChannelId('TRT.KURDİ.tr')).toBe('TRTKURDI.tr');
     expect(foldChannelId('TRT.MÜZİK.tr')).toBe('TRTMUZIK.tr');
     expect(foldChannelId('HABERTÜRK.tr')).toBe('HABERTURK.tr');
-    expect(foldChannelId('SİNEMA.TV.HD.tr')).toBe('SINEMATVHD.tr');
+    expect(foldChannelId('SİNEMA.TV.tr')).toBe('SINEMATV.tr');
+    // Folding removes separators; it is NOT quality normalization.  The HD/SD/4K
+    // qualifier is dropped in the provider layer (`stripQualityQualifier` in
+    // src/providers/shared.js), so folding must leave it alone.
+    expect(foldChannelId('A.NEWS.HD.tr')).toBe('ANEWSHD.tr');
     expect(foldChannelId('FENERBAHÇE.TV.tr')).toBe('FENERBAHCETV.tr');
   });
 
-  it('keeps the case of ids that are not fully uppercase', () => {
-    expect(foldChannelId('beIN.SPORTS.1.tr')).toBe('beINSPORTS1.tr');
+  it('upper-cases the id, whatever case it arrived in', () => {
+    // Folding is the one seam every Turkish id crosses, so it — not each curated
+    // map — is what makes "every id is uppercase" true: a third-party guide read
+    // back from disk lands on the same spelling as a curated one.
+    expect(foldChannelId('beIN.SPORTS.1.tr')).toBe('BEINSPORTS1.tr');
+    expect(foldChannelId('kanald.tr')).toBe('KANALD.tr');
     expect(foldChannelId('TV8.5.tr')).toBe('TV85.tr');
+    // Only the Turkish rule upper-cases; the Swedish branch is verbatim.
+    expect(foldChannelId('SVT.BARN.se')).toBe('SVT.BARN.se');
   });
 
   it('is idempotent', () => {
@@ -60,11 +75,21 @@ describe('foldChannelId', () => {
 
 describe('isCanonicalChannelId', () => {
   it('accepts only final-form Turkish ids and any Swedish id', () => {
-    for (const id of ['ATV.tr', 'TRTCOCUK.tr', 'beINSPORTS1.tr', 'SSPORT1.tr', '360.tr']) {
+    for (const id of ['ATV.tr', 'TRTCOCUK.tr', 'BEINSPORTS1.tr', 'SSPORT1.tr', '360.tr']) {
       expect(isCanonicalChannelId(id), id).toBe(true);
     }
     expect(isCanonicalChannelId('[SVT1HD].SVT1.HD.se')).toBe(true);
-    for (const id of ['TRT.ÇOCUK.tr', 'KANAL.D.tr', 'ATV', 'ATV.', '.tr', 'A.B.tr', 'x"])("onload="y']) {
+    for (const id of [
+      'TRT.ÇOCUK.tr',
+      'KANAL.D.tr',
+      'kanald.tr',
+      'KanalD.tr',
+      'ATV',
+      'ATV.',
+      '.tr',
+      'A.B.tr',
+      'x"])("onload="y',
+    ]) {
       expect(isCanonicalChannelId(id), id).toBe(false);
     }
     expect(isCanonicalChannelId('')).toBe(false);
@@ -104,6 +129,35 @@ describe('channelIdFromName', () => {
   });
 });
 
+// Identity vs spelling: ids are matched through this key (aliases, compare,
+// merge) and written with their own case.  It exists so that joining two guides
+// never turns on casing alone.
+describe('channelIdMatchKey', () => {
+  it('folds the case two spellings of one channel may differ in', () => {
+    expect(channelIdMatchKey('KANALD.tr')).toBe(channelIdMatchKey('kanald.tr'));
+    expect(channelIdMatchKey('[SVT1HD].SVT1.HD.se')).toBe(
+      channelIdMatchKey('[svt1hd].svt1.hd.se')
+    );
+  });
+
+  it('is a key, not a spelling a guide emits', () => {
+    // A Swedish id is written verbatim even though it matches case-insensitively.
+    const result = createGuideResult({
+      channels: [{ id: '[SVT1HD].SVT1.HD.se', name: 'SVT 1' }],
+      programmes: [],
+      language: 'sv',
+    });
+    expect(result.channels[0].id).toBe('[SVT1HD].SVT1.HD.se');
+    expect(channelIdMatchKey(result.channels[0].id)).toBe('[SVT1HD].SVT1.HD.SE');
+  });
+
+  it('passes non-strings through untouched', () => {
+    for (const value of [null, undefined, 42, {}, []]) {
+      expect(channelIdMatchKey(value)).toBe(value);
+    }
+  });
+});
+
 describe('the curated provider maps are the database', () => {
   const curated = PROVIDER_CATALOG.flatMap((entry) =>
     curatedChannelIds(entry).map((id) => [entry.id, id])
@@ -123,9 +177,11 @@ describe('the curated provider maps are the database', () => {
   });
 
   it('never folds two different ids onto one (case-insensitively)', () => {
+    // The comparison is on the *match* key: casing never decides identity, so
+    // two curated ids that differ only in case would fuse into one channel.
     const byFold = new Map();
     for (const [provider, id] of curated) {
-      const key = foldChannelId(id).toLowerCase();
+      const key = channelIdMatchKey(foldChannelId(id));
       const seen = byFold.get(key);
       if (seen && seen.id !== id) {
         // The same channel curated by two providers is fine; two spellings of
@@ -193,14 +249,16 @@ describe('the curated provider maps are the database', () => {
 // more is the same trap in reverse.
 describe('the playlist catalog and the guides agree on channel identity', () => {
   const guideIds = new Set(
-    PROVIDER_CATALOG.flatMap((entry) => curatedChannelIds(entry)).map((id) => foldChannelId(id).toLowerCase())
+    PROVIDER_CATALOG.flatMap((entry) => curatedChannelIds(entry)).map((id) =>
+      channelIdMatchKey(foldChannelId(id))
+    )
   );
   const catalogIds = CHANNEL_CATALOG.map((item) => item.id);
   const gaps = CATALOG_EPG_GAPS.map((gap) => gap.id);
 
   it('gives every catalog channel a guide counterpart or a recorded reason', () => {
     const orphans = catalogIds.filter(
-      (id) => !guideIds.has(foldChannelId(id).toLowerCase()) && !gaps.includes(id)
+      (id) => !guideIds.has(channelIdMatchKey(foldChannelId(id))) && !gaps.includes(id)
     );
     expect(orphans).toEqual([]);
   });
@@ -216,7 +274,7 @@ describe('the playlist catalog and the guides agree on channel identity', () => 
   it('never excuses a channel a guide does serve', () => {
     // Give one of these channels a real guide id and its entry has to go with
     // it, or this list rots into a blanket excuse.
-    const stale = gaps.filter((id) => guideIds.has(foldChannelId(id).toLowerCase()));
+    const stale = gaps.filter((id) => guideIds.has(channelIdMatchKey(foldChannelId(id))));
     expect(stale).toEqual([]);
   });
 
@@ -254,10 +312,12 @@ describe('the guide-result seam', () => {
     });
     // A programme naming the pre-fold spelling still resolves to the emitted
     // id, so folding orphans nothing.
-    expect(result.channels.map((c) => c.id)).toEqual(['TRTCOCUK.tr', 'beINSPORTS1.tr']);
+    expect(result.channels.map((c) => c.id)).toEqual(['TRTCOCUK.tr', 'BEINSPORTS1.tr']);
+    // Programme slots are ordered by channel id in codepoint order, which
+    // uppercase ids make alphabetical: BEINSPORTS1.tr before TRTCOCUK.tr.
     expect(result.programmes.map((p) => p.channel)).toEqual([
+      'BEINSPORTS1.tr',
       'TRTCOCUK.tr',
-      'beINSPORTS1.tr',
     ]);
     expect(result.failures).toBe(0);
   });

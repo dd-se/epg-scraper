@@ -82,7 +82,9 @@ The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
 with `--sports-only` — TV+ also curates the general-interest lineup, and only its sports
 subset belongs in this feed).
 Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
-sections below and `UNSUCCESSFUL.md` for channels still lacking a usable source.
+sections below and `UNSUCCESSFUL.md` for channels still lacking a usable source;
+per-provider implementation notes (transport, coverage window, curated ids,
+gotchas) live in `docs/providers.md`.
 
 ## Browser mode
 
@@ -329,6 +331,9 @@ node bin/epg-scraper.js --provider hurriyet,mynet --merge   --alias-map aliases.
 - The map is a flat JSON object `{ aliasId: canonicalId }` — the key is
   replaced, the value is kept.  Aliases are applied when comparing or merging
   providers (they have no effect on single-provider runs).
+- Keys are matched **case-insensitively**, because the id you are aliasing is
+  not one we spell: `fbTV.tr` in the map still catches our `FBTV.tr`, and the
+  canonical value is emitted exactly as written here.
 - `--compare`: the aliased ids collapse onto the canonical channel in the
   per-channel breakdown, so the schedules are actually diffed against each
   other.
@@ -700,16 +705,17 @@ Conventions every provider must follow:
   summer), because a pinned offset would shift every summer programme by an
   hour; the instants stay absolute either way.
 - **Curated channel-id map.** Turkish XMLTV channel ids are this project's
-  own format: the name in ASCII with every Turkish diacritic folded to its
-  Latin letter (`CNN TÜRK` → `CNNTURK.tr`, `TRT Çocuk` → `TRTCOCUK.tr`),
-  no separators at all, case preserved (`beIN Sports 1` → `beINSPORTS1.tr`,
+  own format: the name in **uppercase ASCII** with every Turkish diacritic
+  folded to its Latin letter (`CNN TÜRK` → `CNNTURK.tr`, `TRT Çocuk` →
+  `TRTCOCUK.tr`), no separators at all (`beIN Sports 1` → `BEINSPORTS1.tr`,
   `S Sport` → `SSPORT1.tr`), plus the `.tr` suffix — only the suffix may
   contain a dot. `foldChannelId()` in `src/slug.js` implements the rule and
   the writer refuses any id that is not already in final form. An `HD`/`TRHD`
   qualifier is **not** part of a channel's identity, so it never reaches the id
-  (`Eurosport 1` → `EUROSPORT1.tr`, not `EUROSPORT1HD.tr`); a station that is
-  *only* available in HD keeps the qualifier, because there the slug cannot
-  recover it (`ANEWSHD.tr`, `TRTAVAZHD.tr`). Providers pin the ids a slug
+  (`Eurosport 1` → `EUROSPORT1.tr`, not `EUROSPORT1HD.tr`; `TRT Avaz` →
+  `TRTAVAZ.tr`, even though the channel publishes HD-only upstream). The same
+  rule drops it from the emitted `<display-name>` (`A NEWS HD` → `A NEWS`).
+  Providers pin the ids a slug
   cannot otherwise recover: renamed/split feeds that collapse onto one id
   (`TV2` → `TEVE2.tr`, `TRT 3 / TRT SPOR` → `TRTSPOR.tr`) and the FOX rebrand,
   where mynet still lists the old name and hurriyet the new one
@@ -717,6 +723,12 @@ Conventions every provider must follow:
   Unknown channels fall back to the generic slug of their display name,
   folded at the same seam. Swedish (`tvnu`) ids are the exception: they keep
   their source-tagged upstream spelling (`[SVT1HD].SVT1.HD.se`) verbatim.
+  Because a Turkish id is upper-cased while a Swedish one is written verbatim
+  (and a third-party guide may spell a channel any way it likes), casing never
+  identifies a channel: the alias map, `--compare` and `--merge` match ids
+  through the **match key** (`channelIdMatchKey()` in `src/slug.js`) and a guide
+  keeps the spelling it first received. Ids that differ only in case are one channel,
+  not two — so a comparison never turns on how a source capitalised a name.
 - **Politeness.** Sequential day-page fetches with a small delay; browser-like
   User-Agent; bounded retries; no other endpoints, no telemetry.
 
@@ -777,7 +789,8 @@ browser transport to them.
   carries the 11 channel logos. No JS, no API, no login.
 - Channels: TRT 1, TRT 2, TRT Haber, TRT Spor, TRT Spor Yıldız, TRT Belgesel,
   TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî — ids curated
-  (`TRTCOCUK.tr`, `TRTAVAZHD.tr`, `TRTSPORYILDIZ.tr`, …).
+  (`TRTCOCUK.tr`, `TRTAVAZ.tr`, `TRTSPORYILDIZ.tr`, …) — no id carries a
+  quality qualifier, even for the HD-only TRT Avaz.
 - **Per-date, not week-shaped**: any date serves (past and future), so the
   requested window is honoured as given and `--days-back` works — unlike
   hurriyet, there is no Mon–Sun clamp. The index publishes today..+6, the same
@@ -801,11 +814,11 @@ browser transport to them.
      `endtime` → the day's programmes with explicit `starttime`/`endtime`
      (already stamped `UTC+03:00`)
 - Coverage: **any requested date range** (the API serves past and future
-  days).  **70 channels are curated**: the platform's `ChannelList` publishes
+  days).  **76 channels are curated**: the platform's `ChannelList` publishes
   172 channels (155 with programme data, 17 are its movie-collection VOD rails)
   and the table keeps every channel TV+ serves that hürriyet or mynet also
   curates — so the provider stands alone for that lineup — plus Viasat History,
-  which closes the catalog's `history.tr` gap.  Each id is the one the other
+  which closes the catalog's `HISTORY.tr` gap.  Each id is the one the other
   providers publish, never a new spelling.
 - **Plain HTTP only** — this provider POSTs JSON, so it cannot run under
   `--browser` (the Playwright fetcher renders pages and cannot POST).  Do not

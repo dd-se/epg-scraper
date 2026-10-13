@@ -1,4 +1,5 @@
 import { createGuideResult } from './model.js';
+import { channelIdMatchKey } from './slug.js';
 
 // Comparisons between two scrape() results.
 //
@@ -90,16 +91,29 @@ function compareSides({ a, b, canonicalize = (id) => id }) {
   const bProgrammes = right.programmes;
 
   // Canonicalize channel ids (optional alias map) so both sides land on the
-  // same id for the same channel.
+  // same id for the same channel, then match them case-insensitively: spelling
+  // alone must never split one channel into an only-a and an only-b half.  The
+  // report still names each channel the way a guide spells it — the first side's
+  // canonical id — never with the upper-cased key it was matched through.
   const canon = (id) => canonicalize(String(id));
-  const aById = new Map(aChannels.map((c) => [canon(c.id), c]));
-  const bById = new Map(bChannels.map((c) => [canon(c.id), c]));
-  const ids = [...new Set([...aById.keys(), ...bById.keys()])].sort();
-  const aProgsFor = (id) => aProgrammes.filter((p) => canon(p.channel) === id);
-  const bProgsFor = (id) => bProgrammes.filter((p) => canon(p.channel) === id);
+  const idKey = (id) => channelIdMatchKey(canon(id));
+  const displayById = new Map(); // match key -> the canonical id to print
+  const noteChannel = (id) => {
+    const key = idKey(id);
+    if (!displayById.has(key)) displayById.set(key, canon(id));
+    return key;
+  };
+  const displayId = (id) => displayById.get(idKey(id)) ?? canon(id);
+  const aById = new Map(aChannels.map((c) => [noteChannel(c.id), c]));
+  const bById = new Map(bChannels.map((c) => [noteChannel(c.id), c]));
+  const ids = [...new Set([...aById.keys(), ...bById.keys()])]
+    .map((key) => ({ key, id: displayById.get(key) }))
+    .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+  const aProgsFor = (key) => aProgrammes.filter((p) => idKey(p.channel) === key);
+  const bProgsFor = (key) => bProgrammes.filter((p) => idKey(p.channel) === key);
   // Key on the canonical channel id so aliased ids land on the same slot.
   const canonKey = (programme) =>
-    [canon(programme.channel), programme.start, programme.stop].join('|');
+    [displayId(programme.channel), programme.start, programme.stop].join('|');
 
   const channels = [];
   const summary = {
@@ -116,21 +130,21 @@ function compareSides({ a, b, canonicalize = (id) => id }) {
     onlyB: [], // { key, programme }
   };
 
-  for (const id of ids) {
-    const inA = aById.has(id);
-    const inB = bById.has(id);
+  for (const { key, id } of ids) {
+    const inA = aById.has(key);
+    const inB = bById.has(key);
     if (inA && inB) {
       summary.common.push(id);
     } else if (inA) {
       summary.onlyAChannels.push(id);
       // Every programme on a channel only A carries is missing from B.
-      for (const [key, programme] of dedupeByKey(aProgsFor(id), canonKey)) {
-        summary.onlyA.push({ key, programme });
+      for (const [slotKey, programme] of dedupeByKey(aProgsFor(key), canonKey)) {
+        summary.onlyA.push({ key: slotKey, programme });
       }
     } else {
       summary.onlyBChannels.push(id);
-      for (const [key, programme] of dedupeByKey(bProgsFor(id), canonKey)) {
-        summary.onlyB.push({ key, programme });
+      for (const [slotKey, programme] of dedupeByKey(bProgsFor(key), canonKey)) {
+        summary.onlyB.push({ key: slotKey, programme });
       }
     }
 
@@ -138,8 +152,8 @@ function compareSides({ a, b, canonicalize = (id) => id }) {
       id,
       inA,
       inB,
-      programmesA: aProgsFor(id).length,
-      programmesB: bProgsFor(id).length,
+      programmesA: aProgsFor(key).length,
+      programmesB: bProgsFor(key).length,
       matched: 0,
       changed: 0,
       onlyA: 0,
@@ -148,8 +162,8 @@ function compareSides({ a, b, canonicalize = (id) => id }) {
     };
 
     if (inA && inB) {
-      const aProgs = dedupeByKey(aProgsFor(id), canonKey);
-      const bProgs = dedupeByKey(bProgsFor(id), canonKey);
+      const aProgs = dedupeByKey(aProgsFor(key), canonKey);
+      const bProgs = dedupeByKey(bProgsFor(key), canonKey);
       for (const [key, aProgramme] of aProgs) {
         const bProgramme = bProgs.get(key);
         if (!bProgramme) {

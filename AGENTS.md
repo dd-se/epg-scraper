@@ -20,8 +20,8 @@ Development tooling includes a static file server in
 
 - **Node ≥ 24.** The plain-HTTP tool uses built-in `fetch`, `node:zlib`,
   `node:stream`, and `node:util` (including `parseEnv()`, which backs the
-  optional `.env` loader). Do not add runtime dependencies beyond
-  Playwright, which is used only for browser functionality.
+  optional `.env` loader). Runtime dependencies stay at Playwright, which only
+  browser functionality uses.
 - **Local credentials.** A provider that needs secrets reads them from the
   environment (never from a committed file). The CLI additionally loads
   `<cwd>/.env` — or the file named by `--dotenv <path>`, **not** `--env-file`:
@@ -34,24 +34,25 @@ Development tooling includes a static file server in
   carries the names as empty placeholders).
 - **ES modules only.** The project uses `"type": "module"`. All source files
   are `.js` with `import`/`export`. Test files are `.mjs`.
-- **No eval.** Provider adapters must parse scraped HTML with regexes or
-  string operations over known markup. Never `eval` or `Function()` scraped
-  content.
-- **No network in tests.** All test suites run against fixtures in
-  `test/fixtures/` and stubbed `fetchImpl` — never against live sites.
-  Browser tests mock `playwright` via `vi.mock()`. Live scraping is a
-  manual step (`npm run scrape`).
-- **Runtime dependencies.** Playwright is currently a regular dependency
-  in `package.json` (not an npm optional dependency). Browser functionality
-  is optional: Playwright is dynamically imported for browser mode,
-  browser-required providers, or HTTP-vs-browser comparison. Plain-HTTP
-  scraping does not need it. Missing Playwright produces a clear error
-  when browser functionality is requested.
-- **Politeness.** Provider adapters use sequential page fetches with a
-  configurable delay, a browser-like User-Agent, and bounded retries.
-  No telemetry, no hidden endpoints.
-- **Honest errors.** Malformed or unavailable remote data degrades to an
-  empty/warned result — never a crash of the CLI.
+- **Markup parsing.** Provider adapters parse scraped HTML with regexes and
+  string operations over known markup: scraped content stays data, and
+  `eval`/`Function()` stay out of provider adapters.
+- **Offline tests.** Every suite runs offline — fixtures in `test/fixtures/`
+  plus a stubbed `fetchImpl`, with `playwright` mocked via `vi.mock()` in the
+  browser suite. Live scraping is the manual `npm run scrape` step.
+- **Runtime dependencies.** Playwright is a regular dependency in
+  `package.json` (not an npm optional dependency) that only browser
+  functionality loads: Playwright is dynamically imported for browser mode,
+  browser-required providers, or HTTP-vs-browser comparison, so plain-HTTP
+  scraping runs without it and a missing install produces a clear error when
+  browser functionality is requested.
+- **Politeness.** Provider adapters fetch sequentially with a configurable
+  delay, a browser-like User-Agent, and bounded retries, and they stay on the
+  pages a source publishes for its readers — no telemetry, no hidden
+  endpoints.
+- **Honest errors.** Remote data that is malformed or unavailable **degrades**:
+  a warning, an empty or partial guide, and a non-zero exit only when a run
+  could produce nothing at all.
 - **Fixed-offset timestamps.** Programme `start`/`stop` are ISO 8601
   strings with one fixed UTC offset (Turkey: `+03:00` year-round; İdman TV
   — Baku — is `+04:00` year-round, since Azerbaijan abolished DST in 2016).
@@ -72,7 +73,7 @@ Development tooling includes a static file server in
   `finishResult()` / `createGuideResult()` (`src/model.js`), which drops
   null/hostile channels and programmes, unknown channel references,
   non-canonical or reversed instants, invalid metadata, and exact duplicates
-  while preserving every valid partial guide. `generateXmltv()` repeats the
+  while preserving every valid partial guide.  `generateXmltv()` repeats the
   invariant strictly through `validateGuideResult()` and remains the final
   defense when a caller bypasses the provider seam.
 
@@ -104,15 +105,20 @@ Development tooling includes a static file server in
    the CLI rejects an incompatible browser run before any scrape starts.
 3. `src/entities.js` — HTML entity/numeric-reference decoder.
 4. `src/slug.js` — the channel-id format: `foldChannelId()` (Turkish ids to
-   ASCII with diacritics folded and no separators, `.tr` suffix kept verbatim,
-   case preserved; Swedish ids pass through untouched),
-   `isCanonicalChannelId()` (the writer-side check), and the generic
-   `channelIdFromName()` slug (uppercase, non-alphanum → `.`, country suffix)
-   used as the adapters' fallback and by the M3U tree's `tvg-id` derivation.
+   uppercase ASCII with diacritics folded and no separators, `.tr` suffix kept
+   verbatim; Swedish ids pass through untouched), `isCanonicalChannelId()` (the
+   writer-side check), `channelIdMatchKey()` (the **match key** ids are matched
+   through — two ids that differ only in case are one channel; see the
+   channel-id format below), and the generic `channelIdFromName()` slug
+   (uppercase, non-alphanum → `.`, country suffix) used as the adapters'
+   fallback and by the M3U tree's `tvg-id` derivation.
 5. `src/model.js` — tolerant `createGuideResult()` used by providers,
    comparison, merge, and the XMLTV reader; it is also the one seam that folds
    channel ids (`foldChannelId()`), so a provider's pre-fold spelling, an alias
    target and a `programme.channel` reference all land on the same emitted id.
+   It does **not** rewrite a display name: normalizing the label is the provider
+   layer's job (`stripQualityQualifier()` in `src/providers/shared.js`), and this
+   seam stores the name exactly as the provider handed it over.
    Strict `validateGuideResult()` used by the writer; it additionally refuses a
    channel id that is not canonical.
 6. `src/time.js` — source wall-clock validation/conversion, canonical guide
@@ -129,157 +135,17 @@ Development tooling includes a static file server in
    XML escaping, plus the reader (`parseXmltv` ← string, `readXmltvFile` ←
    `.xml`/`.xml.gz`) so already-scraped guides can be reused without live
    servers. Timestamp functions are re-exported from `src/time.js`.
-10. `src/providers/` — Provider adapters (shared plumbing — wallToIso,
-    weekDays, weekdayIndex, normalizeChannelKey, defaultDates, finishResult —
-    lives in `src/providers/shared.js`; wallToIso/weekDays are re-exported
-    from hurriyet.js for compatibility):
-    - `hurriyet.js` — Hürriyet TV Rehberi: `parseDayPage(html)`, `scrape()`, day
-      slug/date mapping, curated channel-id map.  Uses positional rail/row
-      pairing; handles the `passive` class added by client-side JS.  Channel
-      logos come from the rail `<img src>` with the `?v=…` query stripped.
-    - `mynet.js` — Mynet TV Rehberi:     `parseMainPage(html)` discovers channels
-      (slug, name, logo from card `data-original`/`src`),
-     `parseChannelPage(html)` extracts time/name slots.  3-day coverage
-      (today + 2 forward), anchored on the first requested date so `--date`
-      is honored regardless of the real clock; supports `maxChannels`
-      option.  Default `politenessDelayMs` is 500 (vs hurriyet's 250)
-      because a full run is ~90 channel pages per day (~260 requests for 3
-      days).
-    - `trt.js` — TRT Yayın Akışı (`trthaber.com`): the 11 TRT channels
-      (TRT 1, TRT 2, TRT Haber, TRT Spor, TRT Spor Yıldız, TRT Belgesel,
-      TRT Çocuk, TRT Müzik, TRT Türk, TRT Avaz, TRT Kurdî), one static SSR
-      page per channel **and** date
-      (`/yayin-akisi/{channel}/{DD-MM-YYYY}`, plain HTTP, no JS/API/login).
-      Unlike hurriyet it is **per-date, not week-shaped** — any date serves
-      (past and future), so the requested window is honoured as given and
-      `--days-back` works; the index publishes today..+6, the default CLI
-      window, and is also the only place the per-channel logos
-      (`kanal-logo/…`) are published. `parseServedDate()` verifies each page's
-      `<title>` against the request and skips a mismatch instead of misdating
-      it (channels are published at different times, so a channel's "tomorrow"
-      can 404 in the morning). `parseDayPage()` reads the `epg-list` items,
-      `parseChannelLogos()` the index cards, `dayPageUrl()`/`daySlug()` the
-      URL shape. Ids are curated in final form (`TRTCOCUK.tr`,
-      `TRTKURDI.tr`, `TRTAVAZHD.tr` for the HD-only TRT Avaz). Stops chain
-      from the next slot (24:00 for the last one).
-      Authoritative for every TRT channel, which is why the merged
-      `hurriyetTrt` feed lists it first. Browser-compatible (GET pages only).
-    - `tvplus.js` — TV+ (Turkcell) Yayın Akışı: a **plain-HTTP JSON API**
-      provider curating **70 channels** — the platform's 172-channel lineup has
-      155 with programme data (the other 17 are movie-collection VOD rails), and
-      the table keeps every channel TV+ serves that hurriyet or mynet also
-      curate (so this provider stands alone for that lineup) plus Viasat
-      History, which closes the catalog's `history.tr` gap.  The sports feeds
-      (TRT Spor/Yıldız, A Spor, HT Spor, FB TV, tabii spor, S Sport 1/2,
-      Eurosport 1/2, Sports TV) are declared separately as `SPORTS_CHANNEL_IDS`
-      because tvplus is in the sports profile.  Channel ids are the ones the
-      other providers publish, never new spellings.  Flow:
-      `POST /get-platform-info` → rotating API base,
-      `POST {base}/EPG/JSON/Authenticate` → session cookie, one
-      `POST {base}/EPG/JSON/ChannelList` for all channel logos, then
-      `POST {base}/EPG/JSON/PlayBillList` per channel+day (explicit
-      start/stop, pre-stamped `UTC+03:00`).  `parsePlaybill()` /
-      `parsePlatformInfo()` / `parseApiInstant()` / `extractSessionCookie()` /
-      `parseChannelListLogos()` / `pickLogoUrl()` are the pure parsers.
-      Channel logos come from the ChannelList `picture` map with fixed field
-      priority `channelpic` → `poster` → `icon` (`icon` is a portrait show
-      poster on several channels, `ad`/`still` are programme stills; sizes
-      are not encoded in the URLs, so shape sniffing is impossible).
-      **Failsafe:** if a PlayBillList call exhausts
-      its transport retries, the session (rotating host + auth cookie) is
-      re-established once and the channel-day retried before it counts as a
-      failure.  **Not browser-compatible** (POSTs JSON; do not pass
-      `--browser`).  Supports `maxChannels`.
-    - `beinsports.js` — beIN Sports Yayın Akışı: beIN Sports 1-4 via the
-      `__NEXT_DATA__` JSON embedded in `beinsports.com.tr/yayin-akisi/
-      {channel}/{weekday}` pages.  `parseDayPage()` / `parseChannelList()`
-      are the pure parsers.  Like hurriyet, the site publishes one Mon–Sun
-      week; programme stops derive from the next slot (24:00 for the last).
-      Channel logos come from `activeLeagues[].image` (single clean URLs
-      only — pipe-joined garbage some guides carry is rejected).
-    - `digiturkburada.js` — DigiturkBurada Yayın Akışı: beIN Sports 1-5,
-      beIN Sports Max 1-2 and GS TV.  beIN 1-4 intentionally duplicate the
-      beinsports provider (same feed, verified title agreement ~96%; this
-      source keeps full-day schedules while beinsports.com.tr prunes
-      already-aired slots intraday) so the daily CI can cover beIN 1-4
-      without the beinsports week-scrape.  Static per-channel pages with a
-      `<table>` of NAME / HH:MM rows; multi-day via a `POST` of
-      `yayin=DD.MM.YYYY` (the served date in the `<h2>` is verified against
-      the request; the site purges past days, so only recent/future dates
-      serve slots).  `parseDayPage()` / `parseServedDate()` /
-      `parseChannelLogo()` are the pure parsers (logos come from the
-      `border="0"` header `<img>`, `?rkt=` query stripped).  **Not browser-
-      compatible** (POSTs form data).
-    - `sporekraniapi.js` — Spor Ekranı API: tabii spor 1-8 and S Sport Plus via
-      one authenticated `GET https://api.sporekrani.com/v3/events?day=...` per
-      requested date. Credentials come only from `SPOREKRANI_API_APP_ID` and
-      `SPOREKRANI_API_KEY`; never commit them. `parseApiEnvelope()` /
-      `parseDayEvents()` are pure parsers. Every exact curated owner in an
-      event's `channels[]` receives the slot. The source has start times only,
-      so the adapter chains to the next start on the same channel inside that
-      response and ends the final start at midnight; it never chains across
-      days. This is the active daily-CI sports source. **Not browser-compatible**
-      (JSON API, not rendered HTML). `scrape()` accepts an optional `env`
-      (default `process.env`) so tests can inject credentials, and per-day
-      warnings summarize a failed request as `HTTP <status>` only —
-      credential-bearing URLs never reach the log.
-    - `sporekrani.js` — retained Spor Ekranı SSR benchmark baseline: tabii spor
-      1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`. Quasar SSR
-      embeds a rolling ~30-day list in `window.__INITIAL_STATE__`; one fetch per
-      channel. Stops chain across the rolling list. It remains registered for
-      provider-to-provider benchmarking but is excluded from CI because sparse
-      lists can extend a programme for days.
-    - `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor 1-4 via
-      `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
-      and its plain-HTTP JSON API.  One session GET per channel captures the
-      ASP.NET antiforgery cookie, hidden-input token and channel code; a
-      `POST /Channel/GetPrevueList` per channel-day returns
-      `mobilPrevueViewModel[]` with **explicit start/stop** (+ `genre`,
-      `description`).  `parseChannelPage()` / `parsePrevueResponse()` /
-      `sessionGet()` / `prevuePost()` are the pure parsers/transport.
-      Cross-midnight tails from the previous day are dropped (each
-      programme belongs to the day it starts on).  **Not browser-
-      compatible** (POSTs form data + antiforgery cookie).  Supports
-      `maxChannels`.
-    - `idmantv.js` — iDMAN TV Yayın Proqramı (İdman Televiziyası,
-      Azerbaijan's first sports channel): the old `idmantv.com.tr` domain is
-      dead; the real site is `idmantv.az/az/program`, a static SSR weekly
-      page (no JS/API/login) that publishes exactly one Mon–Sun week of
-      HH:MM slots in Azerbaijani.  `parseWeeklyPage()` / `parseDayTitle()`
-      are the pure parsers; one fetch covers all seven requested days and
-      dates outside the published week are skipped with a warning.  The
-      single channel carries the site's navbar brand logo
-      (`parseBrandLogo()`, from the `w-nav-brand` header image).  Stops
-      derive from the next slot (24:00 for the last), matching beinsports.
-      Titles are emitted verbatim (the page sometimes appends a stray
-      cross-channel note to the last Sunday slots). Baku is UTC+4 year-round
-      in 2026 — Azerbaijan abolished DST in 2016 (tzdb `Asia/Baku`), so the
-      provider stamps Baku wall times with the fixed `+04:00` (`BAKU_ISO_
-      OFFSET`), and its catalog time zone is `Asia/Baku` for the default
-      date window. This keeps emitted instants equal to the source's. The XMLTV
-      writer/reader compare start/stop as instants, so a merged guide carrying
-      both `+03:00` and `+04:00` timestamps stays correct.
-    - `tvnu.js` — TV.nu Yayın Akışı (Sweden): 69 Swedish national + Nordic
-      pay-TV channels, including TV4 Fotboll/Hockey/Motor/Sportkanalen/Tennis
-      and Sport Live 1–4, the Viaplay/V Sport block (V Sport
-      1/Extra/Premium/Golf/Motor/Vinter, Fight Sports, V Sport Live 1–5,
-      Viaplay Sport) and Eurosport 1–2, via
-      `www.tv.nu/kanal/{slug}?datum=YYYY-MM-DD`. Each
-      day page ships the schedule as a JSON string assignment
-      (`__INITIAL_STATE__ = "…"`); `extractInitialState()` /
-      `parseChannelPage()` / `parseBroadcast()` are the pure parsers
-      (logos from the page channel's own `themedLogo`).  Source timestamps
-      are **absolute epoch ms** (explicit start+stop — never derived), one
-      fetch per channel+day, and pages run 06:00 → 06:00 local, so the day
-      before the window is fetched too and slots are bucketed by the
-      Stockholm date they start on.  This is the one provider in a DST zone:
-      it stamps `epochToIso()` with the Europe/Stockholm offset in force at
-      each instant (`+01:00` winter / `+02:00` summer); the CLI registration
-      declares `country: 'SE'` (`_SE` filenames), `language: 'sv'`
-      (`lang="sv"` titles) and `timeZone: 'Europe/Stockholm'` (Stockholm
-      "today"), and ids normalize to the Swedish `epg_ripper_SE1.xml.gz`
-      snapshot (`reference-se.json`).
-   - `index.js` — `loadProviders()` registry loader derived from the catalog.
+10. `src/providers/` — Provider adapters, one per catalog entry, plus
+    `index.js`, whose `loadProviders()` derives the registry from the catalog.
+    Shared plumbing (`wallToIso`, `weekDays`, `weekdayIndex`,
+    `normalizeChannelKey`, `defaultDates`, `finishResult`, and
+    `stripQualityQualifier()`, which drops a redundant trailing
+    `HD`/`FHD`/`UHD`/`SD` from a channel display name at `finishResult()`) lives
+    in `src/providers/shared.js`; `wallToIso`/`weekDays` are re-exported from
+    `hurriyet.js` for compatibility.
+    Per-provider transport, coverage window, curated channel ids and gotchas:
+    **`docs/providers.md`** — read the entry for the provider you are changing,
+    and add one when you add a provider.
 11. `src/env-file.js` — optional `.env` loading for local live runs:
     `readEnvFile(path)` (missing file → `undefined`, unreadable → readable
     error) and `applyEnv(entries)` (never overwrites an existing variable;
@@ -318,25 +184,14 @@ Development tooling includes a static file server in
     `renderCompareReport()` / `renderProviderCompareReport()` turn the
     reports into text lines.
 
-Sports coverage: `tvplus` + `beinsports` + `digiturkburada` + `sporekraniapi` +
-`tivibu` + `idmantv` merged with `--sports-only` (`--merge --sports-only`) cover
-**33 distinct sports feeds** — each provider contributes only its sports subset
-(`sportsChannelIds()` in the catalog), because tvplus now curates a
-general-interest lineup too; the previous "38" counted tvplus's ATV/TRT 1/TV8
-channels as sports, which they never were.  The rest are tracked in
-`UNSUCCESSFUL.md`. The daily CI merge skips
-`beinsports` (its 1-4 feeds are covered by `digiturkburada`, which keeps
-full-day schedules) and the rolling SSR `sporekrani` baseline (the day-scoped
-`sporekraniapi` adapter matches starts and bounds final stops at midnight).
-`sporekraniapi` adds the tabii spor 1-8 simulcast feeds and S Sport Plus;
-`tivibu` adds Tivibu Spor 1-4; `idmantv` adds İdman TV (an Azerbaijani
-charter).
-Exxen stays login-walled and the rest are platform-exclusive feeds.
 15. `src/merge.js` — `mergeResults(results, canonicalize?, options?)` combines N
-    providers into one guide: channels unioned by (canonical) id (first
-    provider's name wins; missing icon/url backfilled from later
-    providers), programmes
-    unioned + deduped, conflicting slots resolved first-provider-wins (the
+    providers into one guide: channels unioned by (canonical) id — matched
+    case-insensitively through `channelIdMatchKey()` while each entry keeps the
+    spelling of the provider that introduced it, so a later provider whose id
+    differs only in case fills that channel's gaps instead of opening a second
+    one, and its programmes are rewritten onto the surviving spelling (first
+    provider's name wins; missing icon/url backfilled from later providers);
+    programmes unioned + deduped, conflicting slots resolved first-provider-wins (the
     order in `--provider a,b,c` sets the precedence).
     `{ exclusiveChannels: true }` (CLI `--exclusive-channels`) makes it a
     handover instead of a union: the first provider that lists a channel id
@@ -393,14 +248,33 @@ Exxen stays login-walled and the rest are platform-exclusive feeds.
     reads/validates the JSON file, `createCanonicalizer(map)` returns an
     id → canonical-id function that compare and merge apply so ids that
     differ between providers line up.  Resolution is transitive (alias
-    chains collapse onto one id) and cycle-safe.  The lookup is an
-    **own**-property check with a string target, never `id in map`: an
-    inherited key (`constructor`, `toString`, `__proto__`, …) would otherwise
-    resolve a channel id to a function/object, which merge rejects as invalid
-    and thereby drops that channel and all of its programmes.
+    chains collapse onto one id) and cycle-safe.  The lookup
+    **ignores case** (`channelIdMatchKey()`), because the flag exists for a
+    guide that is not ours and need not share our spelling; the canonical
+    value is returned verbatim.  It is also an **own**-property check with a
+    string target, never `id in map`: an inherited key (`constructor`,
+    `toString`, `__proto__`, …) would otherwise resolve a channel id to a
+    function/object, which merge rejects as invalid and thereby drops that
+    channel and all of its programmes.
 
-Script load order is not critical (ES modules resolve automatically), but
-the dependency chain flows upward: providers → catalog/registry/http/xmltv/model/time/slug → env-file → cli.
+The dependency chain flows upward: providers →
+catalog/registry/http/xmltv/model/time/slug → env-file → cli.
+
+### Sports coverage
+
+`tvplus` + `beinsports` + `digiturkburada` + `sporekraniapi` + `tivibu` +
+`idmantv` merged with `--merge --sports-only` cover **33 distinct sports feeds**:
+each provider contributes only its sports subset (`sportsChannelIds()` in the
+catalog), because tvplus also curates a general-interest lineup.  The rest —
+Exxen stays login-walled, the others are platform-exclusive — are tracked in
+`UNSUCCESSFUL.md`.
+
+The daily CI merge skips `beinsports` (its 1-4 feeds are covered by
+`digiturkburada`, which keeps full-day schedules) and the rolling SSR
+`sporekrani` baseline (the day-scoped `sporekraniapi` adapter matches starts and
+bounds final stops at midnight).  `sporekraniapi` adds the tabii spor 1-8
+simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor 1-4; `idmantv` adds
+İdman TV (an Azerbaijani charter).
 
 ## CLI modes
 
@@ -430,18 +304,16 @@ the dependency chain flows upward: providers → catalog/registry/http/xmltv/mod
   country still defaults to `_TR` because XMLTV filenames do not carry it.
   CI uses offline merge to avoid scraping the sports providers twice.
 - **Aliases (`--alias-map <path>`)** — JSON `{ aliasId: canonicalId }`
-  canonicalizes channel ids in compare and merge.  No shipped guide uses it:
+  canonicalizes channel ids in compare and merge; keys are matched
+  case-insensitively, since a third-party guide's spelling is not ours.  No
+  shipped guide uses it:
   every channel two providers share is curated to one id on both sides
   (`test/channel-id.test.mjs` fails otherwise), so the flag is for reconciling a
   third-party guide with ours, not for fixing our own providers.
-- **Credentials (`--dotenv <path>`)** — providers that need secrets read
-  them from the environment; for local live runs the CLI loads `<cwd>/.env`
-  when it exists, or the named file (`--dotenv` names a file that must
-  exist). Variables already set in the environment always win, so CI secrets
-  are never overridden. The flag is not called `--env-file` because Node
-  intercepts that name in argv; Node's own `node --env-file=<path>
-  bin/epg-scraper.js` still works and takes precedence over `./.env`. Used for
-  live `sporekraniapi` testing without exporting anything by hand.
+- **Credentials (`--dotenv <path>`)** — for local live runs the CLI loads
+  `<cwd>/.env`, or the named file (which must exist); precedence and the
+  `--env-file` naming trap are in *Local credentials* above. Used for live
+  `sporekraniapi` testing without exporting anything by hand.
 
 - **Playlist (`--m3u <config.json>`)** — a separate capability with its own
   result type (`{ entries, failures, sources, stats }`), reached through its own
@@ -499,9 +371,9 @@ includes body consumption and is retried on transport errors AND transient
 non-2xx responses (5xx/429) with linear backoff. A request that still fails
 degrades to a per-page warning; a provider run fails only when it cannot
 produce any data. Deterministic statuses (404/410 always; 403 on GET pages)
-are never retried. POST 403 remains retryable for the session-based APIs;
-TV+ then rebuilds its rotating session once, while Tivibu records the failed
-channel-day without another session request. CLI `--days-back`/
+are never retried. POST 403 remains retryable for the session-based APIs, and
+each session provider's own recovery is described in `docs/providers.md`.
+CLI `--days-back`/
 `--days-forward` are capped at 60 so a hostile window cannot hang
 `buildDateRange()`.
 
@@ -522,8 +394,8 @@ calls `fetchImpl(url)` works unchanged — the browser layer is transparent.
    - `scrape()` — fetches pages, parses, and returns through
      `finishResult()` so every provider crosses the same guide-result seam.
    - `BASE_URL` and a curated `CHANNEL_ID_MAP`, whose values are authored in
-     **final form** (see the channel-id rule above): Turkish ids ASCII with
-     diacritics folded and no separators (`TRTCOCUK.tr`); a provider whose
+     **final form** (see the channel-id rule above): Turkish ids uppercase
+     ASCII with diacritics folded and no separators (`TRTCOCUK.tr`); a provider whose
      ids are exempt from the rule (tvnu) exports its map verbatim. Every
      provider exports its map because the catalog consumes it.
 2. Add one entry to `src/provider-catalog.js`: module, display name,
@@ -555,37 +427,31 @@ Inspect current files and `git status` before editing. Use the repository's
 npm scripts:
 
 ```bash
-npm install                 # install dev dependencies (vitest)
-npm test                    # vitest run — all tests, no live network
-npm run test:watch          # interactive vitest mode
-npm run inventory           # print the authored provider/CI inventory
+npm test                    # the whole suite (the completion criterion below)
+npm run inventory           # the authored provider/CI inventory
 npm run scrape              # live scrape (hurriyet, 7 days)
-npm run scrape:gz           # same, gzip output
 npm run merge:sports          # offline merge -> epg_sports_merged_TR.xml.gz
 npm run merge:hurriyet-trt    # offline merge -> epg_hurriyet_trt_merged_TR.xml.gz
 node scripts/build-release-notes.js --guides guide --date YYYY-MM-DD  # release body
-npm run install:playwright  # install Chromium browser binary for --browser mode
-npm run check:browser       # verify Playwright is installed (exit 0 = ready)
-node bin/epg-scraper.js --help
-node bin/epg-scraper.js --list-providers
+npm run install:playwright  # Chromium binary, needed only for --browser mode
+npm run check:browser       # exit 0 = Playwright ready
 ```
+
+`node bin/epg-scraper.js --help` and `--list-providers` describe the CLI itself.
 
 ### Test conventions
 
 - Test files: `test/**/*.test.mjs` (vitest, node environment).
-- All network behavior is tested with **fixtures** and **stubbed `fetchImpl`**
-  — never against live sites.
 - The `fetchImpl` stub must return Response-like objects:
   `{ ok: true, status: 200, text: async () => html }`. Returning raw
   HTML strings will cause `fetchText` to throw `HTTP undefined`.
 - CLI tests drive `runCli()` directly with injected `argv`/`stdout`/`stderr`/
-  `cwd`/`providerLoader` — no child processes, no live network.
+  `cwd`/`providerLoader`, never a child process.
 - Use vitest's `beforeEach`/`afterEach` for temp directory setup and
   `globalThis.fetch` restoration. Always restore globals in `finally` blocks.
 - Browser tests (`test/browser.test.mjs`) mock `playwright` via `vi.mock()`
   and `vi.resetModules()`. The mock must define `chromium.launch()` returning
   a browser with `newContext()` → `newPage()` → `goto()`/`content()`/`close()`.
-  No real browser is launched during `npm test`.
 - Coverage by file: `test/cli-flags.test.mjs` — the CLI flag table: each rule's
   message, the numeric flags' bounds, and the *order* of the rules (adjacent
   rows are pinned against each other so a reorder fails a test);
@@ -622,16 +488,24 @@ node bin/epg-scraper.js --list-providers
 There is no upstream id list any more: channel ids are **curated here** and
 enforced by `test/channel-id.test.mjs`.
 
-- Turkish (`.tr`) ids: ASCII, every Turkish diacritic folded to its Latin
-  letter, **no separators**, case preserved (`beINSPORTS1.tr`, `SSPORT1.tr`),
-  and the `.tr` suffix — the suffix's dot is the only dot in the id.  An
+- Turkish (`.tr`) ids: **uppercase ASCII**, every Turkish diacritic folded to
+  its Latin letter, **no separators** (`BEINSPORTS1.tr`, `SSPORT1.tr`), and the
+  `.tr` suffix — the suffix's dot is the only dot in the id.  `foldChannelId()`
+  upper-cases, so the rule holds for every id that crosses the seam, curated
+  map or not, and it is idempotent, so applying it at any seam is safe.  An
   `HD`/`TRHD` qualifier is never part of the identity (`EUROSPORT1.tr`, not
-  `EUROSPORT1HD.tr`); a station available *only* in HD keeps it
-  (`TRTAVAZHD.tr`).  An id names the channel's **current** name, so a rebrand
+  `EUROSPORT1HD.tr`), not even for a station available *only* in HD
+  (`TRTAVAZ.tr`).  An id names the channel's **current** name, so a rebrand
   is a rename: `NOWTV.tr`, not the dead `FOX.tr`.
-  `foldChannelId()` is idempotent, so applying it at any seam is safe.
 - Swedish (`.se`) ids: **exempt**. tvnu keeps its source-tagged upstream
   spelling (`[SVT1HD].SVT1.HD.se`, `[COMSVHD].SVTB/SVT24.HD.se`) verbatim.
+- **Casing decides spelling, not identity.**  A Turkish id is upper-cased by
+  the seam and a Swedish one is written verbatim, so two guides can spell one
+  channel differently; everything that *joins* ids — the alias map, compare,
+  merge — therefore matches on the **match key** (`channelIdMatchKey()`)
+  instead of the literal string, and a guide keeps the spelling it first
+  received.  (Curated ids are not aligned to any playlist's casing for this
+  reason.)
 - One seam, not per-provider calls: `createGuideResult()` folds ids, so
   providers only have to author `CHANNEL_ID_MAP` values in final form; the
   generic-slug fallback is folded by the same seam (and, in hurriyet/mynet,
@@ -643,9 +517,9 @@ enforced by `test/channel-id.test.mjs`.
 
 The suite proves, over every curated id in `src/provider-catalog.js`
 (`curatedChannelIds()`), that each one is canonical and that **no two of them
-fold onto the same string** — the one failure mode a rename can introduce. A
-new provider therefore means: author its `CHANNEL_ID_MAP` in final form and let
-`npm test` prove it.
+fold onto the same match key** — the one failure mode a rename can introduce now
+that matching ignores case.  A new provider therefore means: author its
+`CHANNEL_ID_MAP` in final form and let `npm test` prove it.
 
 ### Testing best practices
 
@@ -667,10 +541,15 @@ new provider therefore means: author its `CHANNEL_ID_MAP` in final form and let
 ### When changing output shape
 
 The XMLTV output is standard XMLTV plus this project's channel-id format:
-- Channel id: ASCII with Turkish diacritics folded, no separators, `.tr` suffix
-  for the Turkish guides — case-sensitive exceptions (`beINSPORTS1.tr`) mapped
-  explicitly. Swedish (`.se`) ids keep their source tag verbatim
-  (`[SVT1HD].SVT1.HD.se`). See "Channel-id format" above.
+- Channel id: uppercase ASCII with Turkish diacritics folded, no separators,
+  `.tr` suffix for the Turkish guides. Swedish (`.se`) ids keep their source tag
+  and their casing verbatim (`[SVT1HD].SVT1.HD.se`). See "Channel-id format"
+  above.
+- Channel `<display-name>`: the source's own label with a redundant trailing
+  quality qualifier removed (`A NEWS HD` → `A NEWS`), by
+  `stripQualityQualifier()` in the provider layer (`src/providers/shared.js`,
+  applied by every adapter through `finishResult()`).  `src/model.js` never
+  rewrites a name, so the providers are the only place this happens.
 - Programme: `start`/`stop` as `YYYYMMDDHHMMSS +0300` for the Turkish guides
   (`+0100`/`+0200` for tvnu, following the Stockholm offset in force at each
   instant; `+0400` for idmantv — Baku year-round), `<title lang="tr">`
@@ -686,8 +565,8 @@ The XMLTV output is standard XMLTV plus this project's channel-id format:
 If a provider introduces new `data-type` or genre values that need mapping,
 add them to the provider's `CATEGORY_MAP` object. Use labels in the guide's
 language: Turkish providers emit `<category lang="tr">Label</category>`;
-tvnu preserves the source's Swedish genre names with `lang="sv"`. Do not
-translate Swedish categories into Turkish.
+tvnu preserves the source's Swedish genre names with `lang="sv"`, so a
+category always reads in the guide's own language.
 
 ## Commit best practices
 
@@ -697,18 +576,16 @@ translate Swedish categories into Turkish.
   matter later.
 - One logical change per commit.  Inspect `git status` and `git diff`
   first; stage only the files that belong to the change.
-- Never commit: secrets/API keys, scratch files, or scraper output
-  (`epg_*.xml`, `epg_*.xml.gz`, `playlist.m3u`, `m3u-report.json` — all
-  already gitignored). `playlist.m3u` is rebuilt and published by the
-  `m3u-scraper` workflow as a release asset, so there is no snapshot to keep
-  in the repository; review a change to it by regenerating locally with
+- Commit source, tests, docs and fixtures. Secrets/API keys, scratch files
+  and scraper output (`epg_*.xml`, `epg_*.xml.gz`, `playlist.m3u`,
+  `m3u-report.json` — all gitignored) stay out of history. `playlist.m3u` has
+  no snapshot to keep: the `m3u-scraper` workflow rebuilds and publishes it as
+  a release asset, and a local review regenerates it with
   `node bin/epg-scraper.js --m3u m3u.config.json --m3u-out playlist.m3u
   --m3u-report m3u-report.json`.
-- Run `npm test` before committing; a red suite means the change is not
-  done.
 - Only commit lockfile changes when dependencies actually changed.
-- Do not push, deploy, or release from an agent session unless explicitly
-  asked to.
+- An agent session stops at the commit: pushing, deploying and releasing wait
+  for an explicit ask.
 
 ## Release best practices
 
@@ -725,11 +602,19 @@ translate Swedish categories into Turkish.
      (see "When changing output shape").
 - Tag releases after the version-bump commit with an annotated tag
   (`git tag -a vX.Y.Z -m "..."`); push the tag with the release.
-- This package is `"private": true` — do not `npm publish`.  Releases are
-  version bumps + changelog entries + git tags.
+- This package is `"private": true`, so a release is a version bump plus a
+  changelog entry and a git tag — `npm publish` has no part in it.
 
 ## Documentation
 
-When behavior changes, update the relevant docs in the same change:
-`README.md` for usage, `AGENTS.md` for agent-facing rules, and
-inline JSDoc/comments for API contracts.
+When behaviour changes, update the docs it reaches, in the same change:
+
+- `README.md` — CLI usage, flags and mode walkthroughs: what a user runs and
+  what lands on disk.
+- `AGENTS.md` — the rules a patch must follow (this file).
+- `docs/providers.md` — the entry for each provider whose behaviour changed.
+- `CONTEXT.md` — the domain vocabulary; add a term when a concept gets a name.
+- `UNSUCCESSFUL.md` — channels with no working source yet; update it when
+  coverage lands or a source is re-verified.
+- `CHANGELOG.md` — the release entry for anything a consumer can observe.
+- Inline JSDoc/comments — API contracts.

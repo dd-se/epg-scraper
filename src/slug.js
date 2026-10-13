@@ -1,23 +1,28 @@
 // XMLTV channel ids are this project's own format. Two namespaces exist:
 //
-// - Turkish guides (`.tr`): the channel name in ASCII with every Turkish
-//   diacritic folded to its Latin letter (Ç→C, Ğ→G, İ→I, I→I, ı→I, Ö→O,
-//   Ş→S, Ü→U and the lowercase forms), no separators at all, case preserved,
-//   plus the `.tr` suffix — "TRT Çocuk" -> "TRTCOCUK.tr", "beIN Sports 1" ->
-//   "beINSPORTS1.tr", "TRT 2" -> "TRT2.tr". Only the suffix may contain a dot.
+// - Turkish guides (`.tr`): the channel name in **uppercase** ASCII with every
+//   Turkish diacritic folded to its Latin letter (Ç→C, Ğ→G, İ→I, I→I, ı→I,
+//   Ö→O, Ş→S, Ü→U and the lowercase forms), no separators at all, plus the
+//   `.tr` suffix — "TRT Çocuk" -> "TRTCOCUK.tr", "beIN Sports 1" ->
+//   "BEINSPORTS1.tr", "TRT 2" -> "TRT2.tr". Only the suffix may contain a dot.
 // - Swedish guides (`.se`): ids keep their upstream spelling, including the
-//   bracketed source tag and any punctuation it carries
+//   bracketed source tag and any casing it carries
 //   (`[SVT1HD].SVT1.HD.se`), and pass through untouched.
 //
 // `foldChannelId` implements the Turkish rule and is idempotent, so it is safe
 // to apply at any seam; `isCanonicalChannelId` is the writer-side check.
 // Provider adapters keep a curated map for spellings the generic slug rule
-// cannot recover (station aliases, case-sensitive ids like "beINSPORTS1.tr",
-// SD/HD qualifiers), so `channelIdFromName` is only a fallback.
+// cannot recover (station aliases, SD/HD qualifiers), so `channelIdFromName`
+// is only a fallback.
+//
+// A Swedish id may therefore legitimately differ in case from another source's
+// spelling of the same channel, so anything that *joins* ids from more than one
+// origin — the alias map, compare, merge — matches on `channelIdMatchKey()`
+// rather than on the literal string.  Casing decides spelling, never identity.
 
 const TR_SUFFIX = '.tr';
 const SE_SUFFIX = '.se';
-const CANONICAL_TR_RE = /^[A-Za-z0-9]+\.[a-z]{2}$/;
+const CANONICAL_TR_RE = /^[A-Z0-9]+\.[a-z]{2}$/;
 
 const TURKISH_FOLD = new Map([
   ['Ç', 'C'],
@@ -36,10 +41,12 @@ const TURKISH_FOLD = new Map([
 
 /**
  * Fold a channel id into this project's canonical spelling. Turkish ids lose
- * their diacritics and their dots; every other id (Swedish, and anything the
- * caller made up) is returned unchanged.  A `.tr` *domain* would also end in
- * the id suffix, so ids carrying path or scheme punctuation are passed through
- * untouched — only channel ids belong in here.
+ * their diacritics and their dots and are upper-cased, so an id that reaches
+ * the writer through any path — a curated map, the generic slug, a third-party
+ * guide read back from disk — is emitted in the same all-caps form; every other
+ * id (Swedish, and anything the caller made up) is returned unchanged.  A `.tr`
+ * *domain* would also end in the id suffix, so ids carrying path or scheme
+ * punctuation are passed through untouched — only channel ids belong in here.
  *
  * @param {string} id
  * @returns {string}
@@ -49,7 +56,23 @@ export function foldChannelId(id) {
   if (id.includes('/') || id.includes(':')) return id;
   const base = id.slice(0, -TR_SUFFIX.length);
   const folded = [...base].map((char) => TURKISH_FOLD.get(char) ?? char).join('');
-  return folded.replace(/\./g, '') + TR_SUFFIX;
+  return folded.replace(/\./g, '').toUpperCase() + TR_SUFFIX;
+}
+
+/**
+ * The key two channel ids are *matched* on — never a spelling a guide emits.
+ *
+ * Casing decides how an id is written, never which channel it is: a Swedish id
+ * passes through verbatim, and a guide read back from disk may carry any case
+ * at all.  `KANALD.tr` and `kanald.tr` are one channel, so the alias map,
+ * compare and merge look ids up through this key while the emitted guide keeps
+ * whichever spelling arrived first.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+export function channelIdMatchKey(id) {
+  return typeof id === 'string' ? id.toUpperCase() : id;
 }
 
 /**

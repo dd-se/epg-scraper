@@ -48,10 +48,10 @@ export const DAY_TAGS = [
 // Curated channel-id map: display name -> XMLTV id (see src/slug.js for the
 // format).  Case is preserved, so the beIN brand token stays `beIN`.
 export const CHANNEL_ID_MAP = {
-  'BEIN SPORTS 1': 'beINSPORTS1.tr',
-  'BEIN SPORTS 2': 'beINSPORTS2.tr',
-  'BEIN SPORTS 3': 'beINSPORTS3.tr',
-  'BEIN SPORTS 4': 'beINSPORTS4.tr',
+  'BEIN SPORTS 1': 'BEINSPORTS1.tr',
+  'BEIN SPORTS 2': 'BEINSPORTS2.tr',
+  'BEIN SPORTS 3': 'BEINSPORTS3.tr',
+  'BEIN SPORTS 4': 'BEINSPORTS4.tr',
 };
 
 // Display name -> site URL slug (rewriteId).  The site itself also serves

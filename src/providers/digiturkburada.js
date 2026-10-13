@@ -43,37 +43,37 @@ export const CHANNELS = [
   {
     name: 'beIN Sports 1',
     page: '/bein-sports-1-hd-yayin-akisi-60.html',
-    id: 'beINSPORTS1.tr',
+    id: 'BEINSPORTS1.tr',
   },
   {
     name: 'beIN Sports 2',
     page: '/bein-sports-2-hd-yayin-akisi-61.html',
-    id: 'beINSPORTS2.tr',
+    id: 'BEINSPORTS2.tr',
   },
   {
     name: 'beIN Sports 3',
     page: '/bein-sports-3-hd-yayin-akisi-62.html',
-    id: 'beINSPORTS3.tr',
+    id: 'BEINSPORTS3.tr',
   },
   {
     name: 'beIN Sports 4',
     page: '/bein-sports-4-hd-yayin-akisi-63.html',
-    id: 'beINSPORTS4.tr',
+    id: 'BEINSPORTS4.tr',
   },
   {
     name: 'beIN Sports 5',
     page: '/bein-sports-5-hd-yayin-akisi-154.html',
-    id: 'beINSPORTS5.tr',
+    id: 'BEINSPORTS5.tr',
   },
   {
     name: 'beIN Sports Max 1',
     page: '/bein-sports-max-1-hd-yayin-akisi-64.html',
-    id: 'beINSPORTSMAX1.tr',
+    id: 'BEINSPORTSMAX1.tr',
   },
   {
     name: 'beIN Sports Max 2',
     page: '/bein-sports-max-2-hd-yayin-akisi-65.html',
-    id: 'beINSPORTSMAX2.tr',
+    id: 'BEINSPORTSMAX2.tr',
   },
   {
     name: 'GS TV',

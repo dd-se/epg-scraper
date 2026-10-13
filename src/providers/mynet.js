@@ -36,12 +36,12 @@ export const DAY_SLUGS = ['bugun', 'yarin', 'sonraki-gun'];
 
 // Mynet channel slugs use lowercase kebab-case.  A channel without an entry
 // below gets the generic slug of its display name.  This curated map pins the
-// ids for the channels that need specific treatment: HD-only stations
-// (ANEWSHD.tr, TRTAVAZHD.tr, TRTWORLDHD.tr, DAVINCILEARNINGHD.tr,
-// beINSPORTSHABERHD.tr) and split feeds merged onto one id
-// (TRT 3 / TRT SPOR -> TRTSPOR.tr).  Ids are authored in final form: ASCII,
-// Turkish diacritics folded (CNN TÜRK -> CNNTURK.tr), no separators,
-// `.tr` (see src/slug.js).
+// ids for the channels that need specific treatment: names the generic slug
+// cannot recover (A NEWS -> ANEWS.tr, DA VINCI -> DAVINCILEARNING.tr) and split
+// feeds merged onto one id (TRT 3 / TRT SPOR -> TRTSPOR.tr).  Ids are authored
+// in final form: ASCII, Turkish diacritics folded (CNN TÜRK -> CNNTURK.tr), no
+// separators, `.tr` (see src/slug.js) — and never a quality qualifier, because
+// HD/SD/4K is a variant of a channel, not the channel's identity.
 export const CHANNEL_ID_MAP = {
   'ATV': 'ATV.tr',
   'KANAL D': 'KANALD.tr',
@@ -87,29 +87,29 @@ export const CHANNEL_ID_MAP = {
   'BLOOMBERG HT': 'BLOOMBERGHT.tr',
   'BLOOMBERG': 'BLOOMBERGTV.tr',
   'A SPOR': 'ASPOR.tr',
-  'A NEWS': 'ANEWSHD.tr',
+  'A NEWS': 'ANEWS.tr',
   'A2': 'A2.tr',
   'TLC': 'TLC.tr',
   'DMAX': 'DMAX.tr',
   'EUROSPORT 1': 'EUROSPORT1.tr',
   'EUROSPORT 2': 'EUROSPORT2.tr',
   'SPORTS TV': 'SPORTSTV.tr',
-  'BEIN SPORTS HABER': 'beINSPORTSHABERHD.tr',
+  'BEIN SPORTS HABER': 'BEINSPORTSHABER.tr',
   'CARTOON NETWORK': 'CARTOONNETWORK.tr',
   'DISNEY CHANNEL': 'DISNEYCHANNEL.tr',
   'DISNEY JUNIOR': 'DISNEYJUNIOR.tr',
-  'DA VINCI': 'DAVINCILEARNINGHD.tr',
+  'DA VINCI': 'DAVINCILEARNING.tr',
   'NATIONAL GEOGRAPHIC': 'NATIONALGEOGRAPHIC.tr',
   'NATIONAL GEO.': 'NATIONALGEOGRAPHIC.tr',
   'NAT.GEO.WILD': 'NATIONALGEOGRAPHICWILD.tr',
-  'BEIN SPORTS 1': 'beINSPORTS1.tr',
-  'BEIN SPORTS 3': 'beINSPORTS3.tr',
+  'BEIN SPORTS 1': 'BEINSPORTS1.tr',
+  'BEIN SPORTS 3': 'BEINSPORTS3.tr',
   'TRT ÇOCUK': 'TRTCOCUK.tr',
   'TRT MÜZİK': 'TRTMUZIK.tr',
   'TRT TURK': 'TRTTURK.tr',
   'TRT KURDI': 'TRTKURDI.tr',
-  'TRT AVAZ': 'TRTAVAZHD.tr',
-  'TRT WORLD': 'TRTWORLDHD.tr',
+  'TRT AVAZ': 'TRTAVAZ.tr',
+  'TRT WORLD': 'TRTWORLD.tr',
   'TRT 3 / TRT SPOR': 'TRTSPOR.tr',
   'BENGÜTÜRK': 'BENGUTURK.tr',
   'ÜLKE TV': 'ULKETV.tr',

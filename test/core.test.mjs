@@ -6,6 +6,7 @@ import { buildDateRange, registerProvider, getProvider, listProviders } from '..
 import { createGuideResult, validateGuideResult, normalizeLanguageTag } from '../src/model.js';
 import { parseClockMinutes, wallToInstant, parseGuideInstant } from '../src/time.js';
 import { runCli } from '../src/cli.js';
+import { finishResult, stripQualityQualifier } from '../src/providers/shared.js';
 
 describe('entities', () => {
   it('decodes numeric hex/dec references', () => {
@@ -354,6 +355,16 @@ describe('guide result', () => {
     ]);
   });
 
+  it('accepts the display name it is handed, qualifier and all', () => {
+    // Normalizing the label is the provider's job (src/providers/shared.js);
+    // this seam takes the name exactly as given and must not rewrite it.
+    const result = createGuideResult({
+      channels: [{ id: 'ANEWS.tr', name: 'A NEWS HD' }],
+      programmes: [],
+    });
+    expect(result.channels[0].name).toBe('A NEWS HD');
+  });
+
   it('keeps the writer validation seam strict', () => {
     expect(() =>
       validateGuideResult({
@@ -394,6 +405,43 @@ describe('guide result', () => {
   it('normalizes guide language tags', () => {
     expect(normalizeLanguageTag(' sv-SE ')).toBe('sv-SE');
     expect(normalizeLanguageTag('bad tag')).toBeUndefined();
+  });
+});
+
+describe('provider result seam', () => {
+  it('leaves 4K, mid-name quality words and qualifier-only names alone', () => {
+    // `TRT 4K` is a distinct simulcast, not a variant of TRT 1, and a token in
+    // the middle of a name is not a suffix.
+    expect(stripQualityQualifier('TRT 4K')).toBe('TRT 4K');
+    expect(stripQualityQualifier('HD Test')).toBe('HD Test');
+    expect(stripQualityQualifier('A SPOR')).toBe('A SPOR');
+    expect(stripQualityQualifier('A SPOR HD')).toBe('A SPOR');
+    expect(stripQualityQualifier('TRT 1 FHD')).toBe('TRT 1');
+    expect(stripQualityQualifier('Kanal UHD')).toBe('Kanal');
+    expect(stripQualityQualifier('TRT 2 SD')).toBe('TRT 2');
+    expect(stripQualityQualifier('SİNEMA TV HD  ')).toBe('SİNEMA TV');
+    expect(stripQualityQualifier(' HD')).toBe(' HD');
+    expect(stripQualityQualifier(null)).toBe(null);
+    expect(stripQualityQualifier(42)).toBe(42);
+  });
+
+  it('normalizes a channel display name before the guide result is built', () => {
+    const result = finishResult({
+      channels: [
+        { id: 'ANEWS.tr', name: 'A NEWS HD' },
+        { id: 'SHOWTV.tr', name: 'SHOW TV HD' },
+        { id: 'TRTSPOR.tr', name: 'TRT SPOR HD' },
+        // `4K` is not a qualifier: TRT 4K is its own channel.
+        { id: 'TRT4K.tr', name: 'TRT 4K' },
+      ],
+      programmes: [],
+    });
+    expect(result.channels.map((channel) => channel.name)).toEqual([
+      'A NEWS',
+      'SHOW TV',
+      'TRT SPOR',
+      'TRT 4K',
+    ]);
   });
 });
 

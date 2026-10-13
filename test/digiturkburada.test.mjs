@@ -105,13 +105,13 @@ describe('digiturkburada pure parsers', () => {
   });
 
   it('maps display names to page slugs and curated ids', () => {
-    expect(mapChannelId('beIN Sports 1')).toBe('beINSPORTS1.tr');
-    expect(mapChannelId('beIN Sports 2')).toBe('beINSPORTS2.tr');
-    expect(mapChannelId('beIN Sports 3')).toBe('beINSPORTS3.tr');
-    expect(mapChannelId('beIN Sports 4')).toBe('beINSPORTS4.tr');
-    expect(mapChannelId('beIN Sports 5')).toBe('beINSPORTS5.tr');
-    expect(mapChannelId('beIN Sports Max 1')).toBe('beINSPORTSMAX1.tr');
-    expect(mapChannelId('beIN Sports Max 2')).toBe('beINSPORTSMAX2.tr');
+    expect(mapChannelId('beIN Sports 1')).toBe('BEINSPORTS1.tr');
+    expect(mapChannelId('beIN Sports 2')).toBe('BEINSPORTS2.tr');
+    expect(mapChannelId('beIN Sports 3')).toBe('BEINSPORTS3.tr');
+    expect(mapChannelId('beIN Sports 4')).toBe('BEINSPORTS4.tr');
+    expect(mapChannelId('beIN Sports 5')).toBe('BEINSPORTS5.tr');
+    expect(mapChannelId('beIN Sports Max 1')).toBe('BEINSPORTSMAX1.tr');
+    expect(mapChannelId('beIN Sports Max 2')).toBe('BEINSPORTSMAX2.tr');
     expect(mapChannelId('GS TV')).toBe('GSTV.tr');
     expect(normalizeChannelKey('  beIN   SPORTS 5 ')).toBe('BEIN SPORTS 5');
     expect(channelPage('beIN Sports 5')).toBe('/bein-sports-5-hd-yayin-akisi-154.html');
@@ -151,22 +151,22 @@ describe('digiturkburada scrape (stubbed POST)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
-      'beINSPORTS1.tr',
-      'beINSPORTS2.tr',
-      'beINSPORTS3.tr',
-      'beINSPORTS4.tr',
-      'beINSPORTS5.tr',
-      'beINSPORTSMAX1.tr',
-      'beINSPORTSMAX2.tr',
+      'BEINSPORTS1.tr',
+      'BEINSPORTS2.tr',
+      'BEINSPORTS3.tr',
+      'BEINSPORTS4.tr',
+      'BEINSPORTS5.tr',
+      'BEINSPORTSMAX1.tr',
+      'BEINSPORTSMAX2.tr',
       'GSTV.tr',
     ]);
     // Every channel carries its page-header logo — absolute, query-free,
     // single URLs (never pipe-joined).
     const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
-    expect(icons['beINSPORTS1.tr']).toBe(
+    expect(icons['BEINSPORTS1.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-1-buyuk.png'
     );
-    expect(icons['beINSPORTS5.tr']).toBe(
+    expect(icons['BEINSPORTS5.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
     );
     expect(icons['GSTV.tr']).toBe(
@@ -194,7 +194,7 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     });
     // maxChannels: 1 keeps beIN Sports 1; the stub serves the beIN 5
     // fixture for every URL, so its slots land on beIN.SPORTS.1.tr.
-    const ch5 = result.programmes.filter((p) => p.channel === 'beINSPORTS1.tr');
+    const ch5 = result.programmes.filter((p) => p.channel === 'BEINSPORTS1.tr');
     expect(ch5[0].start).toBe('2026-09-08T00:00:00+03:00');
     expect(ch5[0].stop).toBe('2026-09-08T01:47:00+03:00'); // next slot
     expect(ch5[ch5.length - 1].start).toBe('2026-09-08T20:19:00+03:00');
@@ -257,7 +257,9 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || a[1].localeCompare(b[1])
     );
     expect(keys).toEqual(sorted);
-    expect(result.programmes[0].channel).toBe('GSTV.tr');
+    // Ids are uppercase, so codepoint order is plain alphabetical order: the
+    // BEINSPORTS* rows sort before GSTV.tr.
+    expect(result.programmes[0].channel).toBe('BEINSPORTS1.tr');
     // Within one channel, starts ascend.
     const gs = result.programmes.filter((p) => p.channel === 'GSTV.tr');
     expect(gs.map((p) => p.start)).toEqual([...gs.map((p) => p.start)].sort());

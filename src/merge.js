@@ -2,11 +2,14 @@ import {
   createGuideResult,
   programmeIdentityKey,
 } from './model.js';
+import { channelIdMatchKey } from './slug.js';
 
 // Combine N provider results into one guide.
 //
-// Channels are unioned by canonical id: the first provider's entry wins, and a
-// missing icon/url is backfilled from a later one.  Programmes are unioned and
+// Channels are unioned by canonical id — matched through `channelIdMatchKey()`,
+// so a provider whose spelling differs only in case is the same channel: the
+// first provider's entry (and its spelling) wins, and a missing icon/url is
+// backfilled from a later one.  Programmes are unioned and
 // deduped by (channel, start, stop, title), so a slot both providers publish
 // *identically* appears once — in the earlier provider's version.  Differing
 // slot boundaries for the same channel both survive.
@@ -25,6 +28,11 @@ export function mergeResults(
   { onIssue = () => {}, exclusiveChannels = false } = {}
 ) {
   const channelsById = new Map();
+  // Match key -> the spelling the first provider that listed the channel
+  // authored.  Channels are *matched* case-insensitively but keep that
+  // spelling, so a later provider whose id differs only in case fills the
+  // gaps of the existing channel instead of opening a second one.
+  const emittedIdByKey = new Map();
   const programmes = [];
   let days = 0;
   let failures = 0;
@@ -50,9 +58,11 @@ export function mergeResults(
         onIssue( 'invalid-channel', 1);
         continue;
       }
-      const existing = channelsById.get(canonicalId);
+      const key = channelIdMatchKey(canonicalId);
+      if (!emittedIdByKey.has(key)) emittedIdByKey.set(key, canonicalId);
+      const existing = channelsById.get(key);
       if (!existing) {
-        channelsById.set(canonicalId, { ...channel, id: canonicalId });
+        channelsById.set(key, { ...channel, id: emittedIdByKey.get(key) });
       } else {
         if (existing.icon == null && channel.icon != null) existing.icon = channel.icon;
         if (existing.url == null && channel.url != null) existing.url = channel.url;
@@ -65,11 +75,14 @@ export function mergeResults(
         onIssue( 'invalid-programme', 1);
         continue;
       }
-      if (ownedByOthers != null && ownedByOthers.has(channel)) {
+      const key = channelIdMatchKey(channel);
+      if (ownedByOthers != null && ownedByOthers.has(key)) {
         shadowed++;
         continue;
       }
-      programmes.push({ ...programme, channel });
+      // Rewrite onto the surviving channel's spelling: a programme must never
+      // name a channel the union folded into another one.
+      programmes.push({ ...programme, channel: emittedIdByKey.get(key) ?? channel });
     }
   }
 

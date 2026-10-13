@@ -200,6 +200,45 @@ describe('mergeResults', () => {
     expect(canonicalize('B.tr')).toBe('B.tr');
   });
 
+  it('resolves an alias whatever the case of either spelling', () => {
+    // Reaching for this flag means the guide on the other side is not ours, so
+    // neither the map's key nor the id it is asked about need share our casing.
+    const canonicalize = createCanonicalizer({ 'fbtv.tr': 'FENERBAHCETV.tr' });
+    expect(canonicalize('FBTV.tr')).toBe('FENERBAHCETV.tr');
+    expect(canonicalize('fbtv.tr')).toBe('FENERBAHCETV.tr');
+    // The canonical value is emitted verbatim, not re-cased.
+    expect(canonicalize('FENERBAHCETV.tr')).toBe('FENERBAHCETV.tr');
+  });
+
+  it('unions ids that differ only in case into one channel', () => {
+    // Turkish ids are upper-cased by the seam, so this is exercised through the
+    // ids that are written verbatim: matching is on the key, never on the
+    // literal spelling, and the guide keeps the first provider's spelling.
+    const slot = (channel) => ({
+      channel,
+      start: '2026-09-07T15:00:00+02:00',
+      stop: '2026-09-07T16:00:00+02:00',
+      title: 'Rapport',
+    });
+    const merged = mergeResults([
+      {
+        channels: [{ id: '[SVT1HD].SVT1.HD.se', name: 'SVT 1' }],
+        programmes: [slot('[SVT1HD].SVT1.HD.se')],
+        language: 'sv',
+      },
+      {
+        channels: [{ id: '[svt1hd].svt1.hd.se', name: 'SVT 1' }],
+        programmes: [slot('[svt1hd].svt1.hd.se')],
+        language: 'sv',
+      },
+    ]);
+    expect(merged.channels.map((c) => c.id)).toEqual(['[SVT1HD].SVT1.HD.se']);
+    // The second provider's programme was rewritten onto that spelling, so the
+    // identical slot deduped instead of surviving under a second id.
+    expect(merged.programmes.map((p) => p.channel)).toEqual(['[SVT1HD].SVT1.HD.se']);
+    expect(merged.duplicates).toBe(1);
+  });
+
   it('keeps conflicting slots from the first provider (precedence)', () => {
     // The XMLTV writer dedupes (channel, start, stop) keeping the first
     // occurrence, so the merge preserves both titles in order and lets the

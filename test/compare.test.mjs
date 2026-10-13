@@ -278,6 +278,33 @@ describe('compareProviderResults', () => {
     expect(report.summary.matched).toBe(1);
     expect(report.summary.changed).toEqual([]);
   });
+
+  it('matches channel ids case-insensitively', () => {
+    // Two guides spelling one channel differently must not report as an only-a
+    // channel plus an only-b channel: casing is not identity.  Turkish ids are
+    // upper-cased by the seam, so this rides on an id that is written verbatim.
+    const slot = (channel) => ({
+      channel,
+      start: '2026-09-07T15:00:00+02:00',
+      stop: '2026-09-07T16:00:00+02:00',
+      title: 'Rapport',
+    });
+    const a = {
+      channels: [{ id: '[SVT1HD].SVT1.HD.se', name: 'SVT 1' }],
+      programmes: [slot('[SVT1HD].SVT1.HD.se')],
+    };
+    const b = {
+      channels: [{ id: '[svt1hd].svt1.hd.se', name: 'SVT 1' }],
+      programmes: [slot('[svt1hd].svt1.hd.se')],
+    };
+    const report = compareProviderResults({ a, b });
+    // One shared channel, reported under the first side's spelling.
+    expect(report.summary.common).toEqual(['[SVT1HD].SVT1.HD.se']);
+    expect(report.summary.onlyAChannels).toEqual([]);
+    expect(report.summary.onlyBChannels).toEqual([]);
+    expect(report.summary.matched).toBe(1);
+    expect(report.summary.changed).toEqual([]);
+  });
 });
 
 describe('renderProviderCompareReport', () => {

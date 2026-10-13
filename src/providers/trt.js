@@ -20,10 +20,11 @@
 //
 // The 11 channels served are TRT's national lineup; ids are authored in this
 // project's format (src/slug.js): ASCII, Turkish diacritics folded
-// (TRT Çocuk -> TRTCOCUK.tr, TRT Kurdî -> TRTKURDI.tr), no separators, and TRT
-// Avaz kept HD-only (TRTAVAZHD.tr). Channels publish their next day at
-// different times of day, so a tomorrow page can 404 in the morning — that
-// degrades to a warning.
+// (TRT Çocuk -> TRTCOCUK.tr, TRT Kurdî -> TRTKURDI.tr), no separators.  No id
+// carries a quality qualifier — TRT Avaz publishes HD-only upstream, but the HD
+// is a delivery variant, not part of the channel's identity (TRTAVAZ.tr).
+// Channels publish their next day at different times of day, so a tomorrow page
+// can 404 in the morning — that degrades to a warning.
 //
 // Slots carry a start time only, so a programme's stop is derived from the next
 // slot (24:00 for the last one) — the mynet/beinsports/idmantv convention.
@@ -62,8 +63,9 @@ export const CHANNELS = [
   { slug: 'trt-cocuk', name: 'TRT Çocuk', id: 'TRTCOCUK.tr' },
   { slug: 'trt-muzik', name: 'TRT Müzik', id: 'TRTMUZIK.tr' },
   { slug: 'trt-turk', name: 'TRT Türk', id: 'TRTTURK.tr' },
-  // Upstream lists TRT Avaz HD-only.
-  { slug: 'trt-avaz', name: 'TRT Avaz', id: 'TRTAVAZHD.tr' },
+  // Upstream lists TRT Avaz HD-only; the HD is a quality variant, so it stays
+  // out of the id.
+  { slug: 'trt-avaz', name: 'TRT Avaz', id: 'TRTAVAZ.tr' },
   { slug: 'trt-kurdi', name: 'TRT Kurdî', id: 'TRTKURDI.tr' },
 ];
 

@@ -17,8 +17,12 @@ One time-bounded listing on a channel, carrying a title and optional subtitle, d
 _Avoid_: Programme record, event
 
 **Channel Identity**:
-The stable XMLTV channel id used to recognize the same television feed across provider names and guide sources. It names the channel's *current* name and carries no qualifier that is not the channel's own (no `HD`, no legacy brand), so a rebrand is a rename and the identity survives a spelling change on any one source.
+The stable XMLTV channel id used to recognize the same television feed across provider names and guide sources. Turkish ids are uppercase ASCII (`TRTCOCUK.tr`, no separators, only the `.tr` suffix carries a dot); Swedish ids keep their source-tagged spelling. It names the channel's *current* name and carries no qualifier that is not the channel's own (no `HD`, no legacy brand), so a rebrand is a rename and the identity survives a spelling change on any one source.
 _Avoid_: Channel name, slug, source slug
+
+**Channel Match Key**:
+The case-insensitive form of a channel identity, used wherever ids from more than one origin are joined (the alias map, `--compare`, `--merge`). Casing decides how an id is written, never which channel it is, so `KANALD.tr` and `kanald.tr` are one channel and a merge keeps whichever spelling arrived first.
+_Avoid_: Normalized id, folded id
 
 **Guide Window**:
 The ordered set of calendar dates a provider run is expected to cover.

@@ -114,7 +114,7 @@ describe('hurriyet week mapping', () => {
 describe('hurriyet channel id mapping', () => {
   it('uses curated ids', () => {
     expect(mapChannelId('KANAL D')).toBe('KANALD.tr');
-    expect(mapChannelId('beIN SPORTS 1')).toBe('beINSPORTS1.tr');
+    expect(mapChannelId('beIN SPORTS 1')).toBe('BEINSPORTS1.tr');
     expect(mapChannelId('EUROSPORT 1')).toBe('EUROSPORT1.tr');
     expect(mapChannelId('EUROSPORT 2 INT')).toBe('EUROSPORT2.tr');
     expect(mapChannelId('TRT 3 -  SPOR')).toBe('TRTSPOR.tr');

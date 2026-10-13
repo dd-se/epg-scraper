@@ -24,7 +24,7 @@
   {
    "name": "A NEWS HD",
    "tvId": "101",
-   "id": "ANEWSHD.tr"
+   "id": "ANEWS.tr"
   },
   {
    "name": "A PARA HD",
@@ -89,7 +89,7 @@
   {
    "name": "DA VINCI HD",
    "tvId": "208",
-   "id": "DAVINCILEARNINGHD.tr"
+   "id": "DAVINCILEARNING.tr"
   },
   {
    "name": "DISCOVERY CHANNEL HD",
@@ -204,7 +204,7 @@
   {
    "name": "SİNEMA TV HD",
    "tvId": "166",
-   "id": "SINEMATVHD.tr"
+   "id": "SINEMATV.tr"
   },
   {
    "name": "SPORTS TV HD",
@@ -254,7 +254,7 @@
   {
    "name": "TRT AVAZ",
    "tvId": "193",
-   "id": "TRTAVAZHD.tr"
+   "id": "TRTAVAZ.tr"
   },
   {
    "name": "TRT BELGESEL HD",
@@ -304,7 +304,7 @@
   {
    "name": "TRT World HD",
    "tvId": "38",
-   "id": "TRTWORLDHD.tr"
+   "id": "TRTWORLD.tr"
   },
   {
    "name": "TV100",

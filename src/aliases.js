@@ -8,6 +8,7 @@
 // ({ A: B, B: C }) collapse onto one canonical id.
 
 import { readFileSync } from 'node:fs';
+import { channelIdMatchKey } from './slug.js';
 
 // Read + validate a JSON alias map file: a flat object { alias: canonical }.
 export function loadAliasMap(filePath) {
@@ -34,24 +35,35 @@ export function loadAliasMap(filePath) {
 // chain of aliases converges on one id.  A cycle ({ A: B, B: A }) terminates
 // by returning the first id already visited — never an infinite loop.
 //
-// The lookup must be an **own**-property check.  `id in map` also matches
+// The lookup is **case-insensitive**.  Reaching for this flag at all means the
+// guide on the other side is not ours, so its spelling of a channel — `FBTV.tr`
+// vs our curated `FENERBAHCETV.tr` — is not guaranteed to share our casing, and
+// a map that only fired on an exact match would silently alias nothing.  The
+// canonical *value* is returned verbatim: it is the id a guide emits.
+//
+// The lookup must also stay an **own**-property one.  `id in map` matches
 // Object.prototype keys, so a channel id like `constructor`, `toString` or
 // `__proto__` resolved to the inherited *function/object* instead of its own
 // name; merge then rejected the non-string id and silently dropped the channel
-// and all of its programmes.  Object.hasOwn keeps every id that is not a
-// genuine entry in the map itself.
+// and all of its programmes.  Indexing `Object.entries()` keeps the map to its
+// own enumerable entries, and only a string target is ever indexed.
 export function createCanonicalizer(aliasMap) {
   const map = aliasMap || {};
-  const has = (id) =>
-    (typeof id === 'string' || typeof id === 'number') &&
-    Object.prototype.hasOwnProperty.call(map, id) &&
-    typeof map[id] === 'string';
+  const index = new Map();
+  for (const [alias, canonical] of Object.entries(map)) {
+    if (typeof canonical !== 'string') continue;
+    const key = channelIdMatchKey(alias);
+    if (!index.has(key)) index.set(key, canonical);
+  }
   return (id) => {
     const visited = new Set();
-    while (has(id) && !visited.has(id)) {
-      visited.add(id);
-      id = map[id];
+    let current = id;
+    while (typeof current === 'string' || typeof current === 'number') {
+      const key = channelIdMatchKey(String(current));
+      if (!index.has(key) || visited.has(key)) break;
+      visited.add(key);
+      current = index.get(key);
     }
-    return id;
+    return current;
   };
 }

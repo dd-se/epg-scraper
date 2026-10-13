@@ -61,6 +61,34 @@ export function normalizeChannelKey(name) {
   return String(name == null ? '' : name).replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+// ---- Channel display-name normalization ----
+
+// A source labels the HD feed (`A NEWS HD`, `SHOW TV HD`) because that is the
+// feed it lists, but the channel is `A NEWS` — the same rule that keeps the
+// qualifier out of the id (see src/slug.js).  Only a trailing, whitespace-
+// separated token is removed, so a name that merely contains the word is
+// untouched.  `4K` is deliberately not in the set: `TRT 4K` is a distinct
+// simulcast, not a quality variant of TRT 1.
+//
+// This lives in the provider layer because the providers are what know the
+// sources: `src/model.js` accepts the display name it is handed and does not
+// rewrite it.
+const QUALITY_QUALIFIER_RE = /\s+(?:HD|FHD|UHD|SD)\s*$/i;
+
+/**
+ * Drop a redundant trailing quality qualifier from a channel display name.
+ * Non-strings and names without one pass through unchanged, and a name that is
+ * nothing but the qualifier keeps its original spelling.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function stripQualityQualifier(name) {
+  if (typeof name !== 'string') return name;
+  const stripped = name.replace(QUALITY_QUALIFIER_RE, '');
+  return stripped.trim() === '' ? name : stripped;
+}
+
 // ---- Date window helpers ----
 
 // The date window a provider should cover when the CLI passes none.
@@ -116,8 +144,17 @@ export function finishResult({
   language = 'tr',
   log = () => {},
 }) {
+  // The provider owns its display names: the source labels the HD feed
+  // (`A NEWS HD`), the channel is `A NEWS`, so the label is normalized here,
+  // before the guide result is built.  Every adapter crosses this seam, and
+  // `src/model.js` takes the name exactly as handed to it.
+  const normalizedChannels = (Array.isArray(channels) ? channels : []).map((channel) =>
+    channel && typeof channel === 'object' && !Array.isArray(channel)
+      ? { ...channel, name: stripQualityQualifier(channel.name) }
+      : channel
+  );
   const result = createGuideResult(
-    { channels, programmes, days, failures, language },
+    { channels: normalizedChannels, programmes, days, failures, language },
     {
       onIssue: (code, count) => log(`warn: dropped ${count} ${ISSUE_TEXT[code] || code}`),
     }

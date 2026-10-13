@@ -140,14 +140,17 @@ describe('mynet mapChannelId', () => {
     expect(mapChannelId('NAT.GEO.WILD')).toBe('NATIONALGEOGRAPHICWILD.tr');
     expect(mapChannelId('TRT 3 / TRT SPOR')).toBe('TRTSPOR.tr');
     expect(mapChannelId('BLOOMBERG')).toBe('BLOOMBERGTV.tr');
-    expect(mapChannelId('Da Vinci')).toBe('DAVINCILEARNINGHD.tr');
+    expect(mapChannelId('Da Vinci')).toBe('DAVINCILEARNING.tr');
   });
 
-  it('uses the HD id where the reference has no SD variant', () => {
-    expect(mapChannelId('A NEWS')).toBe('ANEWSHD.tr');
-    expect(mapChannelId('TRT AVAZ')).toBe('TRTAVAZHD.tr');
-    expect(mapChannelId('TRT WORLD')).toBe('TRTWORLDHD.tr');
-    expect(mapChannelId('beIN SPORTS HABER')).toBe('beINSPORTSHABERHD.tr');
+  it('never carries a quality qualifier in the id', () => {
+    // These channels publish HD-only upstream, but HD is a delivery variant of
+    // the channel, not its identity — the same rule that drops it from
+    // EUROSPORT1.tr and NICKELODEON.tr.
+    expect(mapChannelId('A NEWS')).toBe('ANEWS.tr');
+    expect(mapChannelId('TRT AVAZ')).toBe('TRTAVAZ.tr');
+    expect(mapChannelId('TRT WORLD')).toBe('TRTWORLD.tr');
+    expect(mapChannelId('beIN SPORTS HABER')).toBe('BEINSPORTSHABER.tr');
   });
 
   it('falls back to generic slug', () => {

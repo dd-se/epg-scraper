@@ -69,7 +69,7 @@ describe('trt channel table', () => {
     expect(mapChannelId('TRT Müzik')).toBe('TRTMUZIK.tr');
     expect(mapChannelId('TRT Türk')).toBe('TRTTURK.tr');
     expect(mapChannelId('trt kurdî')).toBe('TRTKURDI.tr'); // case-insensitive
-    expect(mapChannelId('TRT Avaz')).toBe('TRTAVAZHD.tr'); // HD-only upstream
+    expect(mapChannelId('TRT Avaz')).toBe('TRTAVAZ.tr'); // HD-only upstream; HD is not identity
     expect(mapChannelId('TRT Spor Yıldız')).toBe('TRTSPORYILDIZ.tr');
     expect(mapChannelId('No Such Channel')).toBeUndefined();
   });
