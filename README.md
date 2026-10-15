@@ -531,7 +531,7 @@ language (Turkish):
 
 ```js
 { pattern: 'ATV', id: 'atv.tr', group: 'Ulusal', note: 'national general-interest' },
-{ pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Spor', note: 'sports' },
+{ pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Sport', note: 'sports' },
 { pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'Ulusal', note: 'guide spells it TV8' },
 ```
 

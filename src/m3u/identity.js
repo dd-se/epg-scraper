@@ -547,11 +547,16 @@ function isPlaceholderGroupLabel(label) {
  * `Di̇zi̇`), while the Turkish locale would turn an ASCII `I` into a dotless
  * `ı` (`MUZIK` → `Muzık`).  Folding `İ` first keeps `DİZİ` → `Dizi` without
  * surprising ASCII sources.
+ *
+ * The sports shelf is renamed to `Sport`: sources publish `SPOR`, `Spor` and
+ * the English `Sports`, and all three fold onto one label rather than three
+ * player folders.
  */
 export function canonicalGroupTitle(value) {
   const text = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
   if (text === '') return '';
   if (/^undefined$/i.test(text)) return 'Undefined';
+  if (/^spor$/i.test(text) || /^sports$/i.test(text)) return 'Sport';
   const lowered = text.replace(/İ/g, 'i').toLowerCase();
   return lowered
     .split(' ')

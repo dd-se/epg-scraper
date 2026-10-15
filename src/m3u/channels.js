@@ -46,16 +46,16 @@ export const CHANNEL_CATALOG = [
   { pattern: 'TV8 Haber', id: 'tv8haber.tr', group: 'Haber', note: 'news' },
   { pattern: 'Bloomberg HT', id: 'bloomberght.tr', group: 'Haber', note: 'news' },
 
-  // Spor
-  { pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'A Spor', id: 'aspor.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'beIN Sports 1', id: 'beinsports1.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'beIN Sports 2', id: 'beinsports2.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'beIN Sports 3', id: 'beinsports3.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'beIN Sports 4', id: 'beinsports4.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'tabii spor 1', id: 'tabiispor1.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'S Sport 1', id: 'ssport1.tr', group: 'Spor', note: 'sports' },
-  { pattern: 'Eurosport 1', id: 'eurosport1.tr', group: 'Spor', note: 'sports' },
+  // Sport
+  { pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'A Spor', id: 'aspor.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'beIN Sports 1', id: 'beinsports1.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'beIN Sports 2', id: 'beinsports2.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'beIN Sports 3', id: 'beinsports3.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'beIN Sports 4', id: 'beinsports4.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'tabii spor 1', id: 'tabiispor1.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'S Sport 1', id: 'ssport1.tr', group: 'Sport', note: 'sports' },
+  { pattern: 'Eurosport 1', id: 'eurosport1.tr', group: 'Sport', note: 'sports' },
 
   // Eğlence / çocuk
   { pattern: 'TRT 4K', id: 'trt4k.tr', group: 'Ulusal', note: '4K simulcast (E1: separate from TRT 1)' },
