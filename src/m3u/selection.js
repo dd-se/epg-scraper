@@ -11,7 +11,7 @@
 // never come along.  Editions are opted into with `ATV*` or an explicit
 // `"ATV Alanya"`.
 
-import { foldDiacritics, idKey, normalizeName, stripResolution } from './identity.js';
+import { foldDiacritics, idKey, normalizeName, stripResolution, canonicalGroupTitle } from './identity.js';
 
 /**
  * Compile one glob into an anchored, case-insensitive matcher.
@@ -98,9 +98,16 @@ export function applyGroupOverrides(entries, overrides) {
   const rules = (Array.isArray(overrides) ? overrides : [])
     .filter((rule) => rule && typeof rule.pattern === 'string' && rule.pattern.trim())
     .filter((rule) => typeof rule.group === 'string' && rule.group.trim())
-    .map((rule) => ({ matcher: globToMatcher(rule.pattern), group: rule.group.trim() }));
-  if (rules.length === 0) return list;
-  return list.map((entry) => {
+    .map((rule) => ({ matcher: globToMatcher(rule.pattern), group: canonicalGroupTitle(rule.group) }));
+  // Catalog groups are already canonical, but `canonicalGroupTitle()` keeps a
+  // hand-added override from leaking a new casing.
+  const canonicalized = list.map((entry) => {
+    if (!entry || typeof entry.group !== 'string') return entry;
+    const canonical = canonicalGroupTitle(entry.group);
+    return canonical === entry.group ? entry : { ...entry, group: canonical };
+  });
+  if (rules.length === 0) return canonicalized;
+  return canonicalized.map((entry) => {
     const forms = selectionForms(entry);
     const hit = rules.find((rule) => forms.some((form) => rule.matcher.test(form)));
     return hit ? { ...entry, group: hit.group } : entry;

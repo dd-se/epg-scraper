@@ -13,7 +13,7 @@
 //
 // The `group` is the **declared** category for that channel, written in the
 // playlist's own language (Turkish).  The sources disagree — one files
-// `Beyaz TV` under `Undefined`, the other under `ULUSAL` — so rather than
+// `Beyaz TV` under `Undefined`, the other under `Ulusal` — so rather than
 // inferring the answer from how many copies happen to carry each label, you
 // state it here.  A declared group replaces whatever the playlist published
 // and wins over the unify-by-count pass, which makes this file the single
@@ -22,65 +22,65 @@
 
 export const CHANNEL_CATALOG = [
   // Ulusal genel yayın
-  { pattern: 'ATV', id: 'atv.tr', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'TRT 1', id: 'trt1.tr', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Kanal D', id: 'kanald.tr', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Star TV', id: 'startv.tr', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'ATV', id: 'atv.tr', group: 'Ulusal', note: 'national general-interest' },
+  { pattern: 'TRT 1', id: 'trt1.tr', group: 'Ulusal', note: 'national general-interest' },
+  { pattern: 'Kanal D', id: 'kanald.tr', group: 'Ulusal', note: 'national general-interest' },
+  { pattern: 'Star TV', id: 'startv.tr', group: 'Ulusal', note: 'national general-interest' },
   // The source publishes `SHOW TV HD`, but the channel's canonical name — and
   // the spelling both guides use — is `SHOW TV`, so the id follows it too
   // (`showtv.tr`, guide id `SHOWTV.tr`): id and name agree here rather than
   // the id carrying the source's "HD".  See `EPG_NAME_CONTRACT` below.
-  { pattern: 'Show TV', id: 'showtv.tr', name: 'SHOW TV', group: 'ULUSAL', note: 'national general-interest' },
+  { pattern: 'Show TV', id: 'showtv.tr', name: 'SHOW TV', group: 'Ulusal', note: 'national general-interest' },
   // FOX rebranded to NOW: no source publishes a `FOX` row any more, so the
   // catalog carries one channel, not two.
-  { pattern: 'NOW TV', id: 'nowtv.tr', name: 'NOW', group: 'DİZİ', note: 'national entertainment; guide spells it NOW' },
-  { pattern: 'Show Turk', id: 'showturk.tr', group: 'ULUSAL', note: 'national general-interest' },
-  { pattern: 'Show Max', id: 'showmax.tr', group: 'DİZİ', note: 'national entertainment' },
-  { pattern: '24 TV', id: '24tv.tr', group: 'HABER', note: 'news' },
+  { pattern: 'NOW TV', id: 'nowtv.tr', name: 'NOW', group: 'Dizi', note: 'national entertainment; guide spells it NOW' },
+  { pattern: 'Show Turk', id: 'showturk.tr', group: 'Ulusal', note: 'national general-interest' },
+  { pattern: 'Show Max', id: 'showmax.tr', group: 'Dizi', note: 'national entertainment' },
+  { pattern: '24 TV', id: '24tv.tr', group: 'Haber', note: 'news' },
 
   // Haber
-  { pattern: 'CNN Turk', id: 'cnnturk.tr', name: 'CNN TURK', group: 'HABER', note: 'news; ASCII id/name, guide spells it CNN TÜRK' },
-  { pattern: 'NTV', id: 'ntv.tr', group: 'HABER', note: 'news' },
-  { pattern: 'A Haber', id: 'ahaber.tr', group: 'HABER', note: 'news' },
-  { pattern: 'TRT Haber', id: 'trthaber.tr', group: 'HABER', note: 'news' },
-  { pattern: 'TV8 Haber', id: 'tv8haber.tr', group: 'HABER', note: 'news' },
-  { pattern: 'Bloomberg HT', id: 'bloomberght.tr', group: 'HABER', note: 'news' },
+  { pattern: 'CNN Turk', id: 'cnnturk.tr', name: 'CNN TURK', group: 'Haber', note: 'news; ASCII id/name, guide spells it CNN TÜRK' },
+  { pattern: 'NTV', id: 'ntv.tr', group: 'Haber', note: 'news' },
+  { pattern: 'A Haber', id: 'ahaber.tr', group: 'Haber', note: 'news' },
+  { pattern: 'TRT Haber', id: 'trthaber.tr', group: 'Haber', note: 'news' },
+  { pattern: 'TV8 Haber', id: 'tv8haber.tr', group: 'Haber', note: 'news' },
+  { pattern: 'Bloomberg HT', id: 'bloomberght.tr', group: 'Haber', note: 'news' },
 
   // Spor
-  { pattern: 'TRT Spor', id: 'trtspor.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'A Spor', id: 'aspor.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 1', id: 'beinsports1.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 2', id: 'beinsports2.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 3', id: 'beinsports3.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'beIN Sports 4', id: 'beinsports4.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'tabii spor 1', id: 'tabiispor1.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'S Sport 1', id: 'ssport1.tr', group: 'SPOR', note: 'sports' },
-  { pattern: 'Eurosport 1', id: 'eurosport1.tr', group: 'SPOR', note: 'sports' },
+  { pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'A Spor', id: 'aspor.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'beIN Sports 1', id: 'beinsports1.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'beIN Sports 2', id: 'beinsports2.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'beIN Sports 3', id: 'beinsports3.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'beIN Sports 4', id: 'beinsports4.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'tabii spor 1', id: 'tabiispor1.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'S Sport 1', id: 'ssport1.tr', group: 'Spor', note: 'sports' },
+  { pattern: 'Eurosport 1', id: 'eurosport1.tr', group: 'Spor', note: 'sports' },
 
   // Eğlence / çocuk
-  { pattern: 'TRT 4K', id: 'trt4k.tr', group: 'ULUSAL', note: '4K simulcast (E1: separate from TRT 1)' },
-  { pattern: 'TRT Çocuk', id: 'trtcocuk.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'TRT 4K', id: 'trt4k.tr', group: 'Ulusal', note: '4K simulcast (E1: separate from TRT 1)' },
+  { pattern: 'TRT Çocuk', id: 'trtcocuk.tr', group: 'Çocuk', note: 'children' },
   // Every source spells it `Minika Go` (and `MINIKA GO HD`), never `Minik Go`:
   // a pattern has to be the spelling the matcher can reach, or this channel is
   // silently dropped. `Minika Go*` also takes the HD-dated row.
-  { pattern: 'Minika Go*', id: 'minika.go.tr', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Baby TV', id: 'babytv.tr', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Cartoon Network', id: 'cartoonnetwork.tr', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Nickelodeon', id: 'nickelodeon.tr', group: 'ÇOCUK', note: 'children' },
-  { pattern: 'Disney Channel', id: 'disneychannel.tr', group: 'ÇOCUK', note: 'children' },
+  { pattern: 'Minika Go*', id: 'minika.go.tr', group: 'Çocuk', note: 'children' },
+  { pattern: 'Baby TV', id: 'babytv.tr', group: 'Çocuk', note: 'children' },
+  { pattern: 'Cartoon Network', id: 'cartoonnetwork.tr', group: 'Çocuk', note: 'children' },
+  { pattern: 'Nickelodeon', id: 'nickelodeon.tr', group: 'Çocuk', note: 'children' },
+  { pattern: 'Disney Channel', id: 'disneychannel.tr', group: 'Çocuk', note: 'children' },
   // The source publishes `TV 8`; the Hürriyet guide spells it `TV8`, and the
   // space would also be illegal in a strict tvg-id.
-  { pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'ULUSAL', note: 'general-interest; guide spells it TV8' },
-  { pattern: 'Kanal 7', id: 'kanal7.tr', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Beyaz TV', id: 'beyaztv.tr', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Flash TV', id: 'flashtv.tr', group: 'ULUSAL', note: 'general-interest' },
-  { pattern: 'Investigation', id: 'investigation.tr', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'National Geographic', id: 'nationalgeographic.tr', group: 'BELGESEL', note: 'documentary' },
-  { pattern: 'Discovery Channel', id: 'discoverychannel.tr', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'Ulusal', note: 'general-interest; guide spells it TV8' },
+  { pattern: 'Kanal 7', id: 'kanal7.tr', group: 'Ulusal', note: 'general-interest' },
+  { pattern: 'Beyaz TV', id: 'beyaztv.tr', group: 'Ulusal', note: 'general-interest' },
+  { pattern: 'Flash TV', id: 'flashtv.tr', group: 'Ulusal', note: 'general-interest' },
+  { pattern: 'Investigation', id: 'investigation.tr', group: 'Belgesel', note: 'documentary' },
+  { pattern: 'National Geographic', id: 'nationalgeographic.tr', group: 'Belgesel', note: 'documentary' },
+  { pattern: 'Discovery Channel', id: 'discoverychannel.tr', group: 'Belgesel', note: 'documentary' },
   // Every source spells this channel "Viasat History"; the bare `History`
   // pattern could never match it (patterns are anchored), so the channel had
   // no guide and no playlist entry until tvplus started serving it.
-  { pattern: 'Viasat History', id: 'history.tr', name: 'Viasat History', group: 'BELGESEL', note: 'documentary' },
+  { pattern: 'Viasat History', id: 'history.tr', name: 'Viasat History', group: 'Belgesel', note: 'documentary' },
 ];
 
 /**

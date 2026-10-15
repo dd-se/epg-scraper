@@ -15,6 +15,7 @@ import { selectEntries, applyGroupOverrides, applyIdentityOverrides } from './se
 import {
   groupEntries,
   collapseIdenticalFeeds,
+  canonicalGroupTitle,
   unifyGroupTitles,
   applyNamingStyle,
   expandYedek,
@@ -228,7 +229,9 @@ function finalizeEntry(entry, seenIds, { inferTvgId = true, allowSharedIdentity 
     tvgId,
     tvgName: entry.tvgName || '',
     logo: entry.tvgLogo || '',
-    groupTitle: entry.group || '',
+    // Canonical casing is the last defense for `unifyGroups: false` runs,
+    // where each source's own label survives to the writer.
+    groupTitle: canonicalGroupTitle(entry.group || ''),
     url: entry.url,
     vlcOptions: entry.vlcOptions || [],
     sourceId: entry.sourceId || '',

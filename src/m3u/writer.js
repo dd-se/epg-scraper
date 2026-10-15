@@ -18,6 +18,7 @@
 import { createGzip } from 'node:zlib';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { canonicalGroupTitle } from './identity.js';
 
 // Attributes the writer emits, in the order the reference playlists publish
 // them.  Readers key on names, not position, but matching the sources keeps
@@ -132,7 +133,7 @@ export function generateM3U(result, options = {}) {
       if (key === 'tvg-id') push('tvg-id', entry.tvgId != null ? entry.tvgId : entry.id);
       else if (key === 'tvg-name') push('tvg-name', entry.tvgName);
       else if (key === 'tvg-logo') push('tvg-logo', entry.logo != null ? entry.logo : entry.tvgLogo);
-      else if (key === 'group-title') push('group-title', entry.groupTitle != null ? entry.groupTitle : entry.group);
+      else if (key === 'group-title') push('group-title', canonicalGroupTitle(entry.groupTitle != null ? entry.groupTitle : entry.group));
       else push(key, entry.attributes && entry.attributes[key]);
     }
 

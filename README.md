@@ -530,15 +530,15 @@ that identifies it, and the display label — written in the playlist's own
 language (Turkish):
 
 ```js
-{ pattern: 'ATV', id: 'atv.tr', group: 'ULUSAL', note: 'national general-interest' },
-{ pattern: 'TRT Spor', id: 'trtspor.tr', group: 'SPOR', note: 'sports' },
-{ pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'ULUSAL', note: 'guide spells it TV8' },
+{ pattern: 'ATV', id: 'atv.tr', group: 'Ulusal', note: 'national general-interest' },
+{ pattern: 'TRT Spor', id: 'trtspor.tr', group: 'Spor', note: 'sports' },
+{ pattern: 'TV 8', id: 'tv8.tr', name: 'TV8', group: 'Ulusal', note: 'guide spells it TV8' },
 ```
 
 - **`group`** replaces whatever the sources published and outranks the
   unify-by-count rule below. The two source vocabularies disagree — one files
-  `Beyaz TV` under `Undefined`, the other under `ULUSAL` — so you decide it is
-  `ULUSAL`.
+  `Beyaz TV` under `Undefined`, the other under `Ulusal` — so you decide it is
+  `Ulusal`.
 - **`id`** is **permanent**: it is what a consumer stores for a viewer's
   selection, so it is authored here rather than re-derived from the display name
   each run. Changing one orphans every saved selection.
@@ -616,7 +616,7 @@ A channel's display name is cleaned, not copied: the emitted channel is `ATV`,
 never `ATV (360p)`.
 
 The sources also file the same channel under different `group-title`s (`Beyaz TV`
-is `Undefined` in one source and `ULUSAL` in the other), so the builder unifies
+is `Undefined` in one source and `Ulusal` in the other), so the builder unifies
 each channel's group and every copy adopts it, so a channel never lands in two
 player folders:
 
@@ -625,6 +625,10 @@ player folders:
 * among real labels, the one carried by the **most copies** wins (a tie keeps
   the base copy's, so the result is deterministic);
 * only when every copy is a placeholder does one of them have to win.
+
+Every label is emitted in Title Case (`HABER` → `Haber`), so casing
+disagreements between sources (`ULUSAL` vs `Ulusal`) vote as one label and the
+output stays uniform.
 
 Set `"unifyGroups": false` to keep each source's own label.
 

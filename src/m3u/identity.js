@@ -534,10 +534,36 @@ function isPlaceholderGroupLabel(label) {
 }
 
 /**
+ * Canonical group-title casing: Title Case (`HABER` → `Haber`).
+ *
+ * Sources disagree on casing as well as wording — one files `Beyaz TV` under
+ * `ULUSAL`, the other under `Ulusal` — so every label is folded to Title Case
+ * before it is counted, unified or emitted.  Placeholders keep their
+ * single spelling (`Undefined`; empty stays empty so the writer still omits
+ * the attribute).
+ *
+ * The dotted capital `İ` is folded to `i` before the default lowercasing: the
+ * default `toLowerCase()` turns `İ` into `i` + a combining dot (`DİZİ` →
+ * `Di̇zi̇`), while the Turkish locale would turn an ASCII `I` into a dotless
+ * `ı` (`MUZIK` → `Muzık`).  Folding `İ` first keeps `DİZİ` → `Dizi` without
+ * surprising ASCII sources.
+ */
+export function canonicalGroupTitle(value) {
+  const text = String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
+  if (text === '') return '';
+  if (/^undefined$/i.test(text)) return 'Undefined';
+  const lowered = text.replace(/İ/g, 'i').toLowerCase();
+  return lowered
+    .split(' ')
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(' ');
+}
+
+/**
  * Unify the `group-title` a channel's copies carry.
  *
  * The sources categorize the same channel differently — one files `Beyaz TV`
- * under `Undefined`, the other under `ULUSAL` — so without this a player shows
+ * under `Undefined`, the other under `Ulusal` — so without this a player shows
  * one channel in two folders.  Every copy adopts one label, so a channel lands
  * in exactly one group:
  *
@@ -546,7 +572,9 @@ function isPlaceholderGroupLabel(label) {
  *    "uncategorized", so one source knowing the category beats another source
  *    not knowing it.
  *  - Among real labels, the one carried by the **most copies** wins (three
- *    `ULUSAL` copies beat a single `News`).
+ *    `Ulusal` copies beat a single `News`).  Labels vote by their canonical
+ *    Title Case, so `ULUSAL` and `Ulusal` are one contender, and the winner is
+ *    emitted canonically.
  *  - A tie keeps the base (highest-ranked) copy's label, so the result stays
  *    deterministic.
  *  - Only when *every* copy is a placeholder does one of them have to win.
@@ -559,16 +587,19 @@ export function unifyGroupTitles(groups) {
     const entries = Array.isArray(group && group.entries) ? group.entries : [];
     if (entries.length === 0) return group;
 
+    // Labels are counted by their canonical casing, so `ULUSAL` and `Ulusal`
+    // are one label, not two contenders.  The winning label is emitted in
+    // canonical form too, so the casing survives even when every copy agrees.
     const counts = new Map();
     for (const item of entries) {
-      const label = String((item && item.group) || '');
+      const label = canonicalGroupTitle((item && item.group) || '');
       counts.set(label, (counts.get(label) || 0) + 1);
     }
 
     const real = [...counts.entries()].filter(([label]) => !isPlaceholderGroupLabel(label));
     const candidates = real.length > 0 ? real : [...counts.entries()];
 
-    const baseLabel = String((rankEntries(entries)[0] || {}).group || '');
+    const baseLabel = canonicalGroupTitle((rankEntries(entries)[0] || {}).group || '');
     const baseIsCandidate = candidates.some(([label]) => label === baseLabel);
     let winner = baseIsCandidate ? baseLabel : '';
     let best = baseIsCandidate ? counts.get(baseLabel) || 0 : 0;
@@ -579,7 +610,11 @@ export function unifyGroupTitles(groups) {
       }
     }
 
-    if (entries.every((item) => String((item && item.group) || '') === winner)) return group;
+    if (entries.every((item) => canonicalGroupTitle((item && item.group) || '') === winner)) {
+      // Fast path preserves the object when nothing changes; still rewrite the
+      // spelling when only the casing differs.
+      if (entries.every((item) => String((item && item.group) || '') === winner)) return group;
+    }
     return {
       ...group,
       entries: entries.map((item) => ({ ...item, group: winner })),
