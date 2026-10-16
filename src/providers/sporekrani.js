@@ -60,6 +60,18 @@ export const CHANNEL_ID_MAP = Object.fromEntries(
   CHANNELS.map((c) => [normalizeChannelKey(c.name), c.id])
 );
 
+// Last-resort channel logos, keyed by XMLTV id, for a curated channel the
+// source's own logo feeds cannot serve.  `sporekraniapi` reads the Spor Ekranı
+// channel directory for logos, but that directory has no record for **tabii
+// Spor 8** (the feed is dormant: no channel entry and no event across the
+// sampled window), so its logo is pinned from tabii's own CDN — the
+// broadcaster's canonical asset.  Everything else comes live from the
+// directory or the event payload, so this map should stay tiny.
+export const CHANNEL_ICON_OVERRIDES = {
+  'TABIISPOR8.tr':
+    'https://cms-tabii-public-image.tabii.com/int/60593_0-0-1500-1500.png',
+};
+
 export function mapChannelId(name) {
   return CHANNEL_ID_MAP[normalizeChannelKey(name)];
 }

@@ -127,7 +127,10 @@ describe('CLI env file wiring', () => {
       cwd: tmpDir,
     });
 
-  const requestParams = () => Object.fromEntries(new URL(requests[0]).searchParams);
+  const requestParams = () => {
+    const events = requests.find((url) => url.includes('/v3/events')) || requests[0];
+    return Object.fromEntries(new URL(events).searchParams);
+  };
 
   it('loads ./.env so a provider can read credentials without shell variables', async () => {
     writeFileSync(
@@ -139,7 +142,7 @@ describe('CLI env file wiring', () => {
 
     expect(exit).toBe(0);
     expect(existsSync(path.join(tmpDir, 'guide.xml.gz'))).toBe(true);
-    expect(requests).toHaveLength(1);
+    expect(requests).toHaveLength(2);
     expect(requestParams()).toMatchObject({ app_id: 'from-file', api_key: 'from-file-key' });
     expect(stdout.join('')).toContain('env: .env: applied 2/2 variable(s)');
   });

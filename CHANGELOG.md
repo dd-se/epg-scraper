@@ -110,6 +110,12 @@ id needs updating. Swedish (`tvnu`) ids are unchanged.
 
 ### Fixed
 
+- The `sporekraniapi` guide carried no `<icon>` for an idle tabii spor feed:
+  the events payload only names a logo for a channel that actually has an
+  event, so tabii spor 1-5, 7 and 8 shipped without one whenever they were off
+  the air. The adapter now backfills logos from Spor Ekranı's channel
+  directory, and the one channel that directory does not list (tabii spor 8)
+  falls back to its pinned broadcaster logo.
 - A programme naming a channel in a pre-fold spelling now resolves to the
   emitted id instead of being dropped as `unknown-channel`.
 - The playlist catalog's `History` pattern never matched anything: every source

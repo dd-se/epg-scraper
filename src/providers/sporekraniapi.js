@@ -10,7 +10,12 @@ import {
   splitDate,
 } from './shared.js';
 import { isRealCalendarDate, parseClockMinutes } from '../time.js';
-import { CHANNELS, CHANNEL_ID_MAP, normalizeChannelKey } from './sporekrani.js';
+import {
+  CHANNELS,
+  CHANNEL_ICON_OVERRIDES,
+  CHANNEL_ID_MAP,
+  normalizeChannelKey,
+} from './sporekrani.js';
 
 export { CHANNEL_ID_MAP, normalizeChannelKey };
 
@@ -50,6 +55,19 @@ export function buildEventsUrl(day, credentials) {
   return url.toString();
 }
 
+// The channel directory lists every channel the source carries (name + logo)
+// independent of whether it airs anything, so it can serve a logo for an idle
+// channel that never appears in an `events` payload.
+export function buildChannelsUrl(credentials) {
+  const { appId, apiKey } = credentials || {};
+  const url = new URL('channels', BASE_URL);
+  url.search = new URLSearchParams({
+    app_id: requireCredential(appId, APP_ID_ENV),
+    api_key: requireCredential(apiKey, API_KEY_ENV),
+  });
+  return url.toString();
+}
+
 export function parseApiEnvelope(text) {
   let payload;
   try {
@@ -59,6 +77,28 @@ export function parseApiEnvelope(text) {
   }
   if (!payload || typeof payload !== 'object' || !Array.isArray(payload.data)) return [];
   return payload.data;
+}
+
+// Channel directory -> Map(normalized channel name -> logo).  Entries without
+// a usable http(s) logo are skipped (the directory also carries sat/position
+// bookkeeping rows with a null icon), and the first entry per name wins.
+// Malformed bodies degrade to an empty map.
+export function parseChannelDirectory(text) {
+  const icons = new Map();
+  for (const record of parseApiEnvelope(text)) {
+    const key = normalizeChannelKey(record?.name);
+    const { icon } = record || {};
+    if (
+      key &&
+      !icons.has(key) &&
+      typeof icon === 'string' &&
+      /^https?:\/\//i.test(icon) &&
+      !icon.includes('|')
+    ) {
+      icons.set(key, icon);
+    }
+  }
+  return icons;
 }
 
 function parseSourceSlot(event, expectedDay) {
@@ -160,6 +200,27 @@ export async function scrape({
   const programmes = [];
   let failures = 0;
 
+  // The event payload only carries a logo for a channel that has an event, so
+  // an idle feed (most tabii spor simulcasts, most days) would have none.  The
+  // channel directory publishes a logo for every channel the source carries,
+  // so it backfills them.  A failed directory costs the idle channels their
+  // icon, not the schedule.
+  let directoryIcons = new Map();
+  try {
+    directoryIcons = parseChannelDirectory(
+      await fetchText(buildChannelsUrl(credentials), {
+        fetchImpl: politeFetch,
+        ...inputFetchOptions,
+        headers: {
+          accept: 'application/json',
+          ...(inputFetchOptions.headers || {}),
+        },
+      })
+    );
+  } catch (error) {
+    log(`warn: channel directory unavailable: ${requestErrorSummary(error)}`);
+  }
+
   for (const day of activeDates) {
     let text;
     try {
@@ -189,7 +250,10 @@ export async function scrape({
 
   return finishResult({
     channels: selectedChannels.map((channel) => {
-      const icon = channelIcons.get(channel.id);
+      const icon =
+        channelIcons.get(channel.id) ||
+        directoryIcons.get(normalizeChannelKey(channel.name)) ||
+        CHANNEL_ICON_OVERRIDES[channel.id];
       return icon ? { id: channel.id, name: channel.name, icon } : { id: channel.id, name: channel.name };
     }),
     programmes,

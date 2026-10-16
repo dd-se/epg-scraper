@@ -5,12 +5,14 @@ import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { runCli } from '../src/cli.js';
 import {
+  buildChannelsUrl,
   buildEventsUrl,
   parseApiEnvelope,
+  parseChannelDirectory,
   parseDayEvents,
   scrape,
 } from '../src/providers/sporekraniapi.js';
-import { CHANNELS } from '../src/providers/sporekrani.js';
+import { CHANNELS, CHANNEL_ICON_OVERRIDES } from '../src/providers/sporekrani.js';
 
 const dayFixture = readFileSync(
   fileURLToPath(new URL('./fixtures/sporekraniapi/2026-09-30.json', import.meta.url)),
@@ -36,6 +38,37 @@ describe('sporekraniapi API contract', () => {
       day: '2026-09-30',
     });
     expect(parseApiEnvelope('{"data":[{"id":485823}]}')).toEqual([{ id: 485823 }]);
+  });
+
+  it('builds the authenticated channel-directory URL', () => {
+    const url = new URL(buildChannelsUrl({ appId: 'test-app', apiKey: 'test-key' }));
+
+    expect(url.origin).toBe('https://api.sporekrani.com');
+    expect(url.pathname).toBe('/v3/channels');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      app_id: 'test-app',
+      api_key: 'test-key',
+    });
+  });
+
+  it('parses the channel directory into normalized name -> logo, dropping junk', () => {
+    const icons = parseChannelDirectory(
+      JSON.stringify({
+        data: [
+          { id: 1104, name: 'tabii Spor 1', icon: 'https://img.sporekrani.com/channels/t1.png' },
+          { id: 1105, name: 'tabii Spor 2', icon: 'not-a-url' },
+          { id: 1106, name: 'tabii Spor 3', icon: 'https://a.png|https://b.png' },
+          { id: 1107, name: 'tabii Spor 4' },
+          { id: 1108, name: 'tabii Spor 5', icon: null },
+          { id: 1109, name: 'tabii  spor   1 ', icon: 'https://img.sporekrani.com/channels/dup.png' },
+        ],
+      })
+    );
+
+    // First usable logo per normalized name wins; junk icons are skipped.
+    expect([...icons]).toEqual([['TABII SPOR 1', 'https://img.sporekrani.com/channels/t1.png']]);
+    expect(parseChannelDirectory('<html>maintenance</html>')).toEqual(new Map());
+    expect(parseChannelDirectory('{"data":{}}')).toEqual(new Map());
   });
 
   it('degrades malformed and non-array envelopes to an empty event list', () => {
@@ -158,14 +191,17 @@ describe('sporekraniapi scrape', () => {
       politenessDelayMs: 0,
     });
 
-    expect(requests).toHaveLength(1);
-    expect(Object.fromEntries(new URL(requests[0].url).searchParams)).toEqual({
+    const eventRequests = requests.filter((request) => request.url.includes('/v3/events'));
+    expect(requests).toHaveLength(2);
+    expect(requests[0].url).toContain('/v3/channels');
+    expect(eventRequests).toHaveLength(1);
+    expect(Object.fromEntries(new URL(eventRequests[0].url).searchParams)).toEqual({
       app_id: 'test-app',
       api_key: 'test-key',
       day: '2026-09-30',
     });
-    expect(requests[0].options.headers.accept).toContain('application/json');
-    expect(requests[0].options.headers['user-agent']).toContain('Mozilla/5.0');
+    expect(eventRequests[0].options.headers.accept).toContain('application/json');
+    expect(eventRequests[0].options.headers['user-agent']).toContain('Mozilla/5.0');
     expect(result.channels).toHaveLength(9);
     expect(result.channels.find((channel) => channel.id === 'SSPORTPLUS.tr')).toEqual({
       id: 'SSPORTPLUS.tr',
@@ -196,7 +232,9 @@ describe('sporekraniapi scrape', () => {
     const result = await scrape({
       dates: ['2026-09-29', '2026-09-30', '2026-10-01'],
       fetchImpl: async (url) => {
-        const day = new URL(url).searchParams.get('day');
+        const request = new URL(url);
+        if (request.pathname.endsWith('/channels')) return response('{"data":[]}');
+        const day = request.searchParams.get('day');
         requestedDays.push(day);
         if (day === '2026-09-30') return response('Not Found', { ok: false, status: 404 });
         return response(
@@ -247,9 +285,65 @@ describe('sporekraniapi scrape', () => {
     });
 
     expect(result.channels).toEqual(
-      CHANNELS.slice(0, 8).map((channel) => ({ id: channel.id, name: channel.name }))
+      CHANNELS.slice(0, 8).map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        ...(CHANNEL_ICON_OVERRIDES[channel.id] ? { icon: CHANNEL_ICON_OVERRIDES[channel.id] } : {}),
+      }))
     );
     expect(result.programmes).toEqual([]);
+  });
+
+  it('backfills idle channels from the directory and tabii Spor 8 from its pinned logo', async () => {
+    const directory = JSON.stringify({
+      data: [
+        { id: 1104, name: 'tabii Spor 1', icon: 'https://img.sporekrani.com/channels/t1.png' },
+        { id: 1105, name: 'tabii Spor 2', icon: 'https://img.sporekrani.com/channels/t2.png' },
+      ],
+    });
+    const result = await scrape({
+      dates: ['2026-09-30'],
+      fetchImpl: async (url) =>
+        String(url).includes('/v3/channels') ? response(directory) : response(dayFixture),
+      log: () => {},
+      politenessDelayMs: 0,
+    });
+
+    // Idle feeds get the directory logo...
+    expect(result.channels.find((c) => c.id === 'TABIISPOR1.tr').icon).toBe(
+      'https://img.sporekrani.com/channels/t1.png'
+    );
+    expect(result.channels.find((c) => c.id === 'TABIISPOR2.tr').icon).toBe(
+      'https://img.sporekrani.com/channels/t2.png'
+    );
+    // ...an event logo still wins over the directory (S Sport Plus airs today)...
+    expect(result.channels.find((c) => c.id === 'SSPORTPLUS.tr').icon).toBe(
+      'https://img.sporekrani.com/channels/s-sport-plus.png'
+    );
+    // ...and tabii Spor 8, absent from the directory, falls back to its pinned logo.
+    expect(result.channels.find((c) => c.id === 'TABIISPOR8.tr').icon).toBe(
+      CHANNEL_ICON_OVERRIDES['TABIISPOR8.tr']
+    );
+  });
+
+  it('degrades a failed channel directory to a warning, keeping the schedule', async () => {
+    const logs = [];
+    const result = await scrape({
+      dates: ['2026-09-30'],
+      fetchImpl: async (url) =>
+        String(url).includes('/v3/channels')
+          ? response('Unauthorized', { ok: false, status: 401 })
+          : response(dayFixture),
+      log: (line) => logs.push(line),
+      politenessDelayMs: 0,
+      fetchOptions: { retries: 0 },
+    });
+
+    expect(result.failures).toBe(0);
+    expect(result.programmes).toHaveLength(2);
+    expect(result.channels.find((c) => c.id === 'TABIISPOR1.tr').icon).toBeUndefined();
+    expect(logs.join('\n')).toContain('channel directory unavailable: HTTP 401');
+    expect(logs.join('\n')).not.toContain('test-key');
   });
 
   it('treats a malformed response body as an empty day, not a failure', async () => {

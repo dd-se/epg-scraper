@@ -103,6 +103,15 @@ a channel display name at `finishResult()`) — lives in
   (default `process.env`) so tests can inject credentials, and per-day
   warnings summarize a failed request as `HTTP <status>` only —
   credential-bearing URLs never reach the log.
+  Channel logos come from two places: the event payload carries one for a
+  channel that actually airs during the window, and a one-off
+  `GET /v3/channels` directory backfill (`parseChannelDirectory()`, a
+  normalized name → logo map, `buildChannelsUrl()`) covers the idle feeds —
+  most tabii spor simulcasts carry no events on most days, so the event
+  payload alone leaves them logoless. The directory omits tabii spor 8 (no
+  channel record at all), so that one id falls back to
+  `CHANNEL_ICON_OVERRIDES` in `sporekrani.js` (tabii's own CDN). A failed
+  directory costs the idle channels their icon, not the schedule.
 - `sporekrani.js` — retained Spor Ekranı SSR benchmark baseline: tabii spor
   1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`. Quasar SSR
   embeds a rolling ~30-day list in `window.__INITIAL_STATE__`; one fetch per
