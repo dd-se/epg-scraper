@@ -6,8 +6,10 @@ failed.  Each entry is a fix-me note: the channel either needs a different
 source, login/auth flow, or a bespoke scraper to be built later.
 Statements about live sites below were re-verified on 2026-09-09 unless a
 fixture/test is cited instead; the `idmantv.az` weekly page was re-fetched
-live on 2026-09-12 when the `idmantv` provider landed, and the Swedish
-`tv.nu` channel pages on 2026-09-17 when the `tvnu` provider landed.
+live on 2026-09-12 when the `idmantv` provider landed, the Swedish
+`tv.nu` channel pages on 2026-09-17 when the `tvnu` provider landed, and the
+Exxen rows exhaustively re-probed on 2026-10-16 (platform CMS, the Erstream
+EPG backend, and the aggregators — see the Exxen row).
 
 Covered today (34 sports channels — TV+'s general-interest channels are excluded,
 because the sports merge takes only each provider's sports subset):
@@ -105,15 +107,7 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 | ~~Tabii Spor 8~~ | tabii.com, tvplus.com.tr | **NOW COVERED** via `sporekraniapi` (idle off-event — no 2026-09-08 fixture). |
 | CBC Sport | official `cbcsport.az/teleproqram/` only | **NO PROVIDER YET** — live page carries no static schedule rows (re-verified 2026-09-09); needs `--browser` verification. Un-struck: the old strikethrough implied coverage that does not exist. |
 | ~~GS TV~~ | ~~gstv.com.tr/yayin-akisi~~ (no response) | **NOW COVERED** via `digiturkburada` (fixture `gs-tv-2026-09-08.html`: 15 programmes). |
-| Exxen TV | exxen.com (200 but 2.4 KB JS shell, login-walled), sporekrani.com/home/channel/exxen | Re-verified live 2026-09-09: aggregator page exists and renders "Etkinlik Bulunamadı — Önümüzdeki 30 gün içerisinde aradığınız kriterlere uygun etkinlik bulunmamaktadır". Exxen is a subscription streaming service; the EPG lives behind authentication. Empty aggregator page is consistent with no linear sports scheduled, not proof of death. |
-| Exxen Sports 1 | exxen.com, sporekrani.com/home/channel/exxen-sports-1 | Re-verified live 2026-09-09: aggregator page exists but renders "Etkinlik Bulunamadı — Önümüzdeki 30 gün içerisinde aradığınız kriterlere uygun etkinlik bulunmamaktadır" (empty window, not proof of login-wall). exxen.com itself (JS shell) not re-fetched 2026-09-09. Same as Exxen TV above. |
-| Exxen Sports 2 | exxen.com | Login-walled, same as above (aggregator page not re-verified 2026-09-09 — do not claim emptiness without fetching it). |
-| Exxen Sports 3 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
-| Exxen Sports 4 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
-| Exxen Sports 5 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
-| Exxen Sports 6 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
-| Exxen Sports 7 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
-| Exxen Sports 8 | exxen.com | Login-walled, same as above (aggregator page not re-verified). |
+| Exxen TV / Exxen Sports 1-8 | exxen.com (CMS `LiveChannel` filter + canlı-TV list + sitemaps), the Exxen EPG backend `global-epg-dev.erstream.com` / `global-epg-prod.erstream.com`, `sporekrani.com/home/channel/exxen[-tv]`, `macrehberi.com/kanal/exxen`, `beyazelma78.com/kanal/exxen-spor`, `tvplus.com.tr/canli-tv/yayin-akisi/exxen-tv--4330` | **NO LINEAR CHANNEL / NO PUBLIC EPG** (exhaustively re-probed 2026-10-16). Exxen's own platform carries only **TV8** (cmsId 1315243) and **TV8,5** (1340062) as live channels — the `Exxen + Reklamsız[ + Spor]` CMS entries are subscription *packages*, not channels, and no Exxen-branded linear channel exists in the CMS, the canlı-TV list, or the sitemaps (`livechannel-tr.xml` lists only those two). Exxen's daily-guide UI is served by Erstream's EPG service (`servicesConfig.contentConfig.epg` = `global.epg.erstream` → `https://global-epg-dev.erstream.com`, `apiKey: null`), which returns **only hourly placeholders** (`name:"Program bilgisi bulunmuyor."`, `statusCode:300`) for any `cmsId`/`channelId`/`date` on both the dev host and the prod mirror `global-epg-prod.erstream.com`; `GET /Channel/GetChannels` is HTTP 204 (empty) and the live-channel custom fields carry `HasReverseEpg=false` with no EPG payload. The aggregators that list "Exxen" show no events: `sporekrani` and `macrehberi` `/kanal/exxen` render an empty event list (`common.events: []`), and Spor Ekranı's Exxen channels (783 Exxen, 991 Exxen TV, 1113 Exxenspor YouTube) carry zero events across every sampled day. The TV+ `exxen-tv--4330` SEO URL is a broken/undefined page (TV+ `ChannelList` has no Exxen). Exxen streams live sports as one-off in-app event cards (only 2 `LiveEvent`s exist, both past friendlies), not as a scheduled linear feed. |
 
 ## Likely next steps (in rough order of effort)
 
@@ -122,14 +116,16 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 2. **TJK TV (TAY TV)** — reverse-engineer the AJAX query behind
    `tjk.org/TR/Kurumsal/Query/Page/YayinAkisi` (medium effort; the page
    itself loads no data server-side).
-3. **Exxen / NBA TV / Smart Spor** — Exxen's aggregator pages are live but
-   show an empty 30-day window (re-verified 2026-09-09 for `exxen` and
-   `exxen-sports-1`); exxen.com itself is login-walled. NBA TV coverage was
-   not re-verified — re-check at season start (October) on
-   sporekrani/macrehberi. Smart Spor 1's aggregator page is live but empty
-   (re-verified 2026-09-09); smart-spor-2 not re-verified — "defunct" is an
-   inference, not a verified shutdown.  Would need a licensed/aggregated data
-   source (e.g. a commercial EPG provider) rather than a scraper.
+3. **NBA TV / Smart Spor** — NBA TV coverage was not re-verified — re-check
+   at season start (October) on sporekrani/macrehberi. Smart Spor 1's
+   aggregator page is live but empty (re-verified 2026-09-09); smart-spor-2
+   not re-verified — "defunct" is an inference, not a verified shutdown.
+   Would need a licensed/aggregated data source (e.g. a commercial EPG
+   provider) rather than a scraper.
+   **Exxen is now closed out as unscrapeable** (re-probed 2026-10-16): it
+   publishes no Exxen-branded linear channel and its own EPG service returns
+   only placeholders, so there is no public schedule to scrape — see the
+   Exxen row above.
 
 ## Notes for future work
 
@@ -163,7 +159,23 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
   baseline chains across its rolling multi-day list and is not used in CI.
   The same site (and its data mirror `yayinekrani.com`) keeps pages for every
   channel in this file, so it is worth re-probing when a channel's status
-  changes. (`macrehberi.com` parallels not re-verified 2026-09-09.)
+  changes. (`macrehberi.com` parallels re-checked 2026-10-16: its
+  `/kanal/exxen` page carries an empty `common.events` list, matching
+  sporekrani.)
+- **Exxen's own EPG backend is a stub** (verified 2026-10-16).  Its
+  daily-guide UI calls the Erstream service named by
+  `servicesConfig.contentConfig.epg` (`global.epg.erstream` →
+  `https://global-epg-dev.erstream.com`, `apiKey: null`); the client's requests
+  are `GET /Epg/GetChannelEpg?key=&cmsId=…&date=…&timezone=…&lang=…`,
+  `GET /Epg/GetChannelEpgWithRange?includeEnding=true&fillResponse=true&…` and
+  `POST /Epg/GetAllChannelsCurrentShow?cmsId=…`.  Every one returns only
+  hourly placeholders (`name:"Program bilgisi bulunmuyor."`, `statusCode:300`)
+  for any channel, on both the `-dev` host and the prod mirror
+  `global-epg-prod.erstream.com`; `GET /Channel/GetChannels` is HTTP 204 and no
+  service key is populated (`apiKey: null`).  A logged-in Exxen session would
+  not help — the service holds no EPG data at all.  Only TV8 / TV8,5 are live
+  channels on the platform, and both are already covered by `tvplus`
+  (`TV8.tr`, `TV85.tr`).
 - **Tivibu Spor 2-4 were idle in the fixtures** (2026-09-09: repeating "Tivibu
   Spor Tanıtım" promo loop, 5 slots each); Tivibu Spor 1 carries the real
   content in the fixtures.  The `tivibu` provider emits the promo slots as-is

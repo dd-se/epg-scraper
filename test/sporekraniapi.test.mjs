@@ -460,6 +460,57 @@ describe('sporekraniapi CLI integration', () => {
     expect(existsSync(out)).toBe(false);
   });
 
+  it('--keep-channels writes every channel with its icon even when no events exist', async () => {
+    // The directory covers everything except tabii Spor 8, which only has its
+    // pinned override — mirroring the live source.
+    const directory = JSON.stringify({
+      data: CHANNELS.filter((channel) => channel.id !== 'TABIISPOR8.tr').map((channel, index) => ({
+        id: index + 1,
+        name: channel.name,
+        icon: `https://img.sporekrani.com/channels/${channel.id.toLowerCase()}.png`,
+      })),
+    });
+    globalThis.fetch = async (url) =>
+      String(url).includes('/v3/channels') ? response(directory) : response('{"data":[]}');
+    const out = path.join(tmpDir, 'channels-only.xml.gz');
+    const exit = await runCli({
+      argv: [
+        '--provider', 'sporekraniapi',
+        '--date', '2026-11-09',
+        '--out', out,
+        '--delay-ms', '0',
+        '--keep-channels',
+        '--quiet',
+      ],
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      cwd: tmpDir,
+    });
+
+    expect(exit).toBe(0);
+    expect(existsSync(out)).toBe(true);
+    const xml = gunzipSync(readFileSync(out)).toString('utf8');
+    expect(xml).not.toContain('<programme ');
+    for (const channel of CHANNELS) {
+      const block = new RegExp(`<channel id="${channel.id}">([\\s\\S]*?)</channel>`).exec(xml);
+      expect(block, `missing ${channel.id}`).not.toBeNull();
+      expect(block[1]).toContain('<icon src="');
+    }
+  });
+
+  it('documents --keep-channels in --help', async () => {
+    const stdout = [];
+    const exit = await runCli({
+      argv: ['--help'],
+      stdout: { write: (line) => stdout.push(line) },
+      stderr: { write: () => {} },
+      cwd: tmpDir,
+    });
+
+    expect(exit).toBe(0);
+    expect(stdout.join('')).toContain('--keep-channels');
+  });
+
   it('rejects --browser before scraping because the source is a JSON API', async () => {
     globalThis.fetch = async () => {
       throw new Error('must not fetch');

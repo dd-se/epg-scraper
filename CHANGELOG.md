@@ -89,6 +89,13 @@ id needs updating. Swedish (`tvnu`) ids are unchanged.
   so a sports-profile provider that also curates general-interest channels
   cannot widen a sports feed. `npm run merge:sports` and the CI sports merge job
   both carry it.
+- `--keep-channels` writes a guide's channel list (and each channel's `<icon>`)
+  even when the run found no programmes, instead of refusing it as empty. It is
+  for a consumer that matches logos by channel id (an IPTV app) and still wants
+  them on a day when every curated feed is off the air. Only a guide with no
+  channels at all is refused now; `sporekraniapi`'s daily CI scrape carries the
+  flag, and the CI sports merge carries it too, so the published feeds keep the
+  tabii spor logos on a quiet day.
 - `foldChannelId()` and `isCanonicalChannelId()` in `src/slug.js`, plus the one
   folding seam in `createGuideResult()`, so provider ids, alias targets and
   `programme.channel` references always agree.

@@ -83,6 +83,11 @@ const HELP_TEXT = `Usage: epg-scraper [options]
   --alias-map <path>   JSON file { aliasId: canonicalId } mapping channel ids
                        that differ between providers onto one canonical id
                        (used by --compare and --merge)
+  --keep-channels      write the guide's channel list (with its <icon>s) even
+                       when the run found no programmes, so a consumer that
+                       matches logos by channel id still gets them on a quiet
+                       day; by default a programmes-less guide is refused as
+                       empty
   --dotenv <path>      env file with credentials (default: ./.env when it
                        exists; a named file must exist).  Variables already
                        set in the environment win, so CI secrets are never
@@ -211,6 +216,7 @@ export async function runCli({
         'alias-map': { type: 'string' },
         'exclusive-channels': { type: 'boolean', default: false },
         'sports-only': { type: 'boolean', default: false },
+        'keep-channels': { type: 'boolean', default: false },
         // `--dotenv`, not `--env-file`: Node parses `--env-file` (and
         // `--env-file-if-exists`) anywhere in argv — even after the script
         // path — so a flag with that name never reaches this parser.
@@ -442,6 +448,7 @@ export async function runCli({
     canonicalize,
     exclusiveChannels: values['exclusive-channels'] === true,
     sportsOnly: values['sports-only'] === true,
+    keepChannels: values['keep-channels'] === true,
     dates,
     cwd,
     gzip: values.gzip,
@@ -583,10 +590,16 @@ function guideOutputPath(context, defaultBase) {
     : path.join(context.cwd, defaultBase);
 }
 
-// A guide with no channels or no programmes is indistinguishable downstream
-// from a successful run, so every mode refuses to write one.
-function isEmptyGuide(result) {
-  return result.channels.length === 0 || result.programmes.length === 0;
+// A guide with no channels is indistinguishable downstream from a successful
+// run, so every mode refuses to write one.  A guide with channels but no
+// programmes is refused by default too — same silent-success shape, and a
+// provider that fails outright returns no channels either.  `--keep-channels`
+// opts out of that second rule for a consumer that still wants the channel
+// list and its `<icon>`s (e.g. an IPTV app on a day when every curated sports
+// feed is off the air).
+function isEmptyGuide(result, { keepChannels = false } = {}) {
+  if (result.channels.length === 0) return true;
+  return !keepChannels && result.programmes.length === 0;
 }
 
 // Write one guide and report it on the given stream.  `label` and `suffix`
@@ -630,7 +643,7 @@ async function writeComparisonSides(context, sides) {
   let wroteAny = false;
   for (const side of sides) {
     const { label, result, outputPath, generatorInfoName } = side;
-    if (isEmptyGuide(result)) {
+    if (isEmptyGuide(result, context)) {
       context.emit(`note: ${label} produced no data — skipping ${outputPath}`);
       continue;
     }
@@ -852,7 +865,7 @@ async function runSingleMode(context) {
       `from ${result.days} day page(s), ${result.failures} failed page(s)`
   );
 
-  if (isEmptyGuide(result)) {
+  if (isEmptyGuide(result, context)) {
     context.fail('nothing scraped — refusing to write an empty guide');
     return 1;
   }
@@ -1006,7 +1019,7 @@ async function runMergeMode(context) {
       (merged.shadowed > 0 ? `, ${merged.shadowed} programme(s) shadowed by an earlier provider's channel` : '')
   );
 
-  if (isEmptyGuide(merged)) {
+  if (isEmptyGuide(merged, context)) {
     context.fail(
       offline
         ? 'nothing merged — refusing to write an empty guide'

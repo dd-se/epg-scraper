@@ -260,7 +260,7 @@ jobs:
           fi
           IFS=,; from_list="${inputs[*]}"; unset IFS
           echo "Merging: $from_list"
-          node bin/epg-scraper.js --merge --sports-only --from "$from_list" --out epg_sports_merged_TR.xml.gz
+          node bin/epg-scraper.js --merge --sports-only --from "$from_list" --keep-channels --out epg_sports_merged_TR.xml.gz
 
       - name: List output
         if: always()

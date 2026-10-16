@@ -34,7 +34,14 @@ Options: `--provider`, `--out`, `--gzip/--no-gzip`, `--date YYYY-MM-DD`,
 `--max-channels N`, `--retries N`,
 `--timeout-ms N`, `--retry-delay-ms N`, `--browser`, `--stealth`, `--compare`,
 `--merge`, `--from <files>`, `--alias-map <path>`, `--dotenv <path>`,
-`--quiet`, `--list-providers`.
+`--keep-channels`, `--quiet`, `--list-providers`.
+
+By default every mode refuses to write a guide that has channels but no
+programmes — that "silently successful empty run" shape usually means a source
+broke.  Pass `--keep-channels` to opt out and still write the channel list
+(and each channel's `<icon>`), which an IPTV app that matches logos by channel
+id wants even on a day when every curated feed is off the air (e.g.
+`sporekraniapi`'s tabii spor simulcasts).
 
 Providers that need secrets read them from the environment. For local live
 runs the CLI also loads `./.env` (or the file named by `--dotenv`); real

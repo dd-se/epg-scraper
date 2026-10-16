@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { mergeResults } from '../src/merge.js';
 import { registerProvider } from '../src/registry.js';
@@ -526,5 +527,39 @@ describe('cli --merge', () => {
     });
     expect(exit).toBe(1);
     expect(stderr.join('')).toMatch(/nothing scraped/);
+  });
+
+  it('--keep-channels writes a channels-only guide when a provider has no programmes', async () => {
+    registerProvider({
+      id: 'merge-channels-only',
+      name: 'Merge Channels Only',
+      baseUrl: 'https://e',
+      scrape: async () => ({
+        channels: [{ id: 'ATV.tr', name: 'ATV', icon: 'https://e/atv.png' }],
+        programmes: [],
+        days: 1,
+        failures: 0,
+      }),
+    });
+    const out = path.join(tmpDir, 'channels-only.xml.gz');
+    const exit = await runCli({
+      argv: [
+        '--provider', 'merge-channels-only',
+        '--merge',
+        '--out', out,
+        '--keep-channels',
+        '--quiet',
+      ],
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      cwd: tmpDir,
+    });
+
+    expect(exit).toBe(0);
+    expect(existsSync(out)).toBe(true);
+    const xml = gunzipSync(readFileSync(out)).toString('utf8');
+    expect(xml).toContain('<channel id="ATV.tr">');
+    expect(xml).toContain('<icon src="https://e/atv.png"');
+    expect(xml).not.toContain('<programme ');
   });
 });

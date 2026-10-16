@@ -86,7 +86,10 @@ export const PROVIDER_CATALOG = [
     name: 'Spor Ekranı API (tabii spor 1-8 / S Sport Plus)',
     module: sporekraniapi,
     browserCompatible: false,
-    ci: { enabled: true, args: [], order: 65 },
+    // --keep-channels: the curated sports feeds are most days off the air, so
+    // a quiet window has no programmes; the guide must still ship its channel
+    // list (with logos) for a consumer that matches icons by channel id.
+    ci: { enabled: true, args: ['--keep-channels'], order: 65 },
     sports: { live: true },
   },
   {

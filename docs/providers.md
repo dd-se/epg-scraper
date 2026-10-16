@@ -111,7 +111,10 @@ a channel display name at `finishResult()`) — lives in
   payload alone leaves them logoless. The directory omits tabii spor 8 (no
   channel record at all), so that one id falls back to
   `CHANNEL_ICON_OVERRIDES` in `sporekrani.js` (tabii's own CDN). A failed
-  directory costs the idle channels their icon, not the schedule.
+  directory costs the idle channels their icon, not the schedule. The daily CI
+  scrape passes `--keep-channels`, so a window whose only events are elsewhere
+  still writes the curated channel list (with logos) for the published sports
+  merge instead of being refused as an empty guide.
 - `sporekrani.js` — retained Spor Ekranı SSR benchmark baseline: tabii spor
   1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`. Quasar SSR
   embeds a rolling ~30-day list in `window.__INITIAL_STATE__`; one fetch per

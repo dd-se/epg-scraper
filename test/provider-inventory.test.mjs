@@ -78,7 +78,7 @@ describe('provider operational inventory', () => {
       { provider: 'mynet', args: '--days-forward 2 --delay-ms 500' },
       { provider: 'tvplus', args: '--days-forward 2' },
       { provider: 'digiturkburada', args: '--days-forward 2' },
-      { provider: 'sporekraniapi', args: '' },
+      { provider: 'sporekraniapi', args: '--keep-channels' },
       { provider: 'tivibu', args: '' },
       { provider: 'tvnu', args: '--days-forward 2 --delay-ms 400' },
       { provider: 'idmantv', args: '' },

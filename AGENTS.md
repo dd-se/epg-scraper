@@ -160,7 +160,10 @@ Development tooling includes a static file server in
     behavior behind that seam. All four modes share the write plumbing
     (`guideOutputPath()` resolves `--out` or the mode's default base name,
     `xmltvExtension()` applies `--gzip`, `isEmptyGuide()` is the shared
-    refusal, and `writeGuide()` performs the single `writeXmltv()` call plus
+    refusal — a guide with no channels is always refused, and one with
+    channels but no programmes is refused unless `--keep-channels` keeps the
+    channel list and its `<icon>`s for an IPTV consumer — and `writeGuide()`
+    performs the single `writeXmltv()` call plus
     its log line), and `providerInfo()` memoizes each provider's
     country/language/time zone. `playlistOutputPath()` is the playlist-mode
     counterpart of `xmltvExtension()`: `writeM3U()` takes its path verbatim,
