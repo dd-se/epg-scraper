@@ -1,0 +1,83 @@
+name: debug-provider
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Provider id to scrape (e.g. idmantv, hurriyet, mynet)'
+        required: true
+        default: idmantv
+        type: string
+      args:
+        description: 'Extra CLI args (e.g. --date 2026-10-20 --days-forward 0)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Scrape provider
+        env:
+          PROVIDER: ${{ github.event.inputs.provider }}
+          ARGS: ${{ github.event.inputs.args }}
+          SPOREKRANI_API_APP_ID: ${{ secrets.SPOREKRANI_API_APP_ID }}
+          SPOREKRANI_API_KEY: ${{ secrets.SPOREKRANI_API_KEY }}
+        run: |
+          set -euo pipefail
+          echo "Provider: $PROVIDER"
+          echo "Args: $ARGS"
+          # shellcheck disable=SC2086
+          node bin/epg-scraper.js --provider "$PROVIDER" \
+            --retries 4 --timeout-ms 30000 --retry-delay-ms 1000 \
+            $ARGS
+
+      - name: List output
+        if: always()
+        run: ls -la epg_*.xml* 2>/dev/null || echo "::warning::No guide files produced"
+
+      - name: Validate guide
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(epg_*.xml*)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::warning::No guide to validate"
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            size=$(stat -c%s "$f")
+            echo "$f: ${size} bytes"
+            case "$f" in
+              *.gz)
+                gzip -t "$f" && echo "  gzip OK"
+                gzip -dc "$f" | head -c 512
+                ;;
+              *)
+                head -c 512 "$f"
+                ;;
+            esac
+            echo
+          done
+
+      - name: Upload guide artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: debug-${{ github.event.inputs.provider }}
+          path: epg_*.xml*
+          retention-days: 7
+          if-no-files-found: warn
