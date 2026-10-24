@@ -26,15 +26,16 @@
 # - Each provider scrape is retried (3 attempts with backoff) and runs with
 #   hardened transport flags (--retries/--timeout-ms/--retry-delay-ms).
 # - One provider failing never blocks the others: the matrix uses
-#   fail-fast: false, per-step `if: always()` keeps listings/uploads running,
-#   and artifact upload uses `if-no-files-found: warn`.
+#   fail-fast: false, the scrape job runs with `continue-on-error: true` so a
+#   failed provider keeps the run green while still being recorded as failed,
+#   per-step `if: always()` keeps listings/uploads running, and artifact upload
+#   uses `if-no-files-found: warn`. The trailing `notify` job fires on
+#   `failure()` (which includes continue-on-error failures) and lists which
+#   providers failed, so you get one ntfy alert per run that had a failure.
 # - The sports-merge and publish jobs run with `if: !cancelled()` so they
 #   still run when some providers failed — they merge/publish whatever
 #   guides exist. Yesterday's release assets stay live for providers that
 #   failed today (replacesArtifacts only replaces uploaded files).
-# - Any failed run POSTs one alert to an ntfy topic from the trailing `notify`
-#   job (priority high); a green run sends nothing. See the README's
-#   "Failure alerts" section and the `NTFY_TOPIC` secret.
 
 name: epg-scraper
 
@@ -79,6 +80,13 @@ jobs:
     needs: inventory
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # A single provider failing must not turn the whole run red or block the
+    # merge/publish jobs.  `continue-on-error` keeps the run green while still
+    # recording the job as failed, which is what makes the trailing `notify`
+    # job's `failure()` check fire (it lists the failed provider(s)) and send
+    # the ntfy alert.  Yesterday's release assets stay live for any provider
+    # that failed today.
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
@@ -121,8 +129,9 @@ jobs:
               ${{ matrix.args }}; then
               code=0
               break
+            else
+              code=$?
             fi
-            code=$?
             echo "::warning::Scrape attempt $attempt/$max_attempts for ${{ matrix.provider }} failed (exit $code)"
             if [ "$attempt" -lt "$max_attempts" ]; then
               sleep $((attempt * 20))

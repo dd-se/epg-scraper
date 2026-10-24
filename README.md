@@ -1187,6 +1187,14 @@ a `Click` header that deep-links straight to the failed run, and lists which
 jobs failed or were skipped. Subscribe in the ntfy app or web UI to the topic
 named in the `NTFY_TOPIC` secret.
 
+A single provider failing does **not** turn the run red: the `scrape` matrix
+job uses `continue-on-error: true`, so the run stays green and the
+merge/publish jobs still ship every guide that survived. The failed provider's
+job is still recorded as failed, and GitHub's `failure()` includes
+continue-on-error failures, so `notify` still fires and the ntfy message names
+the provider that failed. Yesterday's release assets stay live for any
+provider that failed today.
+
 Two deliberate choices:
 
 - **Priority `high`, not `urgent`.** A flapping source needs attention today,
