@@ -151,10 +151,6 @@ describe('digiturkburada scrape (stubbed POST)', () => {
 
     expect(result.failures).toBe(0);
     expect(result.channels.map((c) => c.id)).toEqual([
-      'BEINSPORTS1.tr',
-      'BEINSPORTS2.tr',
-      'BEINSPORTS3.tr',
-      'BEINSPORTS4.tr',
       'BEINSPORTS5.tr',
       'BEINSPORTSMAX1.tr',
       'BEINSPORTSMAX2.tr',
@@ -163,9 +159,6 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     // Every channel carries its page-header logo — absolute, query-free,
     // single URLs (never pipe-joined).
     const icons = Object.fromEntries(result.channels.map((c) => [c.id, c.icon]));
-    expect(icons['BEINSPORTS1.tr']).toBe(
-      'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-1-buyuk.png'
-    );
     expect(icons['BEINSPORTS5.tr']).toBe(
       'https://www.digiturkburada.com.tr/kanal3/kanal-buyuk/bein-sports-hd-5-buyuk.png'
     );
@@ -176,8 +169,8 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       expect(icon).toMatch(/^https?:\/\/[^\s|?#]+$/);
       expect(icon).not.toContain('|');
     }
-    expect(result.programmes).toHaveLength(16 + 19 + 20 + 20 + 13 + 11 + 11 + 15);
-    expect(bodies).toHaveLength(8);
+    expect(result.programmes).toHaveLength(13 + 11 + 11 + 15);
+    expect(bodies).toHaveLength(4);
     expect(bodies.every((b) => b === 'yayin=8.09.2026')).toBe(true);
     const ids = new Set(result.channels.map((c) => c.id));
     expect(result.programmes.every((p) => ids.has(p.channel))).toBe(true);
@@ -192,9 +185,10 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       politenessDelayMs: 0,
       maxChannels: 1,
     });
-    // maxChannels: 1 keeps beIN Sports 1; the stub serves the beIN 5
-    // fixture for every URL, so its slots land on beIN.SPORTS.1.tr.
-    const ch5 = result.programmes.filter((p) => p.channel === 'BEINSPORTS1.tr');
+    // maxChannels: 1 keeps beIN Sports 5 (beIN 1-4 are excluded at scrape
+    // time); the stub serves the beIN 5 fixture for every URL, so its slots
+    // land on BEINSPORTS5.tr.
+    const ch5 = result.programmes.filter((p) => p.channel === 'BEINSPORTS5.tr');
     expect(ch5[0].start).toBe('2026-09-08T00:00:00+03:00');
     expect(ch5[0].stop).toBe('2026-09-08T01:47:00+03:00'); // next slot
     expect(ch5[ch5.length - 1].start).toBe('2026-09-08T20:19:00+03:00');
@@ -241,7 +235,7 @@ describe('digiturkburada scrape (stubbed POST)', () => {
       fetchOptions: {},
     });
     expect(result.programmes).toEqual([]);
-    expect(result.failures).toBe(8);
+    expect(result.failures).toBe(4);
   });
 
   it('returns programmes sorted by channel then start', async () => {
@@ -258,8 +252,8 @@ describe('digiturkburada scrape (stubbed POST)', () => {
     );
     expect(keys).toEqual(sorted);
     // Ids are uppercase, so codepoint order is plain alphabetical order: the
-    // BEINSPORTS* rows sort before GSTV.tr.
-    expect(result.programmes[0].channel).toBe('BEINSPORTS1.tr');
+    // BEINSPORTS* rows sort before GSTV.tr (beIN 1-4 are excluded).
+    expect(result.programmes[0].channel).toBe('BEINSPORTS5.tr');
     // Within one channel, starts ascend.
     const gs = result.programmes.filter((p) => p.channel === 'GSTV.tr');
     expect(gs.map((p) => p.start)).toEqual([...gs.map((p) => p.start)].sort());

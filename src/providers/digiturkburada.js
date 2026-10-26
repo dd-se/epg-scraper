@@ -1,4 +1,4 @@
-// DigiturkBurada provider — beIN Sports 1-5, beIN Sports Max 1-2, GS TV.
+// DigiturkBurada provider — beIN Sports 5, beIN Sports Max 1-2, GS TV.
 //
 // Source: https://www.digiturkburada.com.tr/{page}.html
 // (e.g. https://www.digiturkburada.com.tr/bein-sports-5-hd-yayin-akisi-154.html)
@@ -34,11 +34,11 @@ import {
 export const BASE_URL = 'https://www.digiturkburada.com.tr';
 
 // Curated channel table: display name -> page slug + XMLTV id (see src/slug.js
-// for the format).
-// beIN Sports 1-4 duplicate the beinsports provider's feeds on purpose:
-// this source keeps full-day schedules (and its own logos) while
-// beinsports.com.tr prunes already-aired slots intraday, so either side can
-// stand in for the other.
+// for the format). beIN Sports 1-4 are intentionally omitted at scrape time —
+// they are served by the beinsports provider (whose feed carries the live
+// match times). DigiturkBurada contributes only the channels beinsports does
+// not serve; the curated ids still exist for mapChannelId()/CHANNEL_ID_MAP
+// lookups but are never requested by scrape().
 export const CHANNELS = [
   {
     name: 'beIN Sports 1',
@@ -211,7 +211,17 @@ export async function scrape({
   };
   const activeDates = dates && dates.length > 0 ? dates : defaultDates();
 
-  const channels = CHANNELS.slice(0, maxChannels);
+  // beIN Sports 1-4 are owned by the beinsports provider — never request them
+  // here, even if a caller passes dates for them.
+  const EXCLUDED_CHANNEL_IDS = new Set([
+    'BEINSPORTS1.tr',
+    'BEINSPORTS2.tr',
+    'BEINSPORTS3.tr',
+    'BEINSPORTS4.tr',
+  ]);
+  const channels = CHANNELS
+    .filter((c) => !EXCLUDED_CHANNEL_IDS.has(c.id))
+    .slice(0, maxChannels);
   const channelEntries = channels.map((c) => ({ id: c.id, name: c.name }));
   const programmes = [];
   let failures = 0;

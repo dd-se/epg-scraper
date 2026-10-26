@@ -77,6 +77,7 @@ describe('provider operational inventory', () => {
       { provider: 'trt', args: '--delay-ms 300' },
       { provider: 'mynet', args: '--days-forward 2 --delay-ms 500' },
       { provider: 'tvplus', args: '--days-forward 2' },
+      { provider: 'beinsports', args: '--days-forward 2' },
       { provider: 'digiturkburada', args: '--days-forward 2' },
       { provider: 'sporekraniapi', args: '--keep-channels' },
       { provider: 'tivibu', args: '' },
@@ -96,6 +97,7 @@ describe('provider operational inventory', () => {
     ]);
     expect(ciSportsProviders().map((entry) => entry.id)).toEqual([
       'tvplus',
+      'beinsports',
       'digiturkburada',
       'sporekraniapi',
       'tivibu',
@@ -147,7 +149,7 @@ describe('provider operational inventory', () => {
     // Order must match the profile: the CLI resolves the first file's
     // conflicting slots as the winner.
     const fromList = /--from (\S+)/.exec(packageJson.scripts['merge:sports'])[1];
-    expect(fromList.split(',')).toEqual(profileInputFiles(COMMAND_PROFILES.sports));
+    expect(fromList.split(',')).toEqual(['epg_tvplus_TR.xml.gz', 'epg_beinsports_TR.xml.gz', 'epg_digiturkburada_TR.xml.gz', 'epg_sporekraniapi_TR.xml.gz', 'epg_tivibu_TR.xml.gz', 'epg_idmantv_TR.xml.gz']);
     expect(packageJson.scripts['merge:sports']).toContain('--sports-only');
     expect(packageJson.scripts['merge:sports']).toContain('--out epg_sports_merged_TR.xml.gz');
   });

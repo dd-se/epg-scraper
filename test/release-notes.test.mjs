@@ -31,6 +31,8 @@ describe('release notes', () => {
     await write('epg_hurriyet_TR.xml.gz', 'ATV.tr');
     await write('epg_tvplus_TR.xml.gz', 'TRTSPOR.tr');
     await write('epg_idmantv_TR.xml.gz', 'IDMAN.tr');
+    await write('epg_sporekraniapi_TR.xml.gz', 'SPOR1.tr');
+    await write('epg_tivibu_TR.xml.gz', 'TIVIBU1.tr');
     await write('epg_hurriyet_trt_merged_TR.xml.gz', 'TRTHABER.tr');
     await write('epg_sports_merged_TR.xml.gz', 'TRTSPOR.tr');
 
@@ -48,7 +50,7 @@ describe('release notes', () => {
     );
     expect(body).toContain('so `epg_trt_TR.xml.gz`\'s channels are not interleaved with the rest');
     expect(body).toContain(
-      'Union of `epg_tvplus_TR.xml.gz` + `epg_digiturkburada_TR.xml.gz` + `epg_sporekraniapi_TR.xml.gz` + `epg_tivibu_TR.xml.gz` + `epg_idmantv_TR.xml.gz`'
+      'Union of `epg_tvplus_TR.xml.gz` + `epg_beinsports_TR.xml.gz` + `epg_digiturkburada_TR.xml.gz` + `epg_sporekraniapi_TR.xml.gz` + `epg_tivibu_TR.xml.gz` + `epg_idmantv_TR.xml.gz`'
     );
 
     // The sports merge must not claim the trt+hurriyet merge as an input, and a
