@@ -1,0 +1,186 @@
+name: Publish HaGeZi Pro hosts list
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-hagezi-hosts.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-hagezi-hosts
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch HaGeZi Multi PRO
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            -o dist/pro.txt \
+            "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/dnsmasq/pro.txt"
+
+          test -s dist/pro.txt
+          grep -q "^# Title: HaGeZi's Multi PRO" dist/pro.txt
+          grep -q '^# Number of entries: ' dist/pro.txt
+
+      - name: Convert to dnsmasq addn-hosts format
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+
+          # local=/domain/  ->  0.0.0.0 domain
+          sed -n 's/\r$//; /^local=\//{s|^local=/||; s|/$||; s|^|0.0.0.0 |; p;}' \
+            dist/pro.txt > dist/hosts.raw
+
+          # Reject anything that is not a valid hosts line or DNS name before
+          # publishing. Labels are capped at 63 octets, the whole name at 253.
+          awk '
+            NF != 2 {
+              printf "invalid field count: %s\n", $0 > "/dev/stderr"; bad = 1; next
+            }
+            $1 != "0.0.0.0" {
+              printf "invalid address: %s\n", $0 > "/dev/stderr"; bad = 1; next
+            }
+            length($2) > 253 {
+              printf "domain too long: %s\n", $2 > "/dev/stderr"; bad = 1; next
+            }
+            $2 !~ /^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/ {
+              printf "invalid domain: %s\n", $2 > "/dev/stderr"; bad = 1; next
+            }
+            {
+              n = split($2, label, ".")
+              for (i = 1; i <= n; i++) {
+                if (label[i] == "" || length(label[i]) > 63) {
+                  printf "invalid label: %s\n", $2 > "/dev/stderr"; bad = 1
+                }
+              }
+              print
+            }
+            END { exit bad }
+          ' dist/hosts.raw > dist/hosts.valid
+
+          sort -u dist/hosts.valid > dist/hagezi-pro-hosts.txt
+          rm -f dist/hosts.raw dist/hosts.valid
+
+          hosts_entries=$(wc -l < dist/hagezi-pro-hosts.txt)
+
+          # A truncated download or a source format change must fail loudly.
+          test "$hosts_entries" -ge 200000
+          awk 'NF != 2 || $1 != "0.0.0.0" { exit 1 }' dist/hagezi-pro-hosts.txt
+
+          gzip -9 -n -c dist/hagezi-pro-hosts.txt > dist/hagezi-pro-hosts.txt.gz
+          gzip -t dist/hagezi-pro-hosts.txt.gz
+          test "$(gzip -dc dist/hagezi-pro-hosts.txt.gz | wc -l)" -eq "$hosts_entries"
+
+      - name: Report run summary
+        run: |
+          set -euo pipefail
+          source_version=$(sed -n 's/^# Version: //p' dist/pro.txt | head -n1)
+          source_modified=$(sed -n 's/^# Last modified: //p' dist/pro.txt | head -n1)
+          entries=$(wc -l < dist/hagezi-pro-hosts.txt)
+          sha256_gz=$(sha256sum dist/hagezi-pro-hosts.txt.gz | awk '{print $1}')
+
+          {
+            echo "### HaGeZi Multi PRO"
+            echo ""
+            echo "- Source version: \`$source_version\`"
+            echo "- Source last modified: $source_modified"
+            echo "- Domains: **$entries**"
+            echo "- Gzip SHA-256: \`$sha256_gz\`"
+            echo "- Asset: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/hagezi-pro-hosts.txt.gz"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Upload even when an earlier step failed: the publish job re-validates
+      # whatever arrives and refuses to touch the release if it is incomplete.
+      - name: Upload build artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: hagezi-pro-hosts
+          path: |
+            dist/hagezi-pro-hosts.txt
+            dist/hagezi-pro-hosts.txt.gz
+          retention-days: 7
+          if-no-files-found: warn
+
+  publish:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Download build artifact
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: hagezi-pro-hosts
+          path: dist
+
+      - name: List artifact
+        if: always()
+        run: ls -la dist/ 2>/dev/null || echo "::warning::No build artifact downloaded"
+
+      # Re-validate the downloaded copy before it can reach the release. A bad
+      # artifact must never overwrite yesterday's good list.
+      - name: Re-validate before publishing
+        run: |
+          set -euo pipefail
+          cd dist
+
+          for f in hagezi-pro-hosts.txt hagezi-pro-hosts.txt.gz; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f missing or empty — refusing to touch the release"
+              exit 1
+            fi
+          done
+
+          gzip -t hagezi-pro-hosts.txt.gz
+          gzip -dc hagezi-pro-hosts.txt.gz | cmp - hagezi-pro-hosts.txt
+
+          entries=$(wc -l < hagezi-pro-hosts.txt)
+          echo "entries: $entries"
+          if [ "$entries" -lt 200000 ]; then
+            echo "::error::only $entries entries — refusing to touch the release"
+            exit 1
+          fi
+
+          awk '
+            NF != 2 { exit 1 }
+            $1 != "0.0.0.0" { exit 1 }
+            length($2) > 253 { exit 1 }
+            $2 !~ /^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$/ { exit 1 }
+            {
+              n = split($2, label, ".")
+              for (i = 1; i <= n; i++)
+                if (label[i] == "" || length(label[i]) > 63) exit 1
+            }
+          ' hagezi-pro-hosts.txt
+
+      - name: Publish to "latest" release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest
+          commit: main
+          name: HaGeZi Multi PRO hosts (latest)
+          makeLatest: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
+          artifacts: "dist/hagezi-pro-hosts.txt,dist/hagezi-pro-hosts.txt.gz"
