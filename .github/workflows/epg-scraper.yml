@@ -27,11 +27,16 @@
 #   hardened transport flags (--retries/--timeout-ms/--retry-delay-ms).
 # - One provider failing never blocks the others: the matrix uses
 #   fail-fast: false, the scrape job runs with `continue-on-error: true` so a
-#   failed provider keeps the run green while still being recorded as failed,
-#   per-step `if: always()` keeps listings/uploads running, and artifact upload
-#   uses `if-no-files-found: warn`. The trailing `notify` job fires on
-#   `failure()` (which includes continue-on-error failures) and lists which
-#   providers failed, so you get one ntfy alert per run that had a failure.
+#   failed provider keeps the run green, per-step `if: always()` keeps
+#   listings/uploads running, and artifact upload uses
+#   `if-no-files-found: warn`.
+# - `continue-on-error` also hides that failure from `failure()` and from
+#   `needs.<job>.result` downstream, so a `notify` guarded by `failure()`
+#   stays skipped in exactly the case the alert exists for (run 41401157580:
+#   `scrape (idmantv)` failed, `notify` skipped).  A failed leg therefore
+#   uploads a `scrape-failed-<provider>` marker artifact; `notify` starts on
+#   `!cancelled()` and POSTs one ntfy alert when a marker exists or another
+#   stage failed, listing the providers that failed.
 # - The sports-merge and publish jobs run with `if: !cancelled()` so they
 #   still run when some providers failed — they merge/publish whatever
 #   guides exist. Yesterday's release assets stay live for providers that
@@ -81,11 +86,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # A single provider failing must not turn the whole run red or block the
-    # merge/publish jobs.  `continue-on-error` keeps the run green while still
-    # recording the job as failed, which is what makes the trailing `notify`
-    # job's `failure()` check fire (it lists the failed provider(s)) and send
-    # the ntfy alert.  Yesterday's release assets stay live for any provider
-    # that failed today.
+    # merge/publish jobs.  `continue-on-error` keeps the run green, but it
+    # also reports this job to downstream `needs`/`failure()` as successful,
+    # so the trailing `notify` job cannot see a failed leg that way.  The
+    # "Record/Upload failure marker" steps below are the signal it reads
+    # instead.  Yesterday's release assets stay live for any provider that
+    # failed today.
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -188,6 +194,28 @@ jobs:
             echo "::warning::No valid guide for ${{ matrix.provider }} — artifact upload will be empty"
           fi
           echo "Validated $valid/${#files[@]} file(s) for ${{ matrix.provider }}"
+
+      # Job-level `continue-on-error` is invisible inside the job: the scrape
+      # step's own `outcome` still says "failure".  Record that as a file and
+      # ship it as a `scrape-failed-<provider>` artifact, because a matrix
+      # job's outputs are not aggregate-safe (the last leg to finish would
+      # overwrite them) and `needs.scrape.result` reports "success" anyway.
+      - name: Record failure marker
+        if: always()
+        run: |
+          if [ "${{ steps.scrape.outcome }}" = "failure" ]; then
+            mkdir -p scrape-failure
+            echo "${{ matrix.provider }}" > "scrape-failure/${{ matrix.provider }}.txt"
+          fi
+
+      - name: Upload failure marker
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: scrape-failed-${{ matrix.provider }}
+          path: scrape-failure/
+          retention-days: 7
+          if-no-files-found: ignore
 
       # `warn` (not `error`) so a single dead source doesn't fail the
       # upload step itself — the matrix job already records the failure.
@@ -492,12 +520,17 @@ jobs:
   # fail is listed in `needs` so the alert covers every stage, not just the
   # scrapes.
   #
-  # `!cancelled() && failure()` is the pair that matters: the run is already
-  # red at this point, so `failure()` gates the message on a real failure,
-  # while the `cancelled()` check both (a) keeps a manually aborted run
-  # silent and (b) is a status function, so this job still *starts* even when
-  # an upstream job was skipped because an earlier one failed (a job whose
-  # needs were skipped is skipped itself otherwise).
+  # Why not `failure()`: a failed `scrape` leg runs under job-level
+  # `continue-on-error`, which reports that job to `needs` — and therefore to
+  # `failure()` — as "success".  A `notify` guarded by `failure()` is skipped
+  # in exactly the case the alert exists for (run 41401157580: `scrape
+  # (idmantv)` failed, `notify` skipped, run green).  So this job starts on
+  # `!cancelled()` instead — which still keeps a manually aborted run silent,
+  # and is a status function, so it *starts* even when an upstream job was
+  # skipped because an earlier one failed — and the alert step decides from
+  # two explicit signals: the `scrape-failed-*` markers the scrape legs
+  # upload, and `needs.<job>.result` for the stages that do not use
+  # `continue-on-error`.  A run where neither reports a failure exits quietly.
   #
   # Alert level is `high`, not `urgent`: a provider that keeps 5xx-ing needs
   # attention today, but it is not a wake-me-up emergency — the run still
@@ -515,10 +548,20 @@ jobs:
   #                 a repo *variable* if you self-host instead.
   notify:
     needs: [inventory, scrape, epg-sports-merged, epg-trt-merged, publish]
-    if: ${{ !cancelled() && failure() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # No markers is the normal green-run case, so this step must not fail
+      # the job — `download-artifact` errors when nothing matches the pattern.
+      - name: Download scrape failure markers
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          pattern: scrape-failed-*
+          merge-multiple: true
+          path: scrape-failures
+
       - name: Send failure alert to ntfy
         env:
           NTFY_SERVER: https://ntfy.sh
@@ -526,24 +569,38 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          # A missing secret must fail loudly here rather than POSTing to a
-          # guessed topic (or to bare "/"), which would silently drop alerts.
-          if [ -z "$NTFY_TOPIC" ]; then
-            echo "::error::NTFY_TOPIC secret is not set — cannot send the alert. Add it in Settings → Secrets and variables → Actions."
-            exit 1
+          # Providers whose matrix leg failed.  One marker artifact per failed
+          # leg — the only signal that survives `continue-on-error`.
+          failed_providers=''
+          if [ -d scrape-failures ]; then
+            failed_providers=$(cd scrape-failures && ls -1 | sed 's/\.txt$//' | sort)
           fi
           # Needs results are our own workflow data (never scraped input), so
           # the JSON travels through the environment instead of being built
           # into a command line. Node (not jq) keeps this to the one tool the
-          # workflows already use.
-          failed=$(NEEDS_JSON='${{ toJSON(needs) }}' node -e '
+          # workflows already use.  `scrape` appears here only when the whole
+          # matrix job failed; a single failed leg is in the markers above.
+          failed_jobs=$(NEEDS_JSON='${{ toJSON(needs) }}' node -e '
             const needs = JSON.parse(process.env.NEEDS_JSON || "{}");
             const rows = Object.entries(needs)
               .filter(([, job]) => job.result !== "success")
               .map(([name, job]) => `  - ${name}: ${job.result}`);
             process.stdout.write(rows.join("\n"));
           ')
-          [ -n "$failed" ] || failed='  - <none reported>'
+          # Green run: every stage successful, no failed providers.
+          if [ -z "$failed_providers" ] && [ -z "$failed_jobs" ]; then
+            echo "No failures — no alert."
+            exit 0
+          fi
+          # A missing secret must fail loudly here rather than POSTing to a
+          # guessed topic (or to bare "/"), which would silently drop alerts.
+          if [ -z "${NTFY_TOPIC:-}" ]; then
+            echo "::error::NTFY_TOPIC secret is not set — cannot send the alert. Add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          [ -n "$failed_providers" ] || failed_providers='<none>'
+          providers=$(printf '%s\n' "$failed_providers" | sed 's/^/  - /')
+          [ -n "$failed_jobs" ] || failed_jobs='  - <none reported>'
           body=$(printf '%s\n' \
             "$GITHUB_WORKFLOW failed" \
             "" \
@@ -551,8 +608,11 @@ jobs:
             "Branch:  $GITHUB_REF_NAME @ ${GITHUB_SHA::7}" \
             "Trigger: $GITHUB_EVENT_NAME (by $GITHUB_ACTOR)" \
             "" \
+            "Failed providers (scrape):" \
+            "$providers" \
+            "" \
             "Failed / skipped jobs:" \
-            "$failed")
+            "$failed_jobs")
           echo "::group::ntfy alert"
           printf '%s\n' "$body"
           echo "::endgroup::"

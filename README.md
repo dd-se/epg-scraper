@@ -1179,21 +1179,30 @@ and a run with zero valid guides leaves the previous release untouched.
 
 ### Failure alerts (ntfy)
 
-Both workflows end in a `notify` job that runs **only when the run failed**
-(`if: ${{ !cancelled() && failure() }}` — so a green run stays silent and a
-manually aborted run is never announced). It POSTs one message per failed run
-to an ntfy topic at priority `high` (4), tagged `warning,rotating_light`, with
-a `Click` header that deep-links straight to the failed run, and lists which
-jobs failed or were skipped. Subscribe in the ntfy app or web UI to the topic
-named in the `NTFY_TOPIC` secret.
+Both workflows end in a `notify` job that stays silent on a green run and on
+a manually aborted one. It POSTs one message per failed run to an ntfy topic
+at priority `high` (4), tagged `warning,rotating_light`, with a `Click`
+header that deep-links straight to the failed run, and lists which jobs failed
+or were skipped. Subscribe in the ntfy app or web UI to the topic named in the
+`NTFY_TOPIC` secret.
+
+The `m3u-scraper` workflow gates that job with
+`if: ${{ !cancelled() && failure() }}`. The guide scrape cannot: a failed
+provider runs under job-level `continue-on-error`, which reports the job to
+`needs` — and therefore to `failure()` — as successful, so a `failure()`-gated
+`notify` stays skipped in exactly the case the alert exists for (run
+41401157580: `scrape (idmantv)` failed, `notify` skipped). Its `notify` job
+therefore starts on `if: ${{ !cancelled() }}` and alerts only when a
+`scrape-failed-<provider>` marker artifact exists or another stage reports a
+non-success result; with neither, it exits without sending anything.
 
 A single provider failing does **not** turn the run red: the `scrape` matrix
 job uses `continue-on-error: true`, so the run stays green and the
-merge/publish jobs still ship every guide that survived. The failed provider's
-job is still recorded as failed, and GitHub's `failure()` includes
-continue-on-error failures, so `notify` still fires and the ntfy message names
-the provider that failed. Yesterday's release assets stay live for any
-provider that failed today.
+merge/publish jobs still ship every guide that survived. The failed leg is
+still recorded in the run's job list, and it uploads a
+`scrape-failed-<provider>` marker artifact, so `notify` fires and the ntfy
+message names the provider that failed. Yesterday's release assets stay live
+for any provider that failed today.
 
 Two deliberate choices:
 
