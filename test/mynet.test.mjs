@@ -212,6 +212,21 @@ describe('mynet scrape (stubbed)', () => {
     expect(result.programmes.every((p) => ids.has(p.channel))).toBe(true);
   });
 
+  it('warns when some requested dates fall outside the 3-day window', async () => {
+    const channels = parseMainPage(mainHtml).slice(0, 1);
+    const fetchMap = buildFetchMap(channels, ['bugun']);
+    const logs = [];
+    const result = await scrape({
+      dates: ['2026-09-08', '2026-09-11'],
+      fetchImpl: stubFetch(fetchMap),
+      log: (line) => logs.push(line),
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    expect(result.days).toBe(1);
+    expect(logs.some((l) => l.includes('ignoring requested dates outside the 3-day window: 2026-09-11'))).toBe(true);
+  });
+
   it('propagates scraped channel logos into the guide', async () => {
     const channels = parseMainPage(mainHtml).slice(0, 3);
     expect(channels.every((c) => c.icon)).toBe(true);

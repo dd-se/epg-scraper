@@ -81,7 +81,9 @@ export function channelIdMatchKey(id) {
  */
 export function isCanonicalChannelId(id) {
   if (typeof id !== 'string' || id === '') return false;
-  if (id.endsWith(SE_SUFFIX)) return true;
+  // Swedish ids keep their upstream spelling, but an empty base (`.se`) is
+  // not a channel id — it would produce a `<channel id=".se">` with no name.
+  if (id.endsWith(SE_SUFFIX)) return id.length > SE_SUFFIX.length;
   return CANONICAL_TR_RE.test(id) && foldChannelId(id) === id;
 }
 

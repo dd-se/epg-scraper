@@ -62,7 +62,10 @@ export function decodeEntities(input) {
         return raw;
       }
     }
-    const named = NAMED_ENTITIES[body];
-    return named != null ? named : raw;
+    // Own properties only: `&constructor;`, `&toString;` and friends would
+    // otherwise resolve to inherited Object.prototype methods and stringify
+    // into scraped titles (the decoder's contract is to leave unknown
+    // entities intact).
+    return Object.hasOwn(NAMED_ENTITIES, body) ? NAMED_ENTITIES[body] : raw;
   });
 }

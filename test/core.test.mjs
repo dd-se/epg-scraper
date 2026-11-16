@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { decodeEntities } from '../src/entities.js';
-import { channelIdFromName } from '../src/slug.js';
+import { channelIdFromName, isCanonicalChannelId } from '../src/slug.js';
 import { toXmltvTimestamp, generateXmltv } from '../src/xmltv.js';
 import { buildDateRange, registerProvider, getProvider, listProviders } from '../src/registry.js';
 import { createGuideResult, validateGuideResult, normalizeLanguageTag } from '../src/model.js';
@@ -26,6 +26,14 @@ describe('entities', () => {
     expect(decodeEntities('&nope;')).toBe('&nope;');
   });
 
+  it('does not decode inherited Object.prototype keys as entities', () => {
+    // A plain-object lookup used to stringify `Object.prototype.constructor`
+    // into a scraped title for `&constructor;` and friends.
+    expect(decodeEntities('&constructor;')).toBe('&constructor;');
+    expect(decodeEntities('&toString;')).toBe('&toString;');
+    expect(decodeEntities('&hasOwnProperty;')).toBe('&hasOwnProperty;');
+  });
+
   it('handles null/undefined and non-string input', () => {
     expect(decodeEntities(null)).toBe('');
     expect(decodeEntities(undefined)).toBe('');
@@ -43,6 +51,11 @@ describe('slug', () => {
 
   it('never returns an empty id', () => {
     expect(channelIdFromName('///')).toBe('UNKNOWN.tr');
+  });
+
+  it('refuses an empty Swedish id', () => {
+    expect(isCanonicalChannelId('.se')).toBe(false);
+    expect(isCanonicalChannelId('[SVT1HD].SVT1.HD.se')).toBe(true);
   });
 });
 
@@ -458,6 +471,22 @@ describe('guide time semantics', () => {
     expect(wallToInstant(2026, 2, 30, 0)).toBeUndefined();
     expect(wallToInstant(2026, 9, 7, 1441)).toBeUndefined();
     expect(wallToInstant(2026, 9, 7, -1)).toBeUndefined();
+  });
+
+  it('normalizes a colon-less source offset to a canonical guide instant', () => {
+    // wallToInstant() used to stamp `+0300`, which parseGuideInstant() rejects
+    // — silently dropping every programme at the createGuideResult() seam.
+    const start = wallToInstant(2026, 9, 7, 0, '+0300');
+    const stop = wallToInstant(2026, 9, 7, 60, '+0300');
+    expect(start).toBe('2026-09-07T00:00:00+03:00');
+    expect(parseGuideInstant(start)?.epochMs).toBeTypeOf('number');
+    const result = createGuideResult({
+      channels: [{ id: 'KANALD.tr', name: 'Kanal D' }],
+      programmes: [{ channel: 'KANALD.tr', start, stop, title: 'X' }],
+      days: 1,
+      failures: 0,
+    });
+    expect(result.programmes).toHaveLength(1);
   });
 
   it('requires canonical offset-bearing guide instants', () => {

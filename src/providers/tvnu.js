@@ -404,8 +404,12 @@ export async function scrape({
   const requested = [...new Set(activeDates)].sort();
   const requestedSet = new Set(requested);
 
-  const before = previousDate(requested[0]);
-  const fetchDates = before ? [before, ...requested] : requested;
+  // A tv.nu day page covers 06:00 -> 06:00, so *each* requested date needs its
+  // own predecessor to supply that date's 00:00-06:00 slots. Only fetching the
+  // predecessor of the first date loses those slots for a non-contiguous
+  // window (a library caller handing us dates [D, D+2]).
+  const predecessors = requested.map((date) => previousDate(date)).filter(Boolean);
+  const fetchDates = [...new Set([...predecessors, ...requested])].sort();
 
   const channels = CHANNELS.slice(0, maxChannels);
   const programmes = [];

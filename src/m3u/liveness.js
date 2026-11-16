@@ -42,7 +42,29 @@ export function classifyProbeFailure(error) {
   return { retryable: false, reason: code ? code.toLowerCase() : 'network-error' };
 }
 
-async function probeOnce(url, options) {
+// Read only the leading bytes of a response body. Most stubs and smaller
+// responses expose only `text()`, so fall back to it; a real fetch body is
+// streamed and cancelled after the head to avoid buffering a whole playlist.
+async function readHead(response, limit) {
+  const body = response && response.body;
+  if (!body || typeof body.getReader !== 'function') return response.text();
+  const reader = body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (total < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(Buffer.from(value));
+      total += value.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return Buffer.concat(chunks).subarray(0, limit).toString('utf8');
+}
+
+async function probeOnce(url, options, { expectManifest = true } = {}) {
   const { fetchImpl, timeoutMs } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -62,14 +84,14 @@ async function probeOnce(url, options) {
       }
       return { ok: false, status, reason: `http-${status}`, retryable: false };
     }
-    const body = await response.text();
-    const head = body.slice(0, PROBE_BODY_BYTES);
-    if (!head.includes('#EXTM3U')) {
+    const manifest = await readHead(response, PROBE_BODY_BYTES);
+    const head = manifest.slice(0, PROBE_BODY_BYTES);
+    if (expectManifest && !head.includes('#EXTM3U')) {
       // A 2xx that is not a manifest: an HTML block page, a login wall, or a
       // soft error. Deterministic — never retried.
       return { ok: false, status, reason: 'not-a-manifest', retryable: false };
     }
-    return { ok: true, status, head, manifest: body };
+    return { ok: true, status, head, manifest };
   } catch (error) {
     const { retryable, reason } = classifyProbeFailure(error);
     return { ok: false, status: (error && error.status) || 0, reason, retryable };
@@ -175,7 +197,10 @@ async function followFirstSegment(probeResult, entry, probeOptions) {
   } catch {
     return { status: 'ok' };
   }
-  const segment = await probeOnce(resolved, probeOptions);
+  // A media segment is expected to be a 200 with *binary* data, not a
+  // playlist. Probe reachability only — requiring #EXTM3U here marked every
+  // valid .ts segment dead and dropped the whole channel at depth 2.
+  const segment = await probeOnce(resolved, probeOptions, { expectManifest: false });
   if (segment.ok) return { status: 'ok' };
   // NOTE: `verdict` carries `httpStatus`, not a second `status` key — a
   // duplicate `status` would silently overwrite the 'dead'/'ok'/'skipped'

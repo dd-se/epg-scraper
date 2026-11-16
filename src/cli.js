@@ -363,7 +363,15 @@ export async function runCli({
       return 1;
     }
 
-    return runM3uMode({ values, cwd, log, fail, delayMs, transportOptions });
+    // Playlist mode has its own lifecycle; wrap it like executeCliRun() wraps
+    // the guide modes so a bad output path or a validation throw is reported
+    // as `error: ...` + exit 1 instead of a raw Node stack trace.
+    try {
+      return await runM3uMode({ values, cwd, log, fail, delayMs, transportOptions });
+    } catch (error) {
+      fail(error && error.message ? error.message : String(error));
+      return 1;
+    }
   }
 
   // Optional channel-id alias map: canonicalize ids before compare/merge so
@@ -928,7 +936,7 @@ async function runHttpBrowserCompareMode(context) {
  * sports filter can say so and pass the file through.
  */
 function providerIdFromFilename(label) {
-  const match = /^epg_([a-z0-9-]+)_[A-Z]{2}\.xml(?:\.gz)?$/.exec(String(label));
+  const match = /^epg_([a-z0-9-]+)_[a-z]{2}\.xml(?:\.gz)?$/i.exec(String(label));
   return match ? match[1] : undefined;
 }
 

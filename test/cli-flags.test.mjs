@@ -130,6 +130,13 @@ describe('firstFlagViolation', () => {
     expect(firstFlagViolation(flags({ ...withPlaylist, merge: true }))).toBeNull();
   });
 
+  it('defers provider-count complaints to --m3u as well', () => {
+    // The CLI reports every exclusive flag in one line; the table must not
+    // fire first with "multiple providers require --merge/--compare".
+    expect(firstFlagViolation(flags({ m3u: 'm3u.config.json', provider: 'a,b' }))).toBeNull();
+    expect(firstFlagViolation(flags({ m3u: 'm3u.config.json', provider: '' }))).toBeNull();
+  });
+
   it('rejects --from with no usable file path', () => {
     expect(firstFlagViolation(flags({ merge: true, from: ' , ' }))).toBe(
       '--from expects at least one file path'
@@ -188,6 +195,12 @@ describe('firstFlagViolation', () => {
         first: '--from requires --merge (it merges already-scraped XMLTV files)',
         second: '--from expects at least one file path',
         overrides: { from: ' , ' },
+      },
+      // the two trailing "requires --merge" rows have a pinned order too
+      {
+        first: '--exclusive-channels requires --merge (it only changes how providers are combined)',
+        second: '--sports-only requires --merge (it only changes which channels are merged)',
+        overrides: { 'exclusive-channels': true, 'sports-only': true },
       },
     ];
     for (const { first, second, overrides } of cases) {
@@ -266,10 +279,16 @@ describe('parseTransportOptions', () => {
     expect(errors).toEqual(['--retries expects a non-negative integer (retry attempts per request)']);
   });
 
-  it('requires a positive timeout', () => {
+  it('requires a positive timeout within the timer range', () => {
     const errors = [];
     expect(parseTransportOptions(flags({ 'timeout-ms': '0' }), (m) => errors.push(m))).toBeNull();
     expect(errors).toEqual(['--timeout-ms expects a positive integer (milliseconds)']);
+    // Above 2^31-1 ms Node coerces setTimeout to 1ms and aborts every request.
+    const tooBig = [];
+    expect(
+      parseTransportOptions(flags({ 'timeout-ms': '9999999999' }), (m) => tooBig.push(m))
+    ).toBeNull();
+    expect(tooBig).toEqual(['--timeout-ms expects a positive integer (milliseconds)']);
   });
 
   it('declares every transport flag it maps', () => {

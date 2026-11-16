@@ -312,6 +312,10 @@ export async function scrape({
   // Filter to only requested dates that fall within the 3-day window.
   const requestedDates = dates && dates.length > 0 ? dates : dayMap.map((d) => d.date);
   const activeDays = dayMap.filter((d) => requestedDates.includes(d.date));
+  const unavailable = requestedDates.filter((d) => !dayMap.some((day) => day.date === d));
+  if (unavailable.length > 0) {
+    log(`warn: ignoring requested dates outside the 3-day window: ${unavailable.join(', ')}`);
+  }
 
   if (activeDays.length === 0) {
     log('warn: requested dates fall outside the 3-day window (today + 2 days)');

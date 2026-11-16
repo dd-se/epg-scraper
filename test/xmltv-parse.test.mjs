@@ -128,6 +128,21 @@ describe('xmltv output: well-formed against saxes', () => {
     expect(parsed.titles.every((t) => expected.has(t))).toBe(true);
   });
 
+  it('sorts same-channel programmes by instant across a DST offset change', () => {
+    const xml = generateXmltv({
+      language: 'sv',
+      channels: [{ id: 'SVT1.se', name: 'SVT1' }],
+      programmes: [
+        // 02:00+01:00 is 01:00Z; 02:30+02:00 is 00:30Z — the latter is first
+        // even though its ISO string sorts later.
+        { channel: 'SVT1.se', start: '2026-10-25T02:00:00+01:00', stop: '2026-10-25T03:00:00+01:00', title: 'Later wall, earlier instant' },
+        { channel: 'SVT1.se', start: '2026-10-25T02:30:00+02:00', stop: '2026-10-25T03:30:00+02:00', title: 'Earlier wall, earlier instant' },
+      ],
+    });
+    const titles = [...xml.matchAll(/<title lang="sv">([^<]*)<\/title>/g)].map((m) => m[1]);
+    expect(titles).toEqual(['Earlier wall, earlier instant', 'Later wall, earlier instant']);
+  });
+
   it('writes and re-parses gzipped and plain files end to end', async () => {
     const tmpDir = path.join(
       process.env.TMPDIR || '/tmp',

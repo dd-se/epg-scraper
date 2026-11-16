@@ -73,7 +73,9 @@ export const FLAG_VALIDATORS = [
     message: ({ derived }) => `--date "${derived.date}" is not a valid date`,
   },
   {
-    when: ({ derived }) => derived.providerIds.length === 0,
+    // --m3u is checked exclusively in the CLI after this table; defer to that
+    // broader message instead of complaining about the default provider count.
+    when: ({ values, derived }) => values.m3u == null && derived.providerIds.length === 0,
     message: () => '--provider expects at least one provider id',
   },
   {
@@ -86,7 +88,7 @@ export const FLAG_VALIDATORS = [
   },
   {
     when: ({ values, derived }) =>
-      derived.providerIds.length > 1 && !values.merge && !values.compare,
+      values.m3u == null && derived.providerIds.length > 1 && !values.merge && !values.compare,
     message: () =>
       'multiple providers require --merge (combine into one guide) or --compare (diff the providers)',
   },
@@ -150,6 +152,9 @@ export const TRANSPORT_FLAGS = [
     flag: 'timeout-ms',
     key: 'timeoutMs',
     min: 1,
+    // Beyond 2^31-1 ms Node's setTimeout coerces to 1ms (TimeoutOverflowWarning),
+    // aborting every request instantly. Keep the bound beside its complaint.
+    max: 2_147_483_647,
     message: '--timeout-ms expects a positive integer (milliseconds)',
   },
   {
@@ -162,10 +167,10 @@ export const TRANSPORT_FLAGS = [
 
 // One integer flag: undefined when the flag was absent (the caller keeps its
 // default), the parsed value when it is in range, or null when it is not.
-export function parseIntFlag(value, { min, message }) {
+export function parseIntFlag(value, { min, max, message }) {
   if (value == null) return undefined;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min) return null;
+  if (!Number.isInteger(parsed) || parsed < min || (max != null && parsed > max)) return null;
   return parsed;
 }
 
@@ -174,8 +179,8 @@ export function parseIntFlag(value, { min, message }) {
 // returns null when one is invalid; the caller must then exit 1.
 export function parseTransportOptions(values, fail) {
   const options = {};
-  for (const { flag, key, min, message } of TRANSPORT_FLAGS) {
-    const parsed = parseIntFlag(values[flag], { min, message });
+  for (const { flag, key, min, max, message } of TRANSPORT_FLAGS) {
+    const parsed = parseIntFlag(values[flag], { min, max, message });
     if (parsed === null) {
       fail(message);
       return null;

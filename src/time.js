@@ -47,8 +47,14 @@ export function parseClockMinutes(hours, minutes, { allowEndOfDay = false } = {}
 export function wallToInstant(year, month, day, minutes, offset = '+03:00') {
   if (!isRealCalendarDate(year, month, day)) return undefined;
   if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) return undefined;
-  const normalizedOffset = String(offset);
-  if (offsetMinutes(normalizedOffset) == null) return undefined;
+  const offsetMin = offsetMinutes(String(offset));
+  if (offsetMin == null) return undefined;
+  // Emit the canonical `+HH:MM` spelling the guide parser requires. A source
+  // that passes `+0300` would otherwise stamp an instant that
+  // parseGuideInstant() rejects, silently dropping every programme at the
+  // createGuideResult() seam.
+  const abs = Math.abs(offsetMin);
+  const normalizedOffset = `${offsetMin < 0 ? '-' : '+'}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
   const dayOffset = Math.floor(minutes / 1440);
   const minuteOfDay = minutes % 1440;
   const date = utcDate(

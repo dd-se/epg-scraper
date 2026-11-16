@@ -257,6 +257,24 @@ describe('tvnu scrape (stubbed fetch)', () => {
     ...extra,
   });
 
+  it('fetches a predecessor for every requested date, even in a non-contiguous window', async () => {
+    const seen = [];
+    const fetchImpl = async (url) => {
+      seen.push(String(url));
+      return stubFetch(routes())(url);
+    };
+    await scrape({
+      dates: ['2026-09-17', '2026-09-19'],
+      fetchImpl,
+      politenessDelayMs: 0,
+      maxChannels: 1,
+    });
+    // The 18th page carries 00:00-06:00 of the 19th; fetching only the
+    // predecessor of the first date would silently lose those slots.
+    expect(seen).toContain(`${BASE_URL}/kanal/svt1?datum=2026-09-18`);
+    expect(seen).toContain(`${BASE_URL}/kanal/svt1?datum=2026-09-19`);
+  });
+
   it('fetches the day before the window and buckets slots by start date', async () => {
     const seen = [];
     const fetchImpl = async (url) => {

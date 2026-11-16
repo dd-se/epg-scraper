@@ -180,7 +180,11 @@ export function parseDayPage(html) {
       const startMin = parseClockMinutes(Number(sh), Number(sm));
       const endClock = parseClockMinutes(Number(eh), Number(em), { allowEndOfDay: true });
       if (startMin == null || endClock == null) continue;
-      const duration = (endClock - startMin + 1440) % 1440 || 1440;
+      const duration = (endClock - startMin + 1440) % 1440;
+      // A malformed/placeholder `10:00 - 10:00` row is not a full-day show:
+      // the old `|| 1440` manufactured a 24-hour slot that swallowed every
+      // programme after it. A real 00:00 - 24:00 row still yields 1440.
+      if (duration <= 0) continue;
 
       const dataType = matchOne(attrs, /data-type="([^"]*)"/);
       slots.push({

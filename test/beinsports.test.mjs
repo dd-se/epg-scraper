@@ -22,6 +22,18 @@ const day1Html = fixture('day-beinsports-sali.html'); // beIN Sports 1 (channelI
 const day2Html = fixture('day-beinsports-2-sali.html'); // beIN Sports 2 (channelId 2)
 
 const response = (html) => ({ ok: true, status: 200, text: async () => html });
+// The fixtures are one Tuesday page. Re-stamp the served date to the weekday in
+// the requested URL so the stub behaves like the real site (which serves the
+// date it was asked for) instead of tripping the wrong-day guard on 6 of 7
+// pages.
+const clampWeek = weekDays(new Date('2026-09-07T12:00:00Z'));
+const responseForUrl = (url, html) => {
+  const tag = String(url).split('/').pop();
+  const date = DAY_TAGS.includes(tag) ? clampWeek[DAY_TAGS.indexOf(tag)] : undefined;
+  return response(
+    date ? html.replace('"event_date": "2026-09-08"', `"event_date": "${date}"`) : html
+  );
+};
 
 describe('beinsports parseDayPage (fixtures)', () => {
   it('extracts the served date and programme slots', () => {
@@ -117,7 +129,7 @@ describe('beinsports scrape (stubbed week)', () => {
       dates: week,
       fetchImpl: async (url) => {
         urls.push(url);
-        return response(url.includes('beinsports-2') ? day2Html : day1Html);
+        return responseForUrl(url, url.includes('beinsports-2') ? day2Html : day1Html);
       },
       log: () => {},
       politenessDelayMs: 0,
@@ -162,7 +174,7 @@ describe('beinsports scrape (stubbed week)', () => {
       dates: ['2026-09-09', '2026-09-10'],
       fetchImpl: async (url) => {
         urls.push(url);
-        return response(day1Html);
+        return responseForUrl(url, day1Html);
       },
       log: () => {},
       politenessDelayMs: 0,
@@ -173,7 +185,7 @@ describe('beinsports scrape (stubbed week)', () => {
   it('computes stop from the next slot and ends the day at 24:00', async () => {
     const result = await scrape({
       dates: ['2026-09-08'],
-      fetchImpl: async (url) => response(url.includes('beinsports-2') ? day2Html : day1Html),
+      fetchImpl: async (url) => responseForUrl(url, url.includes('beinsports-2') ? day2Html : day1Html),
       log: () => {},
       politenessDelayMs: 0,
     });
@@ -186,6 +198,21 @@ describe('beinsports scrape (stubbed week)', () => {
     // Every day of the week is covered.
     const monday = result.programmes.filter((p) => p.start.startsWith('2026-09-07'));
     expect(monday.length).toBeGreaterThan(0);
+  });
+
+  it('skips a page whose served date does not match the requested day', async () => {
+    const logs = [];
+    const result = await scrape({
+      dates: week,
+      // Every page claims to be 2026-09-01, a date outside the requested week.
+      fetchImpl: async () =>
+        response(day1Html.replace('"event_date": "2026-09-08"', '"event_date": "2026-09-01"')),
+      log: (line) => logs.push(line),
+      politenessDelayMs: 0,
+    });
+    expect(result.programmes).toEqual([]);
+    expect(logs.filter((line) => line.includes('served 2026-09-01, expected'))).toHaveLength(28);
+    expect(logs.filter((line) => line.includes('— skipped'))).toHaveLength(28);
   });
 
   it('degrades gracefully when all pages fail', async () => {
@@ -222,7 +249,8 @@ describe('beinsports cli integration (stubbed fetch, temp output)', () => {
   it('writes a gzipped xmltv file and reports success', async () => {
     const { default: fs } = await import('node:fs');
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (url) => response(String(url).includes('beinsports-2') ? day2Html : day1Html);
+    globalThis.fetch = async (url) =>
+      responseForUrl(String(url), String(url).includes('beinsports-2') ? day2Html : day1Html);
     try {
       const out = path.join(tmpDir, 'bein.xml.gz');
       const exit = await runCli({

@@ -272,9 +272,10 @@ catalog), because tvplus also curates a general-interest lineup.  The rest —
 Exxen stays login-walled, the others are platform-exclusive — are tracked in
 `UNSUCCESSFUL.md`.
 
-The daily CI merge skips `beinsports` (its 1-4 feeds are covered by
-`digiturkburada`, which keeps full-day schedules) and the rolling SSR
-`sporekrani` baseline (the day-scoped `sporekraniapi` adapter matches starts and
+The daily CI merge includes `beinsports` again (re-enabled in `8c0873b`; its
+feeds are still complemented by `digiturkburada`, which keeps full-day
+schedules) but skips the rolling SSR `sporekrani` baseline (the day-scoped
+`sporekraniapi` adapter matches starts and
 bounds final stops at midnight).  `sporekraniapi` adds the tabii spor 1-8
 simulcast feeds and S Sport Plus; `tivibu` adds Tivibu Spor and Tivibu Spor 1-4; `idmantv` adds
 İdman TV (an Azerbaijani charter).

@@ -295,7 +295,10 @@ export function collapseIdenticalFeeds(groups, options = {}) {
 
   for (const group of Array.isArray(groups) ? groups : []) {
     if (!dedupeIdenticalUrls) {
-      out.push(group);
+      // applyMaxCopies() slices the first N copies, so rank them here or a
+      // low-weight source can be kept while a preferred later one is cut
+      // before applyNamingStyle() ever sees it.
+      out.push({ ...group, entries: rankEntries(group.entries) });
       continue;
     }
     const byFeed = new Map();

@@ -563,3 +563,46 @@ describe('cli --merge', () => {
     expect(xml).not.toContain('<programme ');
   });
 });
+describe('merge ownership and language warnings', () => {
+  const slot = (channel, title) => ({
+    channel,
+    start: '2026-09-07T10:00:00+03:00',
+    stop: '2026-09-07T11:00:00+03:00',
+    title,
+  });
+
+  it('honours an alias when deciding which provider owns a channel', () => {
+    const first = {
+      channels: [{ id: 'TRT1.tr', name: 'TRT 1' }],
+      programmes: [slot('TRT1.tr', 'Authoritative')],
+      days: 1, failures: 0, language: 'tr',
+    };
+    const second = {
+      // A reached this channel under an alias; ownership must still be keyed
+      // on the canonical id, not the raw pre-canonical spelling.
+      channels: [{ id: 'ALIAS1.tr', name: 'TRT 1' }],
+      programmes: [slot('ALIAS1.tr', 'Shadowed')],
+      days: 1, failures: 0, language: 'tr',
+    };
+    const merged = mergeResults(
+      [first, second],
+      (id) => (id === 'ALIAS1.tr' ? 'TRT1.tr' : id),
+      { exclusiveChannels: true }
+    );
+    expect(merged.shadowed).toBe(1);
+    expect(merged.programmes.map((p) => p.title)).toEqual(['Authoritative']);
+  });
+
+  it('warns when a live merge mixes guide languages', () => {
+    const issues = [];
+    mergeResults(
+      [
+        { channels: [{ id: 'A.tr', name: 'A' }], programmes: [], days: 1, failures: 0, language: 'tr' },
+        { channels: [{ id: 'B.se', name: 'B' }], programmes: [], days: 1, failures: 0, language: 'sv' },
+      ],
+      (id) => id,
+      { onIssue: (issue, count) => issues.push([issue, count]) }
+    );
+    expect(issues).toContainEqual(['mixed-language', 1]);
+  });
+});

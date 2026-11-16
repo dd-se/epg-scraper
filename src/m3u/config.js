@@ -80,7 +80,9 @@ function optionalInteger(value, fallback, where, { min = 0, max = Number.MAX_SAF
  */
 export function expandEnvVars(value, env = {}, where = 'source url') {
   return String(value).replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (match, name, fallback) => {
-    const found = env[name];
+    // Own properties only: `${__proto__}` would otherwise expand to
+    // `[object Object]` from Object.prototype.
+    const found = Object.hasOwn(env, name) ? env[name] : undefined;
     if (found != null && found !== '') return String(found);
     if (fallback !== undefined) return fallback;
     fail(`${where}: environment variable ${name} is not set`);

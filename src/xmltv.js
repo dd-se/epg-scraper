@@ -28,6 +28,7 @@ import {
   fromXmltvTimestamp,
 } from './time.js';
 import { createGuideResult, normalizeLanguageTag, validateGuideResult } from './model.js';
+import { channelIdMatchKey } from './slug.js';
 
 export { isoToEpochMs, toXmltvTimestamp, fromXmltvTimestamp };
 
@@ -200,12 +201,18 @@ function firstTagText(body, tag) {
 }
 
 function firstIconSrc(body) {
-  const match = /<icon\s[^>]*src\s*=\s*"([^"]*)"[^>]*\/?>/.exec(body || '');
-  return match ? decodeEntities(match[1]) : undefined;
+  // Reuse the anchored attribute reader: an unanchored `/src\s*=/` matches
+  // `data-src=` (or any attribute ending in "src") and fabricates an icon.
+  const match = /<icon\b([^>]*)>/.exec(body || '');
+  return match ? attrValue(match[1], 'src') : undefined;
 }
 
 function documentLanguage(source) {
-  const match = /<(?:display-name|title)\b[^>]*\blang\s*=\s*(["'])([^"']*)\1/i.exec(source || '');
+  // `\b` would match after a `-`, so `data-lang="sv"` was read as the guide's
+  // language. Require real whitespace before the attribute name instead.
+  const match = /<(?:display-name|title)\b[^>]*(?:^|\s)lang\s*=\s*(["'])([^"']*)\1/i.exec(
+    source || ''
+  );
   return (match && normalizeLanguageTag(decodeEntities(match[2]))) || 'tr';
 }
 
@@ -216,6 +223,11 @@ export function parseXmltv(xml) {
   const source = xml == null ? '' : String(xml);
   const channels = [];
   const channelIds = new Set();
+  // The writer folds ids at the createGuideResult() seam, but a third-party
+  // guide read back from disk may spell a programme's channel with different
+  // case than its <channel> declaration. Match on the same key the merge and
+  // alias paths use so those programmes are not silently dropped.
+  const channelMatchKeys = new Set();
   const channelRe = /<channel\b([^>]*)>([\s\S]*?)<\/channel>/g;
   let channelMatch;
   while ((channelMatch = channelRe.exec(source)) !== null) {
@@ -227,6 +239,7 @@ export function parseXmltv(xml) {
     const url = firstTagText(body, 'url') || undefined;
     if (channelIds.has(id)) continue;
     channelIds.add(id);
+    channelMatchKeys.add(channelIdMatchKey(id));
     channels.push({
       id,
       name,
@@ -252,7 +265,7 @@ export function parseXmltv(xml) {
     }
     const title = firstTagText(body, 'title');
     if (!channel || !title) continue;
-    if (!channelIds.has(channel)) continue; // dangling ref: skip
+    if (!channelMatchKeys.has(channelIdMatchKey(channel))) continue; // dangling ref: skip
     // Reversed/zero-length slot: skip.  Compared as instants, since a
     // DST-observing guide can carry two offsets where string order is not
     // chronological.

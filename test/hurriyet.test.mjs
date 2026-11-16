@@ -70,6 +70,18 @@ describe('hurriyet parseDayPage (real page fixture)', () => {
       rowCount: 0,
     });
   });
+
+  it('drops a zero-duration row instead of manufacturing a 24-hour show', () => {
+    const html = `
+      <li class="flow-module-channel"><img alt="Kanal D" src="/l.png"><a href="/k"></a></li>
+      <div class="flow-module-row">
+        <div class="flow-module-col"><h2 class="column-title">Placeholder</h2><span class="column-time">10:00 - 10:00</span></div>
+        <div class="flow-module-col"><h2 class="column-title">Next</h2><span class="column-time">12:00 - 13:00</span></div>
+      </div>`;
+    const slots = parseDayPage(html).slots;
+    expect(slots).toHaveLength(1);
+    expect(slots[0].title).toBe('Next');
+  });
 });
 
 describe('hurriyet wallToIso', () => {

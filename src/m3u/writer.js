@@ -35,6 +35,15 @@ function escapeAttributeValue(value) {
     .slice(0, MAX_FIELD_LENGTH);
 }
 
+/**
+ * Stream URL: CR/LF have no business in a URL (WHATWG `new URL()` silently
+ * strips them, so validation alone cannot catch a forged `#EXTINF` line).
+ * Remove them before both validation and emission.
+ */
+function sanitizeStreamUrl(value) {
+  return String(value == null ? '' : value).replace(/[\r\n\u0085\u2028\u2029]/g, '').trim();
+}
+
 /** Display name: additionally loses commas, which would re-read as the separator. */
 function escapeDisplayName(value) {
   return String(value == null ? '' : value)
@@ -89,7 +98,7 @@ export function validateM3uResult(result, options = {}) {
       ids.add(id.toLowerCase());
     }
 
-    const url = String((entry && entry.url) || '').trim();
+    const url = sanitizeStreamUrl(entry && entry.url);
     if (!url) throw new Error(`generateM3U: ${at} ("${name}") has no stream URL`);
     let parsed;
     try {
@@ -143,7 +152,7 @@ export function generateM3U(result, options = {}) {
       const text = escapeAttributeValue(option);
       if (text) lines.push(`#EXTVLCOPT:${text}`);
     }
-    lines.push(String(entry.url).trim());
+    lines.push(sanitizeStreamUrl(entry.url));
   }
   return lines.join('\n') + '\n';
 }

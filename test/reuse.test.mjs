@@ -4,6 +4,7 @@
 // never live network.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import {
   generateXmltv,
@@ -319,6 +320,31 @@ describe('cli --merge --from', () => {
     expect(stderr.join('')).toMatch(/--from/);
   });
 
+  it('recognizes an uppercase .XML.GZ input when applying --sports-only', async () => {
+    const xml = generateXmltv({
+      channels: [
+        { id: 'ASPOR.tr', name: 'A Spor' },
+        { id: 'KANALD.tr', name: 'Kanal D' },
+      ],
+      programmes: [
+        { channel: 'ASPOR.tr', start: '2026-09-07T10:00:00+03:00', stop: '2026-09-07T11:00:00+03:00', title: 'Sports' },
+        { channel: 'KANALD.tr', start: '2026-09-07T10:00:00+03:00', stop: '2026-09-07T11:00:00+03:00', title: 'News' },
+      ],
+    });
+    const upper = path.join(dir, 'epg_tvplus_TR.XML.GZ');
+    writeFileSync(upper, gzipSync(Buffer.from(xml)));
+    const out = path.join(dir, 'upper-out.xml');
+    const exit = await runCli({
+      argv: ['--merge', '--sports-only', '--from', upper, '--no-gzip', '--out', out],
+      stdout: { write: () => {} },
+      stderr: { write: () => {} },
+      cwd: dir,
+    });
+    expect(exit).toBe(0);
+    const merged = parseXmltv(readFileSync(out, 'utf8'));
+    expect(merged.channels.map((c) => c.id)).toEqual(['ASPOR.tr']);
+  });
+
   it('refuses to write an empty guide when every file is empty', async () => {
     const empty = path.join(dir, 'empty.xml');
     writeFileSync(empty, '<?xml version="1.0" encoding="UTF-8"?>\n<tv></tv>\n');
@@ -331,5 +357,24 @@ describe('cli --merge --from', () => {
     });
     expect(exit).toBe(1);
     expect(stderr.join('')).toMatch(/nothing merged/);
+  });
+});
+
+describe('XMLTV reader hardening', () => {
+  it('anchors icon and language attribute names', () => {
+    const xml = `<tv><channel id="A.tr"><display-name data-lang="sv">A</display-name>` +
+      `<icon src="GOOD" data-src="EVIL" /></channel></tv>`;
+    const guide = parseXmltv(xml);
+    expect(guide.channels[0].icon).toBe('GOOD');
+    expect(guide.language).toBe('tr');
+  });
+
+  it('resolves a programme whose channel differs only in case', () => {
+    const xml = `<tv><channel id="KANALD.tr"><display-name>Kanal D</display-name></channel>` +
+      `<programme start="20260907000000 +0300" stop="20260907010000 +0300" channel="kanald.tr">` +
+      `<title lang="tr">X</title></programme></tv>`;
+    const guide = parseXmltv(xml);
+    expect(guide.channels).toHaveLength(1);
+    expect(guide.programmes).toHaveLength(1);
   });
 });

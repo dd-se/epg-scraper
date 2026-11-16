@@ -11,11 +11,12 @@ import { decodeEntities } from '../src/entities.js';
 import { channelIdFromName } from '../src/slug.js';
 import { toXmltvTimestamp, generateXmltv } from '../src/xmltv.js';
 import { fetchText } from '../src/http.js';
-import { parseDayPage, wallToIso } from '../src/providers/hurriyet.js';
+import { parseDayPage, wallToIso, weekDays } from '../src/providers/hurriyet.js';
 import { parseMainPage, parseChannelPage } from '../src/providers/mynet.js';
 import {
   parseDayPage as parseBeinDayPage,
   parseChannelList as parseBeinChannelList,
+  DAY_TAGS,
 } from '../src/providers/beinsports.js';
 import {
   parseDayPage as parseDbDayPage,
@@ -954,7 +955,16 @@ describe('adversarial: scrape against hostile responses', () => {
       '</script>';
     const result = await scrape({
       dates: ['2026-09-08'],
-      fetchImpl: async () => response(page),
+      fetchImpl: async (url) => {
+        // Re-stamp the served date to the requested weekday: a real page
+        // serves the date it was asked for, and the scraper now drops pages
+        // whose served date disagrees.
+        const tag = String(url).split('/').pop();
+        const date = DAY_TAGS.includes(tag)
+          ? weekDays(new Date('2026-09-07T12:00:00Z'))[DAY_TAGS.indexOf(tag)]
+          : '2026-09-08';
+        return response(page.replace(/"event_date"\s*:\s*"2026-09-08"/, `"event_date":"${date}"`));
+      },
       log: () => {},
       politenessDelayMs: 0,
       maxChannels: 1,

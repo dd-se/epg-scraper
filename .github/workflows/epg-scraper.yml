@@ -567,6 +567,7 @@ jobs:
           NTFY_SERVER: https://ntfy.sh
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
           # Providers whose matrix leg failed.  One marker artifact per failed
@@ -576,11 +577,13 @@ jobs:
             failed_providers=$(cd scrape-failures && ls -1 | sed 's/\.txt$//' | sort)
           fi
           # Needs results are our own workflow data (never scraped input), so
-          # the JSON travels through the environment instead of being built
-          # into a command line. Node (not jq) keeps this to the one tool the
-          # workflows already use.  `scrape` appears here only when the whole
-          # matrix job failed; a single failed leg is in the markers above.
-          failed_jobs=$(NEEDS_JSON='${{ toJSON(needs) }}' node -e '
+          # the JSON is passed as a real step env var (NEEDS_JSON) rather than
+          # interpolated into this shell command, where a quote in a value
+          # could break the single-quoted argument. Node (not jq) keeps this
+          # to the one tool the workflows already use. `scrape` appears here
+          # only when the whole matrix job failed; a single failed leg is in
+          # the markers above.
+          failed_jobs=$(node -e '
             const needs = JSON.parse(process.env.NEEDS_JSON || "{}");
             const rows = Object.entries(needs)
               .filter(([, job]) => job.result !== "success")

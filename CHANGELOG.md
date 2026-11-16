@@ -117,7 +117,44 @@ id needs updating. Swedish (`tvnu`) ids are unchanged.
 
 ### Fixed
 
-- The `sporekraniapi` guide carried no `<icon>` for an idle tabii spor feed:
+- **beinsports** published every slot from a day page whose `event_date`
+  disagreed with the requested date, stamping it with the requested date. Such
+  pages are now skipped (with a warning), matching trt and digiturkburada.
+- **Hürriyet** turned a malformed `10:00 - 10:00` row into a 24-hour programme
+  that swallowed the following slots; zero-duration rows are now dropped.
+- **Security — transport errors no longer leak secret-bearing URLs.** A browser
+  navigation error quotes the full target (including `api_key`/`app_id` query
+  values); the message now passes through `redactUrl()` before it can reach a
+  log line.
+- **Security — M3U stream URLs with embedded CR/LF can no longer forge
+  `#EXTINF` lines** in the generated playlist. WHATWG `new URL()` strips those
+  characters, so strict validation alone could not catch it.
+- **M3U liveness `depth: 2`** used the manifest check on the first media
+  segment, so a valid 200 `.ts` segment was reported dead and the whole channel
+  was dropped. It now checks reachability only and reads just the body head.
+- **M3U glob patterns with several `*` wildcards** no longer backtrack
+  catastrophically (12 stars took ~5s on a 31-character name). Matching is now a
+  linear, anchored subsequence scan.
+- `keepAttributes` is functional again in the M3U pipeline: source attributes
+  survive collection and the writer can emit custom keys. With dedupe off,
+  `applyMaxCopies` now ranks copies before slicing so the highest-weight feed
+  survives.
+- A guide read from an uppercase `.XML.GZ` file no longer silently skips
+  `--sports-only` filtering; the provider-id detection is case-insensitive.
+- Unknown HTML entities named after `Object.prototype` properties
+  (`&constructor;`, `&toString;`, …) no longer decode into scraped titles.
+- `wallToInstant()` now emits canonical `±HH:MM` offsets, so a source passing
+  `+0300` no longer has every programme dropped at the guide-result seam.
+- The XMLTV reader no longer reads `data-src`/`data-lang` as `src`/`lang`, and
+  resolves programmes whose channel id differs only in case. An empty Swedish
+  id (`.se`) is now refused.
+- `--timeout-ms` is bounded to the timer's range, failed-response bodies are
+  cancelled instead of pinning sockets, and playlist-mode write failures are
+  reported as clean `error:` lines rather than raw stack traces.
+- A long-running beinsports scrape can no longer publish stale CDN/week-rollover
+  pages under the wrong date; tvnu fetches a predecessor for every requested
+  date (non-contiguous windows); mynet warns about requested dates outside its
+  three-day window.
   the events payload only names a logo for a channel that actually has an
   event, so tabii spor 1-5, 7 and 8 shipped without one whenever they were off
   the air. The adapter now backfills logos from Spor Ekranı's channel

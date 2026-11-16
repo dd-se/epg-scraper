@@ -234,6 +234,11 @@ function finalizeEntry(entry, seenIds, { inferTvgId = true, allowSharedIdentity 
     groupTitle: canonicalGroupTitle(entry.group || ''),
     url: entry.url,
     vlcOptions: entry.vlcOptions || [],
+    // Keep the source's full attribute map so the writer's explicit
+    // `keepAttributes` extension point can emit custom keys. The writer only
+    // emits keys it is told to keep, so private attributes stay private by
+    // default.
+    ...(entry.attributes && typeof entry.attributes === 'object' ? { attributes: entry.attributes } : {}),
     sourceId: entry.sourceId || '',
     copyIndex: entry.copyIndex || 0,
     baseName: entry.baseName || '',

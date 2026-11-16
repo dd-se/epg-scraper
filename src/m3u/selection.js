@@ -33,6 +33,11 @@ import { foldDiacritics, idKey, normalizeName, stripResolution, canonicalGroupTi
  * the channel and its declared id/group.
  */
 export function globToMatcher(pattern) {
+  // Deliberately NOT a RegExp: joining wildcards as independent `.*` segments
+  // (e.g. `^.*A.*A.*A...Z$`) backtracks catastrophically on a non-matching
+  // name, and these patterns are tested against thousands of remote channel
+  // names. A linear greedy subsequence scan has the same anchored semantics
+  // with no possible ReDoS.
   const text = String(pattern == null ? '' : pattern);
   // Patterns are matched against *normalized* forms, which carry no leading,
   // trailing or doubled spaces.  A user writing `* Alanya *` means "contains
@@ -40,22 +45,59 @@ export function globToMatcher(pattern) {
   // that the form does not have.  Collapsing runs of whitespace to one space
   // and trimming the edges keeps that example working — and `ATV` stays an
   // exact match, so an edition can still never be pulled in by accident.
-  const source = text
+  // Each segment is trimmed individually: `* Alanya *` splits into
+  // ['', ' Alanya ', ''], and the spaces around the wildcards would otherwise
+  // demand a literal space that the normalized form `ATV ALANYA` does not
+  // have. Trimming per segment (not just the whole pattern) is what makes
+  // the documented `"exclude": ["* Alanya *"]` work at all.
+  const segments = text
     .split('*')
-    // Each segment is trimmed individually: `* Alanya *` splits into
-    // ['', ' Alanya ', ''], and the spaces around the wildcards would otherwise
-    // demand a literal space that the normalized form `ATV ALANYA` does not
-    // have. Trimming per segment (not just the whole pattern) is what makes
-    // the documented `"exclude": ["* Alanya *"]` work at all.
-    .map((part) =>
-      foldDiacritics(part)
-        .trim()
-        .replace(/\s+/g, ' ')
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\?/g, '.')
-    )
-    .join('.*');
-  return new RegExp(`^${source}$`, 'i');
+    .map((part) => foldDiacritics(part).trim().replace(/\s+/g, ' '));
+  const upper = (char) => char.toUpperCase();
+
+  // Match one literal/`?` segment starting at `start`; return the index just
+  // past it, or -1. `?` consumes exactly one character.
+  const matchSegment = (value, start, segment) => {
+    let i = start;
+    for (const char of segment) {
+      if (i >= value.length) return -1;
+      if (char !== '?' && upper(char) !== upper(value[i])) return -1;
+      i += 1;
+    }
+    return i;
+  };
+
+  return {
+    test(value) {
+      const text = String(value == null ? '' : value);
+      // A pattern with no wildcard is an exact, anchored match.
+      if (segments.length === 1) return matchSegment(text, 0, segments[0]) === text.length;
+      // `^first` — the first segment must match at the very start.
+      let pos = matchSegment(text, 0, segments[0]);
+      if (pos < 0) return false;
+      // Middle segments may appear anywhere after the previous one; taking
+      // the earliest match leaves the most room for the rest.
+      for (let i = 1; i < segments.length - 1; i += 1) {
+        let found = -1;
+        for (let j = pos; j <= text.length; j += 1) {
+          const end = matchSegment(text, j, segments[i]);
+          if (end >= 0) {
+            found = end;
+            break;
+          }
+        }
+        if (found < 0) return false;
+        pos = found;
+      }
+      // `last$` — the final segment must end at the string end. An empty final
+      // segment (from a trailing `*`) matches the whole remainder.
+      const last = segments[segments.length - 1];
+      for (let j = pos; j <= text.length; j += 1) {
+        if (matchSegment(text, j, last) === text.length) return true;
+      }
+      return false;
+    },
+  };
 }
 
 /**

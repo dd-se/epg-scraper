@@ -222,7 +222,11 @@ export async function scrape({
 
       const { date: servedDate, slots } = parseDayPage(html);
       if (servedDate && servedDate !== date) {
-        log(`warn: ${name} (${tag}) served ${servedDate}, expected ${date}`);
+        // Stamping the requested date onto a page that actually serves another
+        // one publishes a whole day of misdated programmes. Other day-page
+        // adapters (trt, digiturkburada) drop such pages; do the same here.
+        log(`warn: ${name} (${tag}) served ${servedDate}, expected ${date} — skipped`);
+        continue;
       }
 
       const { year, month, day } = splitDate(date);

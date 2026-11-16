@@ -42,6 +42,16 @@ export function redactUrl(url) {
   return touched ? parsed.toString() : text;
 }
 
+// Redact every URL embedded in a free-form error message, not just the URL we
+// passed in. Transport errors from browser adapters quote the full navigation
+// target (e.g. `page.goto: ... at https://host/?api_key=...`), which would
+// otherwise reach a log line with the secret intact.
+export function redactMessage(message) {
+  return String(message == null ? '' : message).replace(/https?:\/\/[^\s<>"')\]]+/g, (url) =>
+    redactUrl(url)
+  );
+}
+
 export function createPoliteFetch(fetchImpl, delayMs = 0) {
   const doFetch = fetchImpl || globalThis.fetch.bind(globalThis);
   if (!Number.isFinite(delayMs) || delayMs <= 0) return doFetch;
@@ -56,10 +66,20 @@ export function createPoliteFetch(fetchImpl, delayMs = 0) {
 
 async function attemptOnce(doFetch, url, init, timeoutMs, finalize, nonRetryableStatuses) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Node coerces delays above 2^31-1 ms to 1ms (with a TimeoutOverflowWarning),
+  // which would abort every request instantly. Clamp to the largest value the
+  // timer can represent rather than trusting the caller's upper bound.
+  const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 2_147_483_647));
   try {
     const response = await doFetch(url, { ...init, signal: controller.signal });
     if (!response || !response.ok) {
+      // An unconsumed body keeps its socket checked out under undici. Cancel it
+      // so a run with many failing pages cannot exhaust the connection pool.
+      try {
+        await response?.body?.cancel?.();
+      } catch {
+        /* already consumed or unsupported: nothing to release */
+      }
       const status = response && response.status;
       const error = new Error(`HTTP ${status == null ? 'undefined' : status} for ${redactUrl(url)}`);
       const configuredNonRetryable = nonRetryableStatuses?.includes(status) === true;
@@ -124,7 +144,7 @@ async function requestWithRetry(url, options = {}) {
     throw lastError; // "HTTP 503 for <url>" — already self-describing.
   }
   const cause = lastError && lastError.message ? lastError.message : String(lastError);
-  throw new Error(`${cause} (${describe()})`);
+  throw new Error(`${redactMessage(cause)} (${describe()})`);
 }
 
 // GET a page and return its text.  Used by the HTML providers (hurriyet,

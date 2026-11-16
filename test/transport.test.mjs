@@ -3,7 +3,13 @@
 // re-establishment failsafe.  All network behavior is stubbed — no live
 // requests (see AGENTS.md).
 import { describe, it, expect, vi } from 'vitest';
-import { createPoliteFetch, fetchText, fetchResponseWithRetry, redactUrl } from '../src/http.js';
+import {
+  createPoliteFetch,
+  fetchText,
+  fetchResponseWithRetry,
+  redactUrl,
+  redactMessage,
+} from '../src/http.js';
 import { scrape as scrapeTvplus, CHANNELS as TVPLUS_CHANNELS } from '../src/providers/tvplus.js';
 import { scrape as scrapeDigiturkburada } from '../src/providers/digiturkburada.js';
 import { scrape as scrapeTivibu } from '../src/providers/tivibu.js';
@@ -473,5 +479,54 @@ describe('tivibu retry transport', () => {
     expect(posts).toBe(2);
     expect(result.programmes.map((p) => p.title)).toEqual(['Match']);
     expect(result.failures).toBe(0);
+  });
+});
+
+describe('transport hardening', () => {
+  it('redacts URLs embedded in free-form transport errors', async () => {
+    const url = 'https://api.example.com/?app_id=SECRET_APP&api_key=SECRET_KEY';
+    const fetchImpl = async () => {
+      throw new Error(`page.goto: net::ERR_CONNECTION_REFUSED at ${url}`);
+    };
+    let message = '';
+    try {
+      await fetchText(url, { fetchImpl, retries: 0 });
+    } catch (error) {
+      message = error.message;
+    }
+    expect(message).not.toContain('SECRET_APP');
+    expect(message).not.toContain('SECRET_KEY');
+    expect(message).toContain('app_id=REDACTED');
+    expect(redactMessage('no url here')).toBe('no url here');
+  });
+
+  it('cancels a failed response body instead of pinning its socket', async () => {
+    let cancels = 0;
+    const fetchImpl = async () => ({
+      ok: false,
+      status: 503,
+      body: { cancel: async () => { cancels += 1; } },
+    });
+    await expect(fetchText('https://x/guide', { fetchImpl, retries: 0 })).rejects.toThrow(/HTTP 503/);
+    expect(cancels).toBe(1);
+  });
+
+  it('clamps a timeout larger than the timer range instead of aborting instantly', async () => {
+    // Node coerces setTimeout delays above 2^31-1 ms to 1ms. The transport must
+    // clamp before handing the value to setTimeout; a fast local response used
+    // to be aborted every time with --timeout-ms 9999999999.
+    const fetchImpl = async (_url, init) => {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 30);
+        init.signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new Error('aborted'));
+        }, { once: true });
+      });
+      return htmlResponse('ok');
+    };
+    await expect(
+      fetchText('https://x/guide', { fetchImpl, timeoutMs: 9999999999, retries: 0 })
+    ).resolves.toBe('ok');
   });
 });
