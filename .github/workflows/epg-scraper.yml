@@ -36,7 +36,8 @@
 #   `scrape (idmantv)` failed, `notify` skipped).  A failed leg therefore
 #   uploads a `scrape-failed-<provider>` marker artifact; `notify` starts on
 #   `!cancelled()` and POSTs one ntfy alert when a marker exists or another
-#   stage failed, listing the providers that failed.
+#   stage failed, listing the providers that failed. The `notify` job is
+#   currently disabled (`if: false`); restore its guard above to re-enable.
 # - The sports-merge and publish jobs run with `if: !cancelled()` so they
 #   still run when some providers failed — they merge/publish whatever
 #   guides exist. Yesterday's release assets stay live for providers that
@@ -548,7 +549,9 @@ jobs:
   #                 a repo *variable* if you self-host instead.
   notify:
     needs: [inventory, scrape, epg-sports-merged, epg-trt-merged, publish]
-    if: ${{ !cancelled() }}
+    # Disabled: ntfy failure alerts are temporarily turned off. To re-enable,
+    # restore `if: ${{ !cancelled() }}` below.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

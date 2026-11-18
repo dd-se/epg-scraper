@@ -1179,12 +1179,17 @@ and a run with zero valid guides leaves the previous release untouched.
 
 ### Failure alerts (ntfy)
 
-Both workflows end in a `notify` job that stays silent on a green run and on
+Both workflows define a `notify` job that stays silent on a green run and on
 a manually aborted one. It POSTs one message per failed run to an ntfy topic
 at priority `high` (4), tagged `warning,rotating_light`, with a `Click`
 header that deep-links straight to the failed run, and lists which jobs failed
 or were skipped. Subscribe in the ntfy app or web UI to the topic named in the
 `NTFY_TOPIC` secret.
+
+> The `epg-scraper` workflow's `notify` job is currently **disabled** (`if:
+> false`), so the guide scrape sends no alerts. Restore its `if: ${{
+> !cancelled() }}` guard to re-enable them; the `m3u-scraper` job below is
+> unaffected.
 
 The `m3u-scraper` workflow gates that job with
 `if: ${{ !cancelled() && failure() }}`. The guide scrape cannot: a failed
