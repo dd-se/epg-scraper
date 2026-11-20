@@ -163,7 +163,9 @@ a channel display name at `finishResult()`) — lives in
   day page ships the schedule as a JSON string assignment
   (`__INITIAL_STATE__ = "…"`); `extractInitialState()` /
   `parseChannelPage()` / `parseBroadcast()` are the pure parsers
-  (logos from the page channel's own `themedLogo`).  Source timestamps
+  (logos from the page channel's own `themedLogo`, preferring the `dark`
+  variant — light-on-transparent artwork that stays legible on dark UIs —
+  with `light` as the fallback).  Source timestamps
   are **absolute epoch ms** (explicit start+stop — never derived), one
   fetch per channel+day, and pages run 06:00 → 06:00 local, so the day
   before the window is fetched too and slots are bucketed by the

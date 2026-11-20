@@ -1085,7 +1085,7 @@ node bin/epg-scraper.js --provider mynet --delay-ms 1000
   instants are absolute either way.  Swedish titles are emitted as
   `<title lang="sv">`, with the first genre as `<category lang="sv">` and
   the description as `<desc lang="sv">`.
-- Channel logos are each page's own `themedLogo` image.
+- Channel logos are each page's own `themedLogo` image, preferring the `dark` variant (light-on-transparent artwork for dark UIs) and falling back to `light`.
 - Channel ids keep their source-tagged Swedish spelling, e.g.
   `[SVT1HD].SVT1.HD.se`; a channel with no tagged id uses a generic `.se` slug
   (e.g. `SVT.BARN.se`). Swedish ids are exempt from the Turkish folding rule.

@@ -40,7 +40,8 @@
 //
 // Titles are Swedish and emitted verbatim; genres map onto <category> (first
 // genre name) and `description` onto <desc>.  Channel logos are the page's
-// own `themedLogo.light.url`.
+// own `themedLogo.dark.url` — the light-on-transparent artwork tv.nu serves
+// for dark UIs — with the light-theme logo as a fallback.
 
 import { fetchText, createPoliteFetch } from '../http.js';
 import { channelIdFromName } from '../slug.js';
@@ -277,11 +278,13 @@ function isHttpUrl(value) {
   return typeof value === 'string' && /^https?:\/\/[^\s|]+$/.test(value.trim());
 }
 
-// The channel logo: `themedLogo.light.url` (the light-theme variant the
-// desktop page shows), with the dark variant as a fallback.
+// The channel logo: `themedLogo.dark.url` (the light-on-transparent variant
+// tv.nu serves for dark UIs), falling back to the light-theme variant.  A
+// dark player/guide is the common EPG surface, and dark ink is invisible on
+// it, so the dark-theme artwork is the safer default.
 function pickLogo(themedLogo) {
   if (!themedLogo || typeof themedLogo !== 'object') return undefined;
-  for (const theme of ['light', 'dark']) {
+  for (const theme of ['dark', 'light']) {
     const entry = themedLogo[theme];
     const url = entry && typeof entry === 'object' ? entry.url : undefined;
     if (isHttpUrl(url)) return url.trim();

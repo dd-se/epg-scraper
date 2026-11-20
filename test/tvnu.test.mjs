@@ -188,14 +188,15 @@ it('rejects hostile broadcast payloads one by one', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.name).toBe('SVT1');
     expect(parsed.slug).toBe('svt1');
-    expect(parsed.logo).toBe('https://new.static.tv.nu/47578019');
+    // The dark-UI variant (light artwork), not the light-theme black logo.
+    expect(parsed.logo).toBe('https://new.static.tv.nu/107707399');
     expect(parsed.slots.map((s) => s.start)).toEqual([
       '2026-09-17T11:20:00+02:00',
       '2026-09-17T12:20:00+02:00',
       '2026-09-17T13:20:00+02:00',
       '2026-09-17T13:25:00+02:00',
     ]);
-    expect(parseChannelLogo(svt1Day)).toBe('https://new.static.tv.nu/47578019');
+    expect(parseChannelLogo(svt1Day)).toBe('https://new.static.tv.nu/107707399');
   });
 
   it('distinguishes a missing state from a legitimately empty day', () => {
@@ -308,6 +309,8 @@ describe('tvnu scrape (stubbed fetch)', () => {
     ]);
     expect(result.programmes.every((p) => p.channel === '[SVT1HD].SVT1.HD.se')).toBe(true);
     expect(result.channels).toHaveLength(1);
+    // These hand-built boundary fixtures publish only the light-theme logo,
+    // so the dark-first pick falls back to it.
     expect(result.channels[0]).toEqual({
       id: '[SVT1HD].SVT1.HD.se',
       name: 'SVT 1',
@@ -439,7 +442,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     const fotboll = parseChannelPage(fotbollDay);
     expect(fotboll.ok).toBe(true);
     expect(fotboll.name).toBe('TV4 Fotboll');
-    expect(fotboll.logo).toBe('https://new.static.tv.nu/227354796');
+    expect(fotboll.logo).toBe('https://new.static.tv.nu/227354874');
     expect(fotboll.slots.map((s) => [s.start, s.title])).toEqual([
       ['2026-09-17T11:00:00+02:00', 'BK Häcken - Mjällby AIF'],
       ['2026-09-17T14:00:00+02:00', 'Venezia FC - ACF Fiorentina'],
@@ -460,7 +463,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     expect(sportkanalen.slots).toHaveLength(21);
     expect(sportkanalen.slots.filter((s) => s.date === '2026-09-17')).toHaveLength(19);
     expect(sportkanalen.slots[0].title).toBe('Fiskedestination');
-    expect(sportkanalen.logo).toBe('https://new.static.tv.nu/227353196');
+    expect(sportkanalen.logo).toBe('https://new.static.tv.nu/227353191');
 
     // This snapshot has one valid broadcast, starting outside the window.
     const live = parseChannelPage(sportLiveDay);
@@ -497,7 +500,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     expect(result.channels[10]).toEqual({
       id: '[TV4FOSV].TV4.Fotboll.se',
       name: 'TV4 Fotboll',
-      icon: 'https://new.static.tv.nu/227354796',
+      icon: 'https://new.static.tv.nu/227354874',
     });
     expect(result.failures).toBe(0);
   });
@@ -519,7 +522,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     expect(result.channels.find((c) => c.id === '[TV4SPL1].TV4.Sport.Live.1.se')).toEqual({
       id: '[TV4SPL1].TV4.Sport.Live.1.se',
       name: 'TV4 Sport Live 1',
-      icon: 'https://new.static.tv.nu/227356274',
+      icon: 'https://new.static.tv.nu/227356323',
     });
     expect(result.failures).toBe(0);
   });
@@ -548,7 +551,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     const vs1 = parseChannelPage(vSport1Day);
     expect(vs1.ok).toBe(true);
     expect(vs1.name).toBe('V Sport 1');
-    expect(vs1.logo).toBe('https://new.static.tv.nu/68084424');
+    expect(vs1.logo).toBe('https://new.static.tv.nu/362296182');
     expect(vs1.slots).toHaveLength(12);
     expect(vs1.slots[0].category).toBe('Fotboll');
 
@@ -586,7 +589,7 @@ describe('tvnu scrape (stubbed fetch)', () => {
     expect(result.channels[19]).toEqual({
       id: '[VIASPHD].V.Sport.1.HD.se',
       name: 'V Sport 1',
-      icon: 'https://new.static.tv.nu/68084424',
+      icon: 'https://new.static.tv.nu/362296182',
     });
     expect(result.failures).toBe(0);
   });
@@ -671,7 +674,8 @@ describe('tvnu cli integration (stubbed fetch, temp output)', () => {
     expect(xml).toContain('<title lang="sv">Husdrömmar</title>');
     expect(xml).toContain('<category lang="sv">Konst</category>');
     expect(xml).toContain('<sub-title lang="sv">Säsong 8, Avsnitt 8</sub-title>');
-    // The channel logo from the page's own themedLogo.
+    // The predecessor page (light-only fixture) supplies the first logo, so
+    // the channel icon falls back to the light-theme variant here.
     expect(xml).toContain('<icon src="https://new.static.tv.nu/47578019" />');
     // Instants keep the Stockholm offset, rendered as XMLTV "+0200".
     expect(xml).toContain('<programme start="20260917001500 +0200"');
