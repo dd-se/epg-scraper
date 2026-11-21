@@ -97,9 +97,11 @@ a channel display name at `finishResult()`) — lives in
   requested date. Credentials come only from `SPOREKRANI_API_APP_ID` and
   `SPOREKRANI_API_KEY`; never commit them. `parseApiEnvelope()` /
   `parseDayEvents()` are pure parsers. Every exact curated owner in an
-  event's `channels[]` receives the slot. The source has start times only,
-  so the adapter chains to the next start on the same channel inside that
-  response and ends the final start at midnight; it never chains across
+  event's `channels[]` receives the slot. D-Smart's Spor Smart feeds are not
+  curated here — they are sourced by `dsmart.js` (the aggregator lists each
+  feed under two names, which is one reason its data is not the source for
+  them). The source has start times only, so the adapter chains to the next start on the same channel inside
+  that response and ends the final start at midnight; it never chains across
   days. This is the active daily-CI sports source. **Not browser-compatible**
   (JSON API, not rendered HTML). `scrape()` accepts an optional `env`
   (default `process.env`) so tests can inject credentials, and per-day
@@ -118,11 +120,46 @@ a channel display name at `finishResult()`) — lives in
   still writes the curated channel list (with logos) for the published sports
   merge instead of being refused as an empty guide.
 - `sporekrani.js` — retained Spor Ekranı SSR benchmark baseline: tabii spor
-  1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`. Quasar SSR
-  embeds a rolling ~30-day list in `window.__INITIAL_STATE__`; one fetch per
-  channel. Stops chain across the rolling list. It remains registered for
-  provider-to-provider benchmarking but is excluded from CI because sparse
-  lists can extend a programme for days.
+  1-8 and S Sport Plus via `sporekrani.com/home/channel/{slug}`.
+  Quasar SSR embeds the schedule in `window.__INITIAL_STATE__`, in one of two
+  shapes: the older `common.events[]` with inline `{name, icon}` channel
+  objects, or the current `common.eventRows[]` whose `channels` are numeric
+  ids resolved through `common.eventChannels[id]`. `parseChannelPage()`
+  handles both; the dual-shape support is kept because the live site moved to
+  `eventRows`, even though the D-Smart feeds it used to carry now belong to
+  `dsmart.js`. The current shape serves only ~2 days (not the advertised 30),
+  so dates outside it are skipped; one fetch per channel, stops chain across
+  the list. It remains registered for provider-to-provider benchmarking but is
+  **excluded from CI** — only `sporekraniapi` and `dsmart` are scraped in the
+  daily job.
+- `dsmart.js` — D-Smart Go's Erstream EPG API. The channel page
+  (`dsmartgo.com.tr/tr/tv-izle/spor-smart/246003`) is a React shell with no
+  embedded schedule; the guide comes from
+  `GET https://global-epg-prod.erstream.com/Epg/GetChannelEpgWithRange` with
+  `includeEnding=true`, `fillResponse=true`, `cmsId`, `startDate`/`endDate`
+  (exclusive), `timezone=03`, `lang=tr` and a **public client key**. Each scrape
+  first fetches the site's `site-config` (with the public bearer token baked
+  into `main.js`) and reads `data.site_config.servicesConfig.contentConfig.epg.apiKey`,
+  so a key rotation needs no code change; `PUBLIC_API_KEY` is only a warned
+  fallback for a failed config fetch, and `DSMART_EPG_KEY` overrides both.
+  The same response carries `contentConfig.cms.apiKey` / `serviceBaseUrl`, used
+  for channel logos. No user secret or login. One config fetch per run, then a
+  CMS `GET /v1/item/{cmsId}` per curated channel (headers `apiKey` and
+  `langCode: tr`) for `images[type=Logo].url` → the XMLTV `<icon>`. No logo URL
+  is hardcoded, though `PUBLIC_CMS_API_KEY` / `CMS_BASE_URL` are warned
+  fallbacks when the config fetch fails; a failed logo lookup costs only the
+  icon, not the schedule. Then one EPG request per channel-day, all sequential
+  and polite. `CATALOG_CHANNELS` documents all 75 channels the API
+  carries (2026-11-21 probe) but only the two D-Smart sports feeds are curated
+  in `CHANNELS` and scraped: Spor Smart (`246003`, `SPORSMART.tr`) and Spor
+  Smart 2 (`246171`, `SPORSMART2.tr`). `parseApiPayload()` / `parseDayEvents()`
+  are pure parsers: the response is a bare array of `{date, startHour,
+  endHour, name, description, statusCode, ...}`; `statusCode: 300` filler rows
+  are dropped and a stop earlier than the start wraps to the next date.
+  Wall times are stamped `+03:00` (Turkey is UTC+3 year-round); with
+  `timezone=03` they line up with `sporekraniapi`'s instants. The EPG feed has
+  no genre field. **Not browser-compatible** (JSON API). CI passes
+  `--keep-channels` because the feeds are often off air.
 - `tivibu.js` — Tivibu Yayın Akışı: Tivibu Spor and Tivibu Spor 1-4 via
   `tivibu.com.tr/kanallar/{slug}` (the old `/yayin-akisi` path is dead)
   and its plain-HTTP JSON API.  One session GET per channel captures the

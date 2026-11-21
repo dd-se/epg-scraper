@@ -1,27 +1,32 @@
-// Sporekrani provider — tabii spor 1-8, S Sport Plus.
+// Sporekrani provider — tabii spor 1-8 and S Sport Plus.
 //
 // Source: https://www.sporekrani.com/home/channel/{slug}  (Spor Ekranı, the
 // "hangi maç hangi kanalda" aggregator — yayinekrani.com serves the same data)
 //
 // Each channel page is a Quasar SSR app with the schedule embedded in a
-// `window.__INITIAL_STATE__` JSON script tag (discovered via chrome-devtools):
+// `window.__INITIAL_STATE__` JSON script tag (discovered via chrome-devtools).
+// Two payload shapes occur in the wild and both are parsed:
 //
-//   state.common.events — the channel's rolling ~30-day event list, each
-//     { name, date_time: "YYYY-MM-DD HH:MM:SS" (Istanbul wall time),
-//       sport_name, league_name, channels: [{ name, ... }, ...] }
+//   state.common.events — the older shape: the channel's rolling ~30-day
+//     event list, each { name, date_time: "YYYY-MM-DD HH:MM:SS" (Istanbul
+//     wall time), sport_name, league_name, channels: [{ name, icon }, ...] }
+//
+//   state.common.eventRows — the current shape: rows with the same event
+//     fields but `channels: [numericId, ...]`, resolved through
+//     state.common.eventChannels[id] = { name, icon, providers }.  The site
+//     currently serves only a ~2-day window in this shape despite its "30
+//     days" blurb, so requested dates outside it are silently skipped.
 //
 // An event can air on several channels (e.g. a Champions League match on
-// tabii Spor 1 AND CBC Sport), so the parser keeps only events whose
-// channels[] includes the page's own channel.  tabii spor 1-8 are match-day
-// simulcast feeds — most days most of them carry no events at all, which is
-// correct (an empty page means nothing is scheduled, not a scrape failure).
+// tabii Spor 1 AND CBC Sport), so the parser keeps only events whose channels
+// include the page's own channel.  tabii spor 1-8 are match-day simulcast
+// feeds — most days most of them carry no events at all, which is correct
+// (an empty page means nothing is scheduled, not a scrape failure).
 //
 // Times are Istanbul wall time with the fixed +03:00 offset.  The source
 // publishes **event start times only**; a programme's stop is derived from
 // the next event on the page (chained across day boundaries, 24:00 for the
 // last event), matching the mynet/beinsports/digiturkburada convention.
-// The rolling window covers ~30 days from the server's "today"; requested
-// dates outside the window are silently skipped (one fetch per channel).
 
 import { fetchText, createPoliteFetch } from '../http.js';
 import {
@@ -121,23 +126,47 @@ export function extractInitialState(html) {
   }
 }
 
+// Resolve an event's channel records into `{ name, icon }` views.  Legacy
+// pages put objects in `channels[]`; current pages put numeric ids that must
+// be looked up in `common.eventChannels`.  Malformed entries are skipped.
+function eventChannelViews(event, eventChannels) {
+  const entries = Array.isArray(event?.channels) ? event.channels : [];
+  const views = [];
+  for (const entry of entries) {
+    if (entry && typeof entry === 'object') {
+      views.push({ name: entry.name, icon: entry.icon });
+      continue;
+    }
+    const record = eventChannels?.[String(entry)];
+    if (record && typeof record === 'object') {
+      views.push({ name: record.name, icon: record.icon });
+    }
+  }
+  return views;
+}
+
 // Parse one channel page into the events that air on `channelName`:
 // [{ date: "YYYY-MM-DD", startMin, title, category }] plus the page's own
 // channel icon.  Events are kept only when the page's own channel appears
-// in the event's channels[] — the same match often airs on other channels
-// too.  Every matching event's channels[] entry carries the page channel's
-// logo (`img.sporekrani.com/channels/…`); the first one found is returned
-// as `channelIcon`.  A missing or malformed page degrades to an empty
-// result, never a crash.
+// in the event's channels — the same match often airs on other channels
+// too.  The first matching channel logo (`img.sporekrani.com/channels/…`)
+// found is returned as `channelIcon`.  A missing or malformed page degrades
+// to an empty result, never a crash.
 export function parseChannelPage(html, channelName) {
   const state = extractInitialState(html);
-  const events = Array.isArray(state?.common?.events) ? state.common.events : [];
+  const common = state?.common;
+  const legacyEvents = Array.isArray(common?.events) ? common.events : [];
+  const rows = Array.isArray(common?.eventRows) ? common.eventRows : [];
+  const eventChannels =
+    common?.eventChannels && typeof common.eventChannels === 'object' ? common.eventChannels : undefined;
   const key = normalizeChannelKey(channelName);
+  if (!key) return { events: [] };
   const out = [];
   let channelIcon;
-  for (const event of events) {
-    if (!Array.isArray(event?.channels)) continue;
-    const own = event.channels.find((c) => normalizeChannelKey(c?.name) === key);
+  for (const event of [...legacyEvents, ...rows]) {
+    const own = eventChannelViews(event, eventChannels).find(
+      (c) => normalizeChannelKey(c.name) === key
+    );
     if (!own) continue;
     if (
       channelIcon == null &&

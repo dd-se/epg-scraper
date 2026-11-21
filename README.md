@@ -85,7 +85,7 @@ masks sensitive query values (`app_id`, `api_key`, `token`, …) and userinfo, s
 a credential-bearing URL cannot leak into output or CI logs.
 
 The Turkish/Azerbaijani sports guide uses `tvplus`, `beinsports`,
-`digiturkburada`, `sporekraniapi`, `tivibu`, and `idmantv` (34 sports channels together,
+`digiturkburada`, `sporekraniapi`, `dsmart`, `tivibu`, and `idmantv` (36 sports channels together,
 with `--sports-only` — TV+ also curates the general-interest lineup, and only its sports
 subset belongs in this feed).
 Separately, `tvnu` covers nine Swedish TV4 sports feeds. See the dedicated
@@ -918,11 +918,15 @@ export SPOREKRANI_API_KEY='<api key>'
 ### Retained benchmark baseline: `sporekrani`
 
 The original `sporekrani` adapter remains registered for reproducible
-provider-to-provider comparisons. It reads the rolling ~30-day
-`window.__INITIAL_STATE__` event list from
-`https://www.sporekrani.com/home/channel/{slug}`. It uses nine page requests
-for a full guide and chains each start to the next listed event across day
-boundaries.
+provider-to-provider comparisons. It reads the `window.__INITIAL_STATE__` event
+list from `https://www.sporekrani.com/home/channel/{slug}`. The payload has two
+shapes — the older `common.events[]` with inline channel objects, and the
+current `common.eventRows[]` with numeric ids resolved through
+`common.eventChannels` — and the parser handles both. The current shape serves
+only about two days, not the advertised ~30. It uses nine page requests for a
+full guide and chains each start to the next listed event across day
+boundaries. It does not curate the D-Smart Spor Smart feeds; those are sourced
+by `dsmart` below.
 
 That rolling-list policy is no longer used by daily CI: sparse event lists can
 leave a programme open for days when the channel has no known broadcast. Run a
@@ -942,6 +946,36 @@ adapter ended at `2026-10-01T00:00:00+03:00`. The API adapter is therefore the
 active CI and sports-merge source. A 7-day run the same day (credentials from
 a local `.env`) returned 52 programmes across the nine channels with zero
 failed requests and every stop inside its own day.
+
+## Provider: dsmart
+
+- Source: D-Smart Go's public Erstream EPG API,
+  `GET https://global-epg-prod.erstream.com/Epg/GetChannelEpgWithRange`. The
+  channel page itself is a React shell with no embedded schedule.
+- Channels: only **Spor Smart** (`SPORSMART.tr`, `cmsId=246003`) and
+  **Spor Smart 2** (`SPORSMART2.tr`, `cmsId=246171`) are curated and scraped.
+  `CATALOG_CHANNELS` in `src/providers/dsmart.js` documents the other 73 feeds
+  the API carries (probe 2026-11-21) without adding them to the guide.
+- The API key is fetched at runtime: each run reads `site-config` from D-Smart's
+  CDN with the public bearer token baked into the site's own `main.js`, so a
+  key rotation needs no code change. `DSMART_EPG_KEY` overrides the key and
+  `DSMART_SITE_CONFIG_TOKEN` the bearer token; a failed config fetch is warned
+  and counted as a failed request before falling back to the pinned public key.
+  Neither value is a user secret — both ship to every browser.
+- Each response is a bare array of programme objects; `statusCode: 300` filler
+  rows are dropped, and `date` + `startHour`/`endHour` are stamped `+03:00`
+  (`timezone=03` aligns the wall times with Turkey's UTC+3). The EPG feed has
+  no genre field. Channel logos are fetched at runtime from D-Smart's CMS
+  (`GET /v1/item/{cmsId}`, using the public `apiKey` / `serviceBaseUrl` from the
+  same `site-config` response) and emitted as `<icon src>` — no logo URL is
+  hardcoded; a failed lookup just drops the icon. JSON API, so it is not
+  browser-compatible.
+- CI passes `--keep-channels`: the two feeds are often off air, and the
+  published sports guide still needs their channel ids.
+
+```bash
+node bin/epg-scraper.js --provider dsmart --keep-channels
+```
 
 ## Provider: tivibu
 
@@ -1133,8 +1167,8 @@ node bin/epg-scraper.js --provider tvnu --alias-map aliases.tvnu.json --merge --
 
 ### Sports guide from the sports providers
 ```bash
-# One guide with all 33 scrapeable sports channels
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --sports-only --out epg_sports_merged_TR.xml.gz
+# One guide with all 36 scrapeable sports channels
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,dsmart,tivibu,idmantv --merge --sports-only --out epg_sports_merged_TR.xml.gz
 ```
 
 `--sports-only` keeps each provider's sports subset, so TV+'s general-interest
@@ -1144,8 +1178,9 @@ merge:sports` is the same run, offline).
 `tvplus` wins conflicts; `beinsports` fills beIN Sports 1-4;
 `digiturkburada` adds beIN Sports 1-5, Max 1-2 and GS TV (5 / Max / GS TV
 exist nowhere else); `sporekraniapi` adds
-tabii spor 1-8 and S Sport Plus; `tivibu` adds Tivibu Spor and Tivibu Spor 1-4; `idmantv`
-adds İdman TV (Azerbaijani titles).
+tabii spor 1-8 and S Sport Plus; `dsmart` adds D-Smart's Spor Smart 1-2 from
+D-Smart Go's public Erstream EPG API; `tivibu` adds Tivibu Spor and Tivibu Spor 1-4;
+`idmantv` adds İdman TV (Azerbaijani titles).
 (The workflow publishes this same file as `epg_sports_merged_TR.xml.gz`.)
 
 ## Scheduled scrapes (GitHub Actions)

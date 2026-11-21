@@ -23,6 +23,7 @@ const tabii2 = fixture('tabii-spor-2.html');
 const tabii3 = fixture('tabii-spor-3.html');
 const tabii4 = fixture('tabii-spor-4.html'); // empty page: no events scheduled
 const sSportPlus = fixture('s-sport-plus.html');
+const sporSmart = fixture('spor-smart.html'); // current eventRows/eventChannels payload
 
 const response = (html) => ({ ok: true, status: 200, text: async () => html });
 
@@ -151,11 +152,35 @@ describe('sporekrani pure parsers', () => {
     );
   });
 
+  it('parses the current eventRows payload and resolves numeric channel ids', () => {
+    // The site now serves `eventRows` with numeric channel ids instead of the
+    // older `events` with inline objects.  The fixture is a live Spor Smart
+    // page; the parser is name-driven, so it must still decode that shape even
+    // though the SSR adapter no longer curates the D-Smart feeds.
+    const smart = parseChannelPage(sporSmart, 'Spor Smart');
+    expect(smart.events).toHaveLength(7);
+    expect(smart.events[0]).toEqual({
+      date: '2026-11-21',
+      startMin: 2 * 60,
+      title: 'Velez Sarsfield - Belgrano',
+      category: 'Futbol',
+    });
+    expect(smart.channelIcon).toBe('https://img.sporekrani.com/channels/P1D2vbjYu0mMGRfUtBzoeW7CoFNWg07sbyTGJEJY.png');
+
+    const smart2 = parseChannelPage(sporSmart, 'Spor Smart 2');
+    expect(smart2.events).toHaveLength(2);
+    expect(smart2.events.map((event) => event.title)).toEqual([
+      'Defensa - Barracas Central',
+      'Argentinos Jrs. - Independiente Rivadavia',
+    ]);
+  });
+
   it('maps display names to slugs and ids', () => {
     expect(mapChannelId('tabii Spor 1')).toBe('TABIISPOR1.tr');
     expect(mapChannelId('tabii Spor 8')).toBe('TABIISPOR8.tr');
     expect(mapChannelId('S Sport Plus')).toBe('SSPORTPLUS.tr');
     expect(mapChannelId('S SPORT PLUS')).toBe('SSPORTPLUS.tr'); // case/space-insensitive
+    expect(mapChannelId('Spor Smart')).toBeUndefined(); // now served by dsmart
     expect(mapChannelId('CBC Sport')).toBeUndefined();
     expect(normalizeChannelKey('  tabii   Spor 1 ')).toBe('TABII SPOR 1');
     expect(channelPageUrl('tabii-spor-1')).toBe('https://www.sporekrani.com/home/channel/tabii-spor-1');

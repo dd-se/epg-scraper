@@ -7,6 +7,7 @@ import * as beinsports from './providers/beinsports.js';
 import * as digiturkburada from './providers/digiturkburada.js';
 import * as sporekrani from './providers/sporekrani.js';
 import * as sporekraniapi from './providers/sporekraniapi.js';
+import * as dsmart from './providers/dsmart.js';
 import * as tivibu from './providers/tivibu.js';
 import * as idmantv from './providers/idmantv.js';
 import * as tvnu from './providers/tvnu.js';
@@ -85,6 +86,16 @@ export const PROVIDER_CATALOG = [
     // a quiet window has no programmes; the guide must still ship its channel
     // list (with logos) for a consumer that matches icons by channel id.
     ci: { enabled: true, args: ['--keep-channels'], order: 65 },
+    sports: { live: true },
+  },
+  {
+    id: 'dsmart',
+    name: 'D-Smart Go EPG (Spor Smart 1-2)',
+    module: dsmart,
+    browserCompatible: false,
+    // The two sports feeds are off air most days, so a quiet window has no
+    // programmes; keep the channel list (and its ids) in the published guide.
+    ci: { enabled: true, args: ['--days-forward', '2', '--keep-channels'], order: 67 },
     sports: { live: true },
   },
   {

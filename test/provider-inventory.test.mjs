@@ -23,6 +23,7 @@ const EXPECTED_IDS = [
   'digiturkburada',
   'sporekrani',
   'sporekraniapi',
+  'dsmart',
   'tivibu',
   'idmantv',
   'tvnu',
@@ -68,7 +69,7 @@ describe('provider operational inventory', () => {
     const registrations = PROVIDER_CATALOG.map(toProviderRegistration);
     expect(
       registrations.filter((provider) => provider.browserCompatible === false).map((provider) => provider.id)
-    ).toEqual(['tvplus', 'digiturkburada', 'sporekraniapi', 'tivibu']);
+    ).toEqual(['tvplus', 'digiturkburada', 'sporekraniapi', 'dsmart', 'tivibu']);
   });
 
   it('owns the daily CI matrix and provider-specific arguments', () => {
@@ -80,6 +81,7 @@ describe('provider operational inventory', () => {
       { provider: 'beinsports', args: '--days-forward 2' },
       { provider: 'digiturkburada', args: '--days-forward 2' },
       { provider: 'sporekraniapi', args: '--keep-channels' },
+      { provider: 'dsmart', args: '--days-forward 2 --keep-channels' },
       { provider: 'tivibu', args: '' },
       { provider: 'tvnu', args: '--days-forward 2 --delay-ms 400' },
       { provider: 'idmantv', args: '' },
@@ -92,6 +94,7 @@ describe('provider operational inventory', () => {
       'beinsports',
       'digiturkburada',
       'sporekraniapi',
+      'dsmart',
       'tivibu',
       'idmantv',
     ]);
@@ -100,6 +103,7 @@ describe('provider operational inventory', () => {
       'beinsports',
       'digiturkburada',
       'sporekraniapi',
+      'dsmart',
       'tivibu',
       'idmantv',
     ]);
@@ -110,8 +114,8 @@ describe('provider operational inventory', () => {
     const union = (entries) => new Set(entries.flatMap((entry) => sportsChannelIds(entry)));
     const liveIds = union(liveSportsProviders());
     const ciIds = union(ciSportsProviders());
-    expect(liveIds.size).toBe(34);
-    expect(ciIds.size).toBe(34);
+    expect(liveIds.size).toBe(36);
+    expect(ciIds.size).toBe(36);
     for (const id of curatedChannelIds(PROVIDER_CATALOG.find((entry) => entry.id === 'beinsports'))) {
       expect(ciIds.has(id)).toBe(true);
     }
@@ -149,7 +153,7 @@ describe('provider operational inventory', () => {
     // Order must match the profile: the CLI resolves the first file's
     // conflicting slots as the winner.
     const fromList = /--from (\S+)/.exec(packageJson.scripts['merge:sports'])[1];
-    expect(fromList.split(',')).toEqual(['epg_tvplus_TR.xml.gz', 'epg_beinsports_TR.xml.gz', 'epg_digiturkburada_TR.xml.gz', 'epg_sporekraniapi_TR.xml.gz', 'epg_tivibu_TR.xml.gz', 'epg_idmantv_TR.xml.gz']);
+    expect(fromList.split(',')).toEqual(['epg_tvplus_TR.xml.gz', 'epg_beinsports_TR.xml.gz', 'epg_digiturkburada_TR.xml.gz', 'epg_sporekraniapi_TR.xml.gz', 'epg_dsmart_TR.xml.gz', 'epg_tivibu_TR.xml.gz', 'epg_idmantv_TR.xml.gz']);
     expect(packageJson.scripts['merge:sports']).toContain('--sports-only');
     expect(packageJson.scripts['merge:sports']).toContain('--out epg_sports_merged_TR.xml.gz');
   });
@@ -186,6 +190,7 @@ describe('provider operational inventory', () => {
         'beinsports',
         'digiturkburada',
         'sporekraniapi',
+        'dsmart',
         'tivibu',
         'idmantv',
       ],

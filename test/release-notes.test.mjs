@@ -50,7 +50,7 @@ describe('release notes', () => {
     );
     expect(body).toContain('so `epg_trt_TR.xml.gz`\'s channels are not interleaved with the rest');
     expect(body).toContain(
-      'Union of `epg_tvplus_TR.xml.gz` + `epg_beinsports_TR.xml.gz` + `epg_digiturkburada_TR.xml.gz` + `epg_sporekraniapi_TR.xml.gz` + `epg_tivibu_TR.xml.gz` + `epg_idmantv_TR.xml.gz`'
+      'Union of `epg_tvplus_TR.xml.gz` + `epg_beinsports_TR.xml.gz` + `epg_digiturkburada_TR.xml.gz` + `epg_sporekraniapi_TR.xml.gz` + `epg_dsmart_TR.xml.gz` + `epg_tivibu_TR.xml.gz` + `epg_idmantv_TR.xml.gz`'
     );
 
     // The sports merge must not claim the trt+hurriyet merge as an input, and a

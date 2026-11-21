@@ -11,7 +11,7 @@ live on 2026-09-12 when the `idmantv` provider landed, the Swedish
 Exxen rows exhaustively re-probed on 2026-10-16 (platform CMS, the Erstream
 EPG backend, and the aggregators — see the Exxen row).
 
-Covered today (34 sports channels — TV+'s general-interest channels are excluded,
+Covered today (36 sports channels — TV+'s general-interest channels are excluded,
 because the sports merge takes only each provider's sports subset):
 
 | Provider | Channels |
@@ -20,13 +20,14 @@ because the sports merge takes only each provider's sports subset):
 | `beinsports` | beIN Sports 1, beIN Sports 2, beIN Sports 3, beIN Sports 4 |
 | `digiturkburada` | beIN Sports 5, beIN Sports Max 1, beIN Sports Max 2, GS TV |
 | `sporekraniapi` | tabii spor 1, tabii spor 2, tabii spor 3, tabii spor 4, tabii spor 5, tabii spor 6, tabii spor 7, tabii spor 8, S Sport Plus |
+| `dsmart` | Spor Smart, Spor Smart 2 |
 | `tivibu` | Tivibu Spor, Tivibu Spor 1, Tivibu Spor 2, Tivibu Spor 3, Tivibu Spor 4 |
 | `idmantv` | İdman TV |
 
-Run all six and merge into one guide:
+Run all seven and merge into one guide:
 
 ```bash
-node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,tivibu,idmantv --merge --sports-only
+node bin/epg-scraper.js --provider tvplus,beinsports,digiturkburada,sporekraniapi,dsmart,tivibu,idmantv --merge --sports-only
 ```
 
 (The offline rebuild from the CI artifacts is `npm run merge:sports`, which
@@ -92,8 +93,8 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 | ~~Tivibu Spor 2~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× "Tivibu Spor Tanıtım" promo loop, emitted as-is — idle feed, not a failure). |
 | ~~Tivibu Spor 3~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× promo loop, same as Spor 2). |
 | ~~Tivibu Spor 4~~ | ~~tivibu.com.tr/yayin-akisi~~ (404 — old path) | **NOW COVERED** via the `tivibu` provider (fixture 2026-09-09: 5× promo loop, same as Spor 2). |
-| Smart Spor 1 | smartspor.com.tr (no response — not re-verified 2026-09-09), sporekrani.com/home/channel/smart-spor-1 | Re-verified live 2026-09-09: aggregator page exists but renders "Etkinlik Bulunamadı — Önümüzdeki 30 gün içerisinde aradığınız kriterlere uygun etkinlik bulunmamaktadır". "Looks defunct" is an inference from the empty window, not a verified shutdown — treat as no-current-events unless a future scrape shows data. |
-| Smart Spor 2 | smartspor.com.tr (not re-verified), sporekrani.com/home/channel/smart-spor-2 (not re-fetched 2026-09-09) | Same status as Smart Spor 1 by analogy only — smart-spor-2 page not re-verified; do not claim emptiness without fetching it. Likely no-current-events. |
+| ~~Smart Spor 1 / Spor Smart~~ | ~~smartspor.com.tr~~ (no response), ~~sporekrani.com/home/channel/smart-spor-1~~ (empty alias page) | **NOW COVERED** via the `dsmart` provider under `SPORSMART.tr` — D-Smart ch. 77. Re-verified live 2026-11-21: D-Smart Go's public Erstream EPG API serves the full schedule (`cmsId=246003`); the stale `smart-spor-1` aggregator slug was a bad alias, not a defunct channel. |
+| ~~Smart Spor 2 / Spor Smart 2~~ | ~~smartspor.com.tr~~, ~~sporekrani.com/home/channel/smart-spor-2~~ (not re-fetched 2026-09-09) | **NOW COVERED** via the `dsmart` provider under `SPORSMART2.tr` — D-Smart ch. 82 (`cmsId=246171`). |
 | ~~iDMAN TV~~ | ~~idmantv.com.tr~~ (dead domain) | **NOW COVERED** via the `idmantv` provider (`idmantv.az/az/program`, fixture 2026-09-07: static weekly page, one fetch = 7 days, Azerbaijani titles; 133 programme rows in the fixture). |
 | TJK TV (TAY TV) | tjktv.org.tr (no response), tjk.org/TR/Kurumsal/Query/Page/YayinAkisi, sporekrani.com legacy path `/tv-yayin-akisi/kanallar/tjk-tv`, tvyayinakisi.com/tjk-tv-yayin-akisi/ | tjk.org's Yayın Akışı page is live but data loads via an AJAX query (empty on plain fetch — needs the underlying API + `--browser`); the legacy sporekrani path renders "Yayın bilgisi bulunamadı" (re-verified live 2026-09-09); tvyayinakisi.com not re-verified. Still no scrapeable EPG. |
 | NBA TV | nba.com/tv (404) | Aggregator coverage not re-verified (macrehberi page not fetched 2026-09-09; sporekrani NBA TV page not fetched either). Off-season hypothesis stands but is unconfirmed — re-check at season start (October) on sporekrani/macrehberi. |
@@ -115,13 +116,16 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
    `--browser`; if the schedule is there, it is one more small provider.
 2. **TJK TV (TAY TV)** — reverse-engineer the AJAX query behind
    `tjk.org/TR/Kurumsal/Query/Page/YayinAkisi` (medium effort; the page
-   itself loads no data server-side).
-3. **NBA TV / Smart Spor** — NBA TV coverage was not re-verified — re-check
-   at season start (October) on sporekrani/macrehberi. Smart Spor 1's
-   aggregator page is live but empty (re-verified 2026-09-09); smart-spor-2
-   not re-verified — "defunct" is an inference, not a verified shutdown.
-   Would need a licensed/aggregated data source (e.g. a commercial EPG
-   provider) rather than a scraper.
+   itself loads no data server-side). A public schedule does exist: D-Smart
+   Go's Erstream EPG carries it as `cmsId=246108` (live probe 2026-11-21:
+   "Istanbul 16:00–21:45"), so adding it to `dsmart.js` would be far less work
+   — it is simply outside the two-channel scope of that provider today.
+3. **NBA TV** — coverage was not re-verified — re-check at season start
+   (October) on sporekrani/macrehberi. **Smart Spor / Spor Smart is closed
+   out** (re-verified 2026-11-21): the earlier "no source" reading came from
+   the stale `smart-spor-1` slug; both feeds are live and covered by the
+   `dsmart` provider under `SPORSMART.tr` / `SPORSMART2.tr`, so no
+   licensed/commercial source is needed.
    **Exxen is now closed out as unscrapeable** (re-probed 2026-10-16): it
    publishes no Exxen-branded linear channel and its own EPG service returns
    only placeholders, so there is no public schedule to scrape — see the
@@ -153,6 +157,16 @@ re-verified here — treat macrehberi claims below as stale until re-checked).
 - **tabii spor 1-8 are match-day simulcast channels** — most days most of
   them carry nothing, so an empty `sporekraniapi` result for a given
   channel/day is correct, not a scrape failure.
+- **An empty aggregator page can be a bad slug, not a dead channel.** Spor
+  Ekranı's stale `smart-spor-1` page is empty while `spor-smart` carries data;
+  the feeds are now served by the `dsmart` provider from D-Smart Go's own EPG
+  API, which lists each once (`cmsId` 246003 / 246171). The aggregator also
+  publishes each under two names (`Spor Smart`/`Smart Spor HD`,
+  `Spor Smart 2`/`Smart Spor 2`), and its current SSR payload is
+  `common.eventRows` + `common.eventChannels` (numeric ids), not the older
+  `common.events` with inline channel objects. Neither adapter curates those
+  feeds any more; `sporekrani` only keeps the dual-shape parser for its
+  benchmark role.
 - **Spor Ekranı publishes event start times only** — `sporekraniapi` derives
   stops from the next start for the same channel inside that day's response
   and uses midnight for the final start. The retained `sporekrani` SSR

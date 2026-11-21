@@ -85,6 +85,20 @@ id needs updating. Swedish (`tvnu`) ids are unchanged.
 
 ### Added
 
+- New `dsmart` provider for D-Smart Go's public Erstream EPG API, carrying
+  D-Smart's **Spor Smart** (`SPORSMART.tr`, ch. 77, `cmsId=246003`) and
+  **Spor Smart 2** (`SPORSMART2.tr`, ch. 82, `cmsId=246171`) — the daily sports
+  guide now sources them here instead of `sporekraniapi`. Each run reads the
+  current API key from the site's `site-config` response, so a rotation needs
+  no code change (a failed config fetch is warned and counted, then falls back
+  to the pinned public key). The same config supplies the public CMS settings
+  used to fetch each channel's `Logo` image at runtime, so the guide carries
+  D-Smart's real `<icon>` URLs (no hardcoded logo URLs; a failed lookup only
+  drops the icon).
+  The provider documents all 75 channels the API carries but scrapes only those
+  two. Live-verified with `--keep-channels` (including a `--days-forward 2`
+  run): 2 channels, 0 failed requests, 68 programmes over the 3-day window.
+  Total sports coverage stays at 36 channels.
 - `--sports-only` (`--merge` only) keeps each provider's curated sports subset,
   so a sports-profile provider that also curates general-interest channels
   cannot widen a sports feed. `npm run merge:sports` and the CI sports merge job
