@@ -310,7 +310,7 @@ asset back to the same profile.
 Both merged guides are published as release assets
 (`guide/epg_*.xml.gz`), after passing the same size / gzip-integrity / `<tv>`
 validation as the per-provider guides, so a corrupt merge can never overwrite
-yesterday's good asset. Their release-note sections are generated from the same
+the last good asset. Their release-note sections are generated from the same
 profiles, so each merged asset is described with its real inputs rather than a
 provider name guessed from its filename.
 
@@ -1186,13 +1186,15 @@ D-Smart Go's public Erstream EPG API; `tivibu` adds Tivibu Spor and Tivibu Spor 
 ## Scheduled scrapes (GitHub Actions)
 
 `.github/workflows/epg-scraper.yml` builds its matrix and sports-merge inputs
-from `src/provider-catalog.js`, then runs the configured providers daily at
-00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets on a rolling
-`latest` GitHub Release. The matrix excludes beinsports because
-DigiturkBurada already covers its beIN 1–4 feeds with full-day schedules, and
-`sporekraniapi` supersedes the rolling SSR Spor Ekranı adapter because its
-day-scoped responses bound the final event at midnight. The API job requires
-the `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY` GitHub Secrets.
+from `src/provider-catalog.js`, then runs the configured providers Monday
+through Saturday at 00:30 UTC (03:30 TRT) and publishes XMLTV guides as assets
+on a rolling `latest` GitHub Release (Sunday is skipped, so Saturday's guides
+stay live until Monday's run). `sporekraniapi` supersedes the rolling SSR Spor
+Ekranı adapter because its day-scoped responses bound the final event at
+midnight, and `beinsports` stays in the matrix for beIN Sports 1–4's live match
+times while DigiturkBurada contributes only the feeds it does not serve.
+The API job requires the `SPOREKRANI_API_APP_ID` and `SPOREKRANI_API_KEY`
+GitHub Secrets.
 Mynet runs with an explicit `--delay-ms 500` because a full run is ~260
 page fetches; tvnu uses `--days-forward 2 --delay-ms 400`: 69 channels ×
 (3 requested days + 1 lookback day) = 276 requests before retries.
@@ -1241,14 +1243,14 @@ job uses `continue-on-error: true`, so the run stays green and the
 merge/publish jobs still ship every guide that survived. The failed leg is
 still recorded in the run's job list, and it uploads a
 `scrape-failed-<provider>` marker artifact, so `notify` fires and the ntfy
-message names the provider that failed. Yesterday's release assets stay live
+message names the provider that failed. Previously published assets stay live
 for any provider that failed today.
 
 Two deliberate choices:
 
 - **Priority `high`, not `urgent`.** A flapping source needs attention today,
-  but the run still publishes every guide that survived and yesterday's
-  release assets stay live for the rest — that is not a 3 a.m. emergency.
+  but the run still publishes every guide that survived and the previously
+  published assets stay live for the rest — that is not a 3 a.m. emergency.
   `urgent` (5) is reserved for real outages.
 - **The topic is a secret, not a literal.** On ntfy.sh the topic *name* is the
   read credential — anyone who knows it can subscribe — so it lives in the

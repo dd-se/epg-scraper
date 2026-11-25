@@ -1,6 +1,6 @@
-# Daily EPG scrape — scrapes every provider on a schedule and publishes the
-# resulting XMLTV guides to a rolling "latest" GitHub Release, so IPTV apps
-# can fetch them from a stable URL:
+# EPG scrape (Monday–Saturday) — scrapes every provider on a schedule and
+# publishes the resulting XMLTV guides to a rolling "latest" GitHub Release, so
+# IPTV apps can fetch them from a stable URL:
 #
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_hurriyet_TR.xml.gz
 #   https://github.com/dd-se/epg-scraper/releases/latest/download/epg_trt_TR.xml.gz
@@ -41,16 +41,18 @@
 #   currently disabled (`if: false`); restore its guard above to re-enable.
 # - The sports-merge and publish jobs run with `if: !cancelled()` so they
 #   still run when some providers failed — they merge/publish whatever
-#   guides exist. Yesterday's release assets stay live for providers that
+#   guides exist. Previously published assets stay live for providers that
 #   failed today (replacesArtifacts only replaces uploaded files).
 
 name: epg-scraper
 
 on:
   schedule:
-    # 00:30 UTC = 03:30 TRT, daily — after midnight when the source sites
-    # roll over to the new day's schedules.
-    - cron: '30 0 * * *'
+    # 00:30 UTC = 03:30 TRT, Monday–Saturday — after midnight when the source
+    # sites roll over to the new day's schedules.  Sunday is skipped
+    # (`1-6` instead of `*`), so the release keeps Saturday's guides over the
+    # weekend and is refreshed by Monday's run.
+    - cron: '30 0 * * 1-6'
   workflow_dispatch:
 
 permissions:
@@ -92,7 +94,7 @@ jobs:
     # also reports this job to downstream `needs`/`failure()` as successful,
     # so the trailing `notify` job cannot see a failed leg that way.  The
     # "Record/Upload failure marker" steps below are the signal it reads
-    # instead.  Yesterday's release assets stay live for any provider that
+    # instead.  Previously published assets stay live for any provider that
     # failed today.
     continue-on-error: true
     strategy:
@@ -265,8 +267,8 @@ jobs:
         run: ls -la guides/ 2>/dev/null || echo "::warning::No guide artifacts downloaded"
 
       # Merge whatever sports guides survived. A missing provider is a
-      # warning, not a failure — yesterday's merged asset stays live for
-      # the gap, and today's merge covers the rest.
+      # warning, not a failure — the previously published merged asset stays
+      # live for the gap, and today's merge covers the rest.
       - name: Merge sports providers (offline, no scraping)
         id: merge
         env:
@@ -406,8 +408,8 @@ jobs:
   # rolling "latest" release. Asset names are stable, so
   # .../releases/latest/download/<name> is a permanent raw URL for IPTV apps.
   # Runs even on partial failure: every valid guide found is published,
-  # providers that failed today keep yesterday's assets (replacesArtifacts
-  # only replaces the files actually uploaded).
+  # providers that failed today keep their previously published assets
+  # (replacesArtifacts only replaces the files actually uploaded).
   publish:
     needs: [scrape, epg-sports-merged, epg-trt-merged]
     if: ${{ !cancelled() }}
@@ -438,7 +440,7 @@ jobs:
         run: ls -la guide/ 2>/dev/null || echo "::warning::No guide artifacts downloaded"
 
       # Drop corrupt/empty downloads before they can reach the release:
-      # a bad asset must never overwrite yesterday's good one.
+      # a bad asset must never overwrite the last good one.
       - name: Validate guides
         id: validate
         run: |
@@ -537,11 +539,11 @@ jobs:
   #
   # Alert level is `high`, not `urgent`: a provider that keeps 5xx-ing needs
   # attention today, but it is not a wake-me-up emergency — the run still
-  # publishes every guide that survived, and yesterday's assets stay live for
-  # the ones that did not. Tags `warning,rotating_light` mark it as a siren.
-  # The alert step is deliberately *not* failure-proof: if ntfy is unreachable
-  # this job goes red, because a silently dead notification path is worse than
-  # one extra red job on an already-red run.
+  # publishes every guide that survived, and previously published assets stay
+  # live for the ones that did not. Tags `warning,rotating_light` mark it as a
+  # siren. The alert step is deliberately *not* failure-proof: if ntfy is
+  # unreachable this job goes red, because a silently dead notification path
+  # is worse than one extra red job on an already-red run.
   #
   # Secrets, never literals:
   #   NTFY_TOPIC  — the topic name. It is the read credential for ntfy.sh
